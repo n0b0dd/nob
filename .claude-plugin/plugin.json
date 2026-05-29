@@ -1,0 +1,9 @@
+{
+  "name": "nob",
+  "description": "Orchestrates cross-layer fullstack monorepo development: Planner → PM Agent → Backend Agent → Frontend Agent → Reviewer",
+  "version": "1.0.0",
+  "author": { "name": "n0b0dd" },
+  "homepage": "https://github.com/n0b0dd/nob",
+  "repository": "https://github.com/n0b0dd/nob",
+  "license": "MIT"
+}

@@ -16,6 +16,7 @@ PM Agent owns all product definition work. It detects which mode to run from the
 
 Inspect the input:
 
+- If the input contains a `[INPUTS]` block with a `Plan context:` field → always run **Requirements Extraction Mode** (this is a Nob hub dispatch)
 - Input contains `/` or ends in `.md` → go to **Requirements Extraction Mode**
 - Input is plain text with no path characters → go to **Spec-Writing Mode**
 - Ambiguous → ask: "Are you giving me a spec file path or a rough idea to turn into a spec?"
@@ -47,8 +48,6 @@ Run stack auto-detection:
 5. Check root level for same patterns
 6. None found → backend not detected
 
-Store result as STACK_CONTEXT.
-
 ### Step 2: Ask clarifying questions
 
 Ask **one at a time** — wait for an answer before continuing:
@@ -77,6 +76,9 @@ Write `docs/specs/YYYY-MM-DD-<slug>.md` using the Write tool with this structure
 ## Users
 [answer to question 1]
 
+## Constraints
+[answer to question 3, or: none]
+
 ## Requirements
 - [requirement derived from the idea and clarifying answers — specific and testable]
 - [add as many as the idea and answers imply]
@@ -88,9 +90,13 @@ Write `docs/specs/YYYY-MM-DD-<slug>.md` using the Write tool with this structure
 - [any unresolved ambiguity, or: none]
 ```
 
+If there are no constraints, write 'none' in that section.
+
 Print: "Spec written to `docs/specs/<filename>.md`."
 
 ### Step 4: Offer implementation
+
+**Note:** This step only applies when PM Agent is invoked directly by the user. If you were dispatched by the Nob hub (i.e., you received a `[INPUTS]` block), skip this step entirely.
 
 Ask:
 > "Ready to implement? I can hand this to the engineering pipeline now. (yes / no)"
@@ -105,6 +111,7 @@ Ask:
 ### Step 1: Read the spec file
 
 Use the Read tool to read the spec file path from the input (or from `[PLAN OUTPUT]` when called by the Nob hub).
+If `[PLAN OUTPUT]` is present, check its Ambiguities section. Any ambiguities that were already resolved by the user (answered before dispatch) should be treated as constraints during extraction — do not re-flag them.
 
 ### Step 2: Extract requirements
 
@@ -123,6 +130,8 @@ From the spec, extract:
 Do NOT add anything not in the spec. Mark missing items as "not specified" and let implementation agents decide.
 
 ## Output Format
+
+*This output block is only emitted in Requirements Extraction Mode — not in Spec-Writing Mode.*
 
 ```
 [PM-AGENT OUTPUT]

@@ -205,11 +205,11 @@ Run PM Agent first (sequential), then Backend Agent and Frontend Agent concurren
 
 **Agent 1 — PM Agent**
 
-Read `{SKILL_BASE_DIR}/pm-agent/SKILL.md`. Dispatch with `model: agents.models["pm-agent"] ?? "haiku"`:
+Read `{SKILL_BASE_DIR}/../pm-agent/SKILL.md`. Dispatch with `model: agents.models["pm-agent"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/pm-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../pm-agent/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -341,7 +341,7 @@ Proceed to Phase 3.
 ### Fan-out path (Mode: fan-out)
 
 Read these sub-skill files once and store their full contents:
-- `{SKILL_BASE_DIR}/pm-agent/SKILL.md` → PM_SKILL
+- `{SKILL_BASE_DIR}/../pm-agent/SKILL.md` → PM_SKILL
 - `{SKILL_BASE_DIR}/backend-agent/SKILL.md` → BACKEND_SKILL
 - `{SKILL_BASE_DIR}/frontend-agent/SKILL.md` → FRONTEND_SKILL
 - `{SKILL_BASE_DIR}/qa-agent/SKILL.md` → QA_SKILL

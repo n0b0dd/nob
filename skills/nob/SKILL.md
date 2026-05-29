@@ -1,6 +1,6 @@
 ---
 name: nob
-description: Use when asked to implement a feature spec, fix a bug, or sync clients after an API change across a fullstack monorepo. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob [intent]". Orchestrates Planner → PM Agent → Backend Agent → Frontend Agent → Reviewer in sequence.
+description: 'Use when asked to implement a feature spec, fix a bug, or sync clients after an API change across a fullstack monorepo. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob [intent]". Orchestrates Planner → PM Agent → Backend Agent → Frontend Agent → Reviewer in sequence.'
 ---
 
 # Nob — Hub Orchestrator

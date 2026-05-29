@@ -1,35 +1,128 @@
 ---
 name: nob-pm-agent
-description: Use when extracting structured requirements from a feature specification for Nob workflows. Reads a spec file and outputs a structured requirements block consumed by backend-agent and frontend-agent. Part of the Nob skill hub.
+description: "Use directly to turn a rough idea into a spec file, or as part of the Nob pipeline to extract structured requirements from a spec. Triggers on: 'pm-agent [idea or spec path]'. Spec-writing mode: plain text input → research codebase → clarifying questions → write spec → optionally run /nob. Requirements mode: file path input → extract structured requirements block."
 ---
 
 # Nob — PM Agent
 
 ## Overview
-Read a feature specification and extract unambiguous, structured requirements. Your output is consumed by implementation agents — it must be specific enough that they can implement without re-reading the original spec.
+PM Agent owns all product definition work. It detects which mode to run from the input:
+- **Plain text** → spec-writing mode: research codebase, ask clarifying questions, write a spec file
+- **File path** → requirements extraction mode: read spec and output structured requirements for the engineering pipeline
 
-## Process
+---
+
+## Step 0: Mode Detection
+
+Inspect the input:
+
+- Input contains `/` or ends in `.md` → go to **Requirements Extraction Mode**
+- Input is plain text with no path characters → go to **Spec-Writing Mode**
+- Ambiguous → ask: "Are you giving me a spec file path or a rough idea to turn into a spec?"
+
+---
+
+## Spec-Writing Mode
+
+### Step 1: Read codebase context
+
+Read these files if they exist (skip silently if not found):
+- `CLAUDE.md` at the repo root
+- `.nob.yml` at the repo root
+
+Run stack auto-detection:
+
+**Frontend** (first match wins):
+1. `package.json` in `frontend/`, `web/`, `client/`, `app/` — check `dependencies`: `next` → Next.js · `vue` → Vue · `react` → React
+2. `pubspec.yaml` → Flutter
+3. `android/` directory → Android
+4. `ios/Podfile` → iOS
+5. None found → frontend not detected
+
+**Backend** (first match wins):
+1. `package.json` in `backend/`, `server/`, `api/` with `express`/`fastify`/`koa`/`hapi` → Node
+2. `requirements.txt` or `pyproject.toml` in `backend/` → Python
+3. `go.mod` in `backend/` → Go
+4. `pom.xml` in `backend/` → Java
+5. Check root level for same patterns
+6. None found → backend not detected
+
+Store result as STACK_CONTEXT.
+
+### Step 2: Ask clarifying questions
+
+Ask **one at a time** — wait for an answer before continuing:
+
+1. "Who are the users of this feature?" (e.g. authenticated users, admins, guests)
+2. "What is the core action they are trying to do? Describe the happy path in one sentence."
+3. "Any constraints? (e.g. must work on mobile, requires auth, performance-critical)" — accept "none" as valid
+4. "What is explicitly out of scope for this feature?" — accept "none" as valid
+
+Store answers as CLARIFICATIONS.
+
+### Step 3: Write spec file
+
+Derive a slug from the idea: lowercase words, hyphens, max 5 words (e.g. "user notification system" → `user-notification-system`).
+
+Ensure `docs/specs/` exists: run `mkdir -p docs/specs` using the Bash tool.
+
+Write `docs/specs/YYYY-MM-DD-<slug>.md` using the Write tool with this structure:
+
+```markdown
+# Feature: [name]
+
+## Summary
+[one sentence describing what is being built]
+
+## Users
+[answer to question 1]
+
+## Requirements
+- [requirement derived from the idea and clarifying answers — specific and testable]
+- [add as many as the idea and answers imply]
+
+## Out of scope
+- [answer to question 4, or: none specified]
+
+## Open questions
+- [any unresolved ambiguity, or: none]
+```
+
+Print: "Spec written to `docs/specs/<filename>.md`."
+
+### Step 4: Offer implementation
+
+Ask:
+> "Ready to implement? I can hand this to the engineering pipeline now. (yes / no)"
+
+- **yes** → invoke the `nob` skill with argument `implement docs/specs/<filename>.md`
+- **no** → stop. Print: "Spec saved at `docs/specs/<filename>.md`. Run `/nob implement docs/specs/<filename>.md` when ready."
+
+---
+
+## Requirements Extraction Mode
 
 ### Step 1: Read the spec file
-Use the Read tool to read the spec file path provided in the [PLAN OUTPUT] block (Task 1 of the plan).
+
+Use the Read tool to read the spec file path from the input (or from `[PLAN OUTPUT]` when called by the Nob hub).
 
 ### Step 2: Extract requirements
+
 From the spec, extract:
 
-1. **Feature name and summary** — one sentence describing what is being built
-2. **Acceptance criteria** — convert every requirement into a testable checkbox item. If the spec says "users can update their profile", write: `- [ ] User can update display name`. If the spec is vague, make the criteria as specific as possible and flag it as an assumption.
-3. **Backend changes needed** — list each API endpoint or data model change required. Include: HTTP method, path, request shape, response shape. If the spec does not mention backend specifics, write "not specified in spec — backend agent should infer from acceptance criteria".
-4. **Frontend changes needed** — list each screen, component, or user interaction required. If the spec does not mention frontend specifics, write "not specified in spec — frontend agent should infer from acceptance criteria".
-5. **Edge cases** — any explicitly mentioned edge cases. If none mentioned, write "none specified".
-6. **Out of scope** — anything the spec explicitly excludes. If nothing excluded, write "none specified".
-7. **Ambiguities** — any requirement that could be interpreted two ways. Phrase each as a question: "Does 'update profile' include changing the user's email address?"
+1. **Feature name and summary** — one sentence
+2. **Acceptance criteria** — convert every requirement into a testable checkbox. If vague, be specific and flag as an assumption.
+3. **Backend changes needed** — HTTP method, path, request shape, response shape. If not specified: "not specified in spec — backend agent should infer from acceptance criteria"
+4. **Frontend changes needed** — screen, component, user interaction. If not specified: "not specified in spec — frontend agent should infer from acceptance criteria"
+5. **Edge cases** — explicitly mentioned only. If none: "none specified"
+6. **Out of scope** — explicitly excluded. If none: "none specified"
+7. **Ambiguities** — requirements that could be interpreted two ways, phrased as questions
 
 ### Step 3: Never invent requirements
-Do NOT add any item not explicitly or implicitly stated in the spec. If something is not in the spec, mark it as "not specified" and let the implementation agent decide. Your job is extraction, not invention.
+
+Do NOT add anything not in the spec. Mark missing items as "not specified" and let implementation agents decide.
 
 ## Output Format
-
-Return this exact block:
 
 ```
 [PM-AGENT OUTPUT]
@@ -60,6 +153,7 @@ Ambiguities flagged:
 ```
 
 ## Error Handling
-- **Spec file not found**: output "PM Agent cannot proceed — spec file [path] not found."
+- **Spec file not found** (extraction mode): output "PM Agent cannot proceed — spec file [path] not found."
 - **Spec is one-liners with no detail**: extract what exists, flag every missing dimension as an ambiguity
-- **Spec has contradictions**: flag each contradiction explicitly in Ambiguities
+- **Spec has contradictions**: flag each contradiction in Ambiguities
+- **`docs/specs/` cannot be created**: warn user and ask for an alternative path

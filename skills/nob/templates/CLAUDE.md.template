@@ -1,0 +1,33 @@
+# Project: [Your Project Name]
+
+## Stack
+- Frontend: [e.g., React 18, TypeScript, Tailwind]
+- Backend: [e.g., Node.js 20, Express, PostgreSQL]
+- Mobile: [e.g., Flutter 3, Dart — or remove this line]
+
+## Folder Structure
+- `/frontend` — UI layer
+- `/backend` — API and business logic
+- `/docs/specs` — feature specifications (PM writes here)
+- `/docs/bugs` — bug reports (QA writes here)
+- `/docs/backlog` — acceptance criteria (PO writes here)
+
+## API Conventions
+- Base URL: `/api/v1`
+- Auth: [e.g., Bearer token in Authorization header]
+- Error format: `{ "error": { "code": "string", "message": "string" } }`
+
+## Frontend Conventions
+- Component pattern: [e.g., functional components with hooks]
+- State management: [e.g., Zustand]
+- API client: [e.g., axios in /frontend/src/api/]
+
+## Backend Conventions
+- Route pattern: [e.g., /backend/src/routes/]
+- Middleware: [e.g., auth middleware at /backend/src/middleware/auth.js]
+- Tests: [e.g., Jest + Supertest, run with `npm test` from /backend]
+
+## Team Roles
+- PM specs live in: /docs/specs
+- QA bugs live in: /docs/bugs
+- PO backlog lives in: /docs/backlog

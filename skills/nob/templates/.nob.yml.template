@@ -1,0 +1,41 @@
+# Nob configuration
+# Copy this file to your monorepo root as .nob.yml and fill in your stack details.
+
+stack:
+  frontend:
+    enabled: true
+    type: react          # react | vue | next | flutter | android | ios | react-native
+    path: /frontend      # path relative to repo root
+
+  backend:
+    enabled: true
+    type: node           # node | python | go | java | ruby
+    path: /backend
+
+  docs:
+    enabled: true
+    specs: /docs/specs        # change to wherever your spec files live
+    bugs: /docs/bugs          # change to wherever your bug reports live
+    backlog: /docs/backlog    # change to wherever your backlog items live
+
+agents:
+  enabled:
+    - planner
+    - pm-agent
+    - backend-agent
+    - frontend-agent
+    - qa-agent
+    - reviewer
+  models:
+    backend-agent: sonnet   # code-writing agents need sonnet
+    frontend-agent: sonnet
+    planner: haiku          # planning/review/qa agents can use haiku
+    pm-agent: haiku
+    qa-agent: haiku
+    reviewer: haiku
+
+  max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
+
+  checkpoint:
+    enabled: true           # write/read checkpoint files on disk (default: true)
+    path: .nob/       # directory for checkpoint.json

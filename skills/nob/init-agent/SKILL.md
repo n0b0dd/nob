@@ -18,9 +18,13 @@ Provided by the hub in the `[INPUTS]` block:
 
 ---
 
+## Setup
+
+Extract `Working directory` from the `[INPUTS]` block. Store it as WORKING_DIR. All Bash commands and Write tool calls in this skill use WORKING_DIR as the base path (e.g., `ls -A {WORKING_DIR}`, `mkdir -p {WORKING_DIR}/frontend/src/app`).
+
 ## Step 1: Check directory is empty
 
-Run via Bash: `ls -A .`
+Run via Bash: `ls -A {WORKING_DIR}`
 
 If any files exist other than `.git` and `.gitignore`: stop immediately and emit:
 
@@ -1155,6 +1159,7 @@ agents:
     pm-agent: haiku
     qa-agent: haiku
     reviewer: haiku
+    init-agent: sonnet
   max_parallel_slices: 3
   checkpoint:
     enabled: true

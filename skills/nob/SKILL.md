@@ -578,8 +578,8 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 ```
 Nob init complete.
 
-Project:   [project-name from INIT_OUTPUT]
-Stack:     [frontend-type] + [backend-type] + [database]
+Project:   [value of "Project:" field from INIT_OUTPUT]
+Stack:     [value of "Frontend:" field] + [value of "Backend:" field] + [value of "Database:" field from INIT_OUTPUT]
 
 Files created: [N]
 Installs:
@@ -600,6 +600,7 @@ Next steps:
   3. Start frontend: [frontend start command from INIT_OUTPUT]
   4. Write a spec:   docs/specs/your-feature.md
   5. Then run:       /nob implement docs/specs/your-feature.md
+  6. When ready:     git push -u origin nob/init
 ```
 
 If any field is unavailable (e.g. init-agent returned partial output), substitute "unknown" for that field.

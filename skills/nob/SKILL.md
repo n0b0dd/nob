@@ -124,7 +124,7 @@ Also extract:
 | "I want to build", "I have an idea", "bring to market", "startup", "business idea", "validate my idea", "launch a", "nob venture" | Venture |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
-> "Is this a new feature to implement, a bug to fix, or an API contract sync?"
+> "Is this a new feature to implement, a bug to fix, an API contract sync, or a business idea you'd like to validate?"
 
 Do NOT guess the workflow type. If ambiguous, ask.
 
@@ -151,6 +151,14 @@ User intent: {user's original message}
 
 - Extract `[INIT-AGENT OUTPUT]...[/INIT-AGENT OUTPUT]` from the result. Store as INIT_OUTPUT.
 - Jump directly to Step 4 (Print terminal summary) using the Init terminal summary format below.
+
+## Venture workflow early exit
+
+If the identified workflow is `Venture`:
+- Read `agents.venture.enabled` from RESOLVED_CONFIG. Default to `true` if absent.
+- If `false`: print "Venture mode is disabled in `.nob.yml`. Set `agents.venture.enabled: true` to enable." and exit.
+- Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
+- Jump directly to the **Venture Workflow** section below.
 
 ## Phase 0: Resume scan
 

@@ -1432,12 +1432,14 @@ Files created:
 - [list every file path written, one per line, relative to working dir]
 
 Installs:
-  frontend: [command ✓ | command ✗]
-  backend:  [command ✓ | command ✗]
+  [if JS/TS stack: pnpm install (root) ✓ | pnpm install (root) ✗]
+  [if Python backend: apps/backend pip install ✓ | apps/backend pip install ✗]
+  [if Go backend: apps/backend go mod tidy ✓ | apps/backend go mod tidy ✗]
+  [if Flutter frontend: apps/frontend flutter pub get ✓ | apps/frontend flutter pub get ✗]
 
 [if any failures:]
 Install errors — run manually:
-  [cd <dir> && <exact command>]
+  [exact retry command with correct directory]
 
 Frontend start command: [command]
 Frontend directory: apps/frontend/

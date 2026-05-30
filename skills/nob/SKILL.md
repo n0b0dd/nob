@@ -46,7 +46,7 @@ If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG.
 ### Auto-detection
 
 **Frontend detection** (first match wins):
-1. Scan for `package.json` in `frontend/`, `web/`, `client/`, `app/` (in that order). If found, read it and check `dependencies`:
+1. Scan for `package.json` in `apps/frontend/`, `frontend/`, `web/`, `client/`, `app/` (in that order). If found, read it and check `dependencies`:
    - Contains `next` → type `next`
    - Contains `vue` → type `vue`
    - Contains `react` or `react-dom` → type `react`
@@ -59,10 +59,10 @@ If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG.
 6. None found → `stack.frontend.enabled: false`
 
 **Backend detection** (first match wins):
-1. Scan for `package.json` in `backend/`, `server/`, `api/` (in that order). Check `dependencies` for `express`, `fastify`, `koa`, `hapi` → type `node`. Path = that directory.
-2. `requirements.txt` or `pyproject.toml` in `backend/` → type `python`, path = `backend/`
-3. `go.mod` in `backend/` → type `go`, path = `backend/`
-4. `pom.xml` in `backend/` → type `java`, path = `backend/`
+1. Scan for `package.json` in `apps/backend/`, `backend/`, `server/`, `api/` (in that order). Check `dependencies` for `express`, `fastify`, `koa`, `hapi` → type `node`. Path = that directory.
+2. `requirements.txt` or `pyproject.toml` in `apps/backend/` or `backend/` → type `python`, path = that directory.
+3. `go.mod` in `apps/backend/` or `backend/` → type `go`, path = that directory.
+4. `pom.xml` in `apps/backend/` or `backend/` → type `java`, path = that directory.
 5. Multiple matches across steps 1–4 → ask: "I found possible backend directories: [list]. Which one should Nob use?" Wait for answer. (If only one match, use it. Skip steps 6–9.)
 6. No match in steps 1–4: check root `requirements.txt` or `pyproject.toml` → type `python`, path = `.`
 7. No match in steps 1–4: root `go.mod` → type `go`, path = `.`

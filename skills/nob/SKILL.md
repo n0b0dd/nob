@@ -112,12 +112,14 @@ Also extract:
 | "implement [file]", "build [feature]", "add [feature] from [spec]" | Spec → Code |
 | "fix [file]", "there's a bug in [area]", "bug report [file]" | Bug → Fix |
 | "sync clients", "api changed", "update clients after [change]" | API → Sync |
-| "nob init", "initialize project", "scaffold project", "init" | Init |
+| "nob init", "initialize project", "scaffold project", "init" (standalone) | Init |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
 > "Is this a new feature to implement, a bug to fix, or an API contract sync?"
 
 Do NOT guess the workflow type. If ambiguous, ask.
+
+If the identified workflow is `Init`, skip to the **Init workflow early exit** section immediately below before proceeding to Phase 0.
 
 ## Init workflow early exit
 
@@ -600,6 +602,8 @@ Next steps:
   5. Then run:       /nob implement docs/specs/your-feature.md
 ```
 
+If any field is unavailable (e.g. init-agent returned partial output), substitute "unknown" for that field.
+
 **For all other workflows:**
 
 ```
@@ -643,3 +647,4 @@ Next steps:
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
 - **Reviewer status is FAIL**: print all failing items prominently; do NOT auto-retry or attempt to fix automatically
 - **Non-slice agent result missing expected output block**: re-dispatch once; if still missing, report raw agent output and stop
+- **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

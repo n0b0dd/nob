@@ -1078,6 +1078,214 @@ After writing all Go files, run from `apps/backend/`: `go mod tidy`
 
 ---
 
+### shared/core (always created)
+
+Run: `mkdir -p shared/core/contracts shared/core/schema`
+
+**If FRONTEND_TYPE is `next`, `react-vite`, or `vue`, OR BACKEND_TYPE is `express`** (any JS/TS app):
+
+Derive PROJECT_SLUG from PROJECT_NAME: lowercase, spaces replaced with hyphens (e.g. "Task Tracker" → "task-tracker").
+
+Write `pnpm-workspace.yaml`:
+```yaml
+packages:
+  - 'apps/*'
+  - 'shared/*'
+```
+
+Write `package.json` (root):
+```json
+{
+  "name": "[PROJECT_SLUG]",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev"
+  }
+}
+```
+
+Write `shared/core/package.json`:
+```json
+{
+  "name": "@[PROJECT_SLUG]/core",
+  "version": "0.1.0",
+  "main": "./contracts/index.ts",
+  "types": "./contracts/index.ts"
+}
+```
+
+Write `shared/core/contracts/index.ts`:
+```typescript
+export interface ApiResponse<T> {
+  data: T
+  error?: { code: string; message: string }
+}
+
+export interface Item {
+  id: string
+  name: string
+}
+```
+
+**If BACKEND_TYPE = `fastapi` or `go`:**
+
+Write `shared/core/contracts/openapi.yml`:
+```yaml
+openapi: 3.0.0
+info:
+  title: [PROJECT_NAME] API
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/v1/items:
+    get:
+      summary: List items
+      responses:
+        '200':
+          description: OK
+```
+
+**If ORM_TYPE = `prisma`:**
+
+Determine Prisma provider: DATABASE_TYPE = `postgres` → `postgresql`; DATABASE_TYPE = `sqlite` → `sqlite`.
+
+Write `shared/core/schema/schema.prisma`:
+```prisma
+datasource db {
+  provider = "[postgresql | sqlite]"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../../../node_modules/.prisma/client"
+}
+
+model Item {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+}
+```
+
+Update `shared/core/package.json` to add Prisma dependency:
+```json
+{
+  "name": "@[PROJECT_SLUG]/core",
+  "version": "0.1.0",
+  "main": "./contracts/index.ts",
+  "types": "./contracts/index.ts",
+  "dependencies": {
+    "@prisma/client": "^5.0.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.0.0"
+  }
+}
+```
+
+**If ORM_TYPE = `drizzle`:**
+
+Write `shared/core/schema/schema.ts`:
+```typescript
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core'
+
+export const items = pgTable('items', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+})
+```
+
+Write `shared/core/schema/drizzle.config.ts`:
+```typescript
+import type { Config } from 'drizzle-kit'
+
+export default {
+  schema: './shared/core/schema/schema.ts',
+  out: './shared/core/schema/migrations',
+  driver: 'pg',
+} satisfies Config
+```
+
+Update `shared/core/package.json` to add Drizzle dependency:
+```json
+{
+  "name": "@[PROJECT_SLUG]/core",
+  "version": "0.1.0",
+  "main": "./contracts/index.ts",
+  "types": "./contracts/index.ts",
+  "dependencies": {
+    "drizzle-orm": "^0.30.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.20.0"
+  }
+}
+```
+
+**If ORM_TYPE = `alembic` (FastAPI):**
+
+Run: `mkdir -p shared/core/schema/migrations`
+
+Write `shared/core/schema/migrations/README.md`:
+```markdown
+# Database Migrations
+
+Managed by Alembic. Initialize from apps/backend/:
+
+    alembic init alembic
+    alembic revision --autogenerate -m "initial"
+    alembic upgrade head
+```
+
+Write `shared/core/__init__.py`:
+(empty file — makes this a Python package)
+
+Write `shared/core/pyproject.toml`:
+```toml
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "core"
+version = "0.1.0"
+```
+
+**If ORM_TYPE = `goose` (Go):**
+
+Run: `mkdir -p shared/core/schema/migrations`
+
+Write `shared/core/schema/migrations/README.md`:
+```markdown
+# Database Migrations
+
+Managed by goose. Run from the repo root:
+
+    goose -dir shared/core/schema/migrations postgres "$DATABASE_URL" up
+    goose -dir shared/core/schema/migrations postgres "$DATABASE_URL" create migration_name sql
+```
+
+**If BACKEND_TYPE = `go`:**
+
+Write `go.work`:
+```
+go 1.22
+
+use (
+	./apps/backend
+)
+```
+
+---
+
 ## Step 5: Generate CLAUDE.md
 
 Write `CLAUDE.md` at the working directory root. Use confirmed stack values — no placeholder text.

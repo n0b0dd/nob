@@ -838,8 +838,10 @@ Stack:     [value of "Frontend:" field] + [value of "Backend:" field] + [value o
 
 Files created: [N]
 Installs:
-  frontend: [npm install ✓ | flutter pub get ✓ | failed ✗]
-  backend:  [npm install ✓ | pip install ✓ | go mod tidy ✓ | failed ✗]
+  [if JS/TS stack: pnpm install (root) ✓ | failed ✗]
+  [if Python backend: apps/backend pip install ✓ | failed ✗]
+  [if Go backend: apps/backend go mod tidy ✓ | failed ✗]
+  [if Flutter frontend: apps/frontend flutter pub get ✓ | failed ✗]
 
 [if any install failed:]
 Install errors — run manually:
@@ -850,7 +852,7 @@ Config written:
   .nob.yml
 
 Next steps:
-  1. Copy .env.example → .env in frontend/ and backend/ and fill in values
+  1. Copy .env.example → .env in apps/frontend/ and apps/backend/ and fill in values
   2. Start backend:  [backend start command from INIT_OUTPUT]
   3. Start frontend: [frontend start command from INIT_OUTPUT]
   4. Write a spec:   docs/specs/your-feature.md

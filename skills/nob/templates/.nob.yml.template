@@ -5,12 +5,15 @@ stack:
   frontend:
     enabled: true
     type: react          # react | vue | next | flutter | android | ios | react-native
-    path: /frontend      # path relative to repo root
+    path: apps/frontend/   # path relative to repo root
 
   backend:
     enabled: true
     type: node           # node | python | go | java | ruby
-    path: /backend
+    path: apps/backend/
+
+  shared:
+    core: shared/core/     # domain-organized shared contracts and schema
 
   docs:
     enabled: true

@@ -25,7 +25,7 @@ Example: if the system context shows `Base directory for this skill: /home/user/
 Run `git branch --show-current` to get the current branch name.
 
 If the current branch is `main` or `master`:
-- Derive a branch name from the source file: `nob/<spec-or-bug-filename-without-extension>` (e.g. `nob/user-profile` from `test-spec-user-profile.md`)
+- Derive a branch name from the source file: `nob/<spec-or-bug-filename-without-extension>` (e.g. `nob/user-profile` from `test-spec-user-profile.md`). If no source file exists in the intent (e.g., intent is `nob init`), use `nob/init`.
 - Run `git checkout -b <branch-name>` to create and switch to the branch
 - Confirm to the user: "Created branch `<branch-name>`"
 
@@ -87,6 +87,7 @@ agents:
     pm-agent: haiku
     qa-agent: haiku
     reviewer: haiku
+    init-agent: sonnet
   max_parallel_slices: 3
   checkpoint:
     enabled: true
@@ -111,11 +112,34 @@ Also extract:
 | "implement [file]", "build [feature]", "add [feature] from [spec]" | Spec → Code |
 | "fix [file]", "there's a bug in [area]", "bug report [file]" | Bug → Fix |
 | "sync clients", "api changed", "update clients after [change]" | API → Sync |
+| "nob init", "initialize project", "scaffold project", "init" | Init |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
 > "Is this a new feature to implement, a bug to fix, or an API contract sync?"
 
 Do NOT guess the workflow type. If ambiguous, ask.
+
+## Init workflow early exit
+
+If the identified workflow is `Init`:
+- Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
+- Do not read or check for a checkpoint file.
+- Read `{SKILL_BASE_DIR}/init-agent/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["init-agent"] ?? "sonnet"` and this prompt:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/init-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+User intent: {user's original message}
+[/INPUTS]
+```
+
+- Extract `[INIT-AGENT OUTPUT]...[/INIT-AGENT OUTPUT]` from the result. Store as INIT_OUTPUT.
+- Jump directly to Step 4 (Print terminal summary) using the Init terminal summary format below.
 
 ## Phase 0: Resume scan
 
@@ -546,6 +570,37 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 ---
 
 ## Step 4: Print terminal summary
+
+**If workflow is `Init`, use this summary:**
+
+```
+Nob init complete.
+
+Project:   [project-name from INIT_OUTPUT]
+Stack:     [frontend-type] + [backend-type] + [database]
+
+Files created: [N]
+Installs:
+  frontend: [npm install ✓ | flutter pub get ✓ | failed ✗]
+  backend:  [npm install ✓ | pip install ✓ | go mod tidy ✓ | failed ✗]
+
+[if any install failed:]
+Install errors — run manually:
+  [exact retry command with correct working directory]
+
+Config written:
+  CLAUDE.md
+  .nob.yml
+
+Next steps:
+  1. Copy .env.example → .env in frontend/ and backend/ and fill in values
+  2. Start backend:  [backend start command from INIT_OUTPUT]
+  3. Start frontend: [frontend start command from INIT_OUTPUT]
+  4. Write a spec:   docs/specs/your-feature.md
+  5. Then run:       /nob implement docs/specs/your-feature.md
+```
+
+**For all other workflows:**
 
 ```
 Nob complete.

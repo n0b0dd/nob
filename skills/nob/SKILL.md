@@ -160,6 +160,243 @@ If the identified workflow is `Venture`:
 - Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
 - Jump directly to the **Venture Workflow** section below.
 
+---
+
+## Venture Workflow
+
+Run this section only when the identified workflow is `Venture` (routed here from the Venture early exit above).
+
+Store the user's original message as VENTURE_IDEA.
+
+### Checkpoint setup
+
+Create directories if they do not exist:
+```bash
+mkdir -p docs/venture
+mkdir -p {checkpoint.path}
+```
+
+Ensure `.nob/` appears in `.gitignore` at the repo root. If the line is absent, append it using the Edit tool.
+
+Read `{checkpoint.path}venture-checkpoint.json` if it exists. Store as VENTURE_CHECKPOINT (null if not found or not parseable).
+
+Stage order: `[idea-framer, market-researcher, business-modeler, gtm-strategist, financial-modeler, venture-reviewer]`
+
+For each stage in order: if VENTURE_CHECKPOINT has `stages.[stage-name].status: "completed"`, restore its output from `stages.[stage-name].output` and skip re-running it.
+
+Helper — write venture checkpoint after each stage completes: Read the current `{checkpoint.path}venture-checkpoint.json` (or start with `{}`), update only `stages.[stage-name]` to `{status: "completed", output: "[extracted output block]", output_file: "[file path]"}`, write back using the Write tool.
+
+---
+
+### Stage 1: Idea-Framer
+
+Skip if VENTURE_CHECKPOINT shows `stages.idea-framer.status: "completed"`. Restore IDEA_FRAMER_OUTPUT from checkpoint.
+
+Read `{SKILL_BASE_DIR}/idea-framer/SKILL.md`. Dispatch with `model: agents.models["idea-framer"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/idea-framer/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Idea: {VENTURE_IDEA}
+[/INPUTS]
+```
+
+Extract `[IDEA-FRAMER OUTPUT]...[/IDEA-FRAMER OUTPUT]`. Store as IDEA_FRAMER_OUTPUT.
+
+Write venture checkpoint for stage `idea-framer`.
+
+---
+
+### Stage 2: Market-Researcher
+
+Skip if VENTURE_CHECKPOINT shows `stages.market-researcher.status: "completed"`. Restore MARKET_RESEARCHER_OUTPUT from checkpoint.
+
+Read `{SKILL_BASE_DIR}/market-researcher/SKILL.md`. Dispatch with `model: agents.models["market-researcher"] ?? "sonnet"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/market-researcher/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Idea frame: {IDEA_FRAMER_OUTPUT}
+Problem: {Problem field from IDEA_FRAMER_OUTPUT}
+[/INPUTS]
+```
+
+Extract `[MARKET-RESEARCHER OUTPUT]...[/MARKET-RESEARCHER OUTPUT]`. Store as MARKET_RESEARCHER_OUTPUT.
+
+**Soft review**: if `Flag:` in MARKET_RESEARCHER_OUTPUT is not `none`, print the flag message to the user. Then print: "Research complete. Continuing to business modeling..."
+
+Write venture checkpoint for stage `market-researcher`.
+
+---
+
+### Stage 3: Business-Modeler
+
+Skip if VENTURE_CHECKPOINT shows `stages.business-modeler.status: "completed"`. Restore BUSINESS_MODELER_OUTPUT from checkpoint.
+
+Read `{SKILL_BASE_DIR}/business-modeler/SKILL.md`. Dispatch with `model: agents.models["business-modeler"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/business-modeler/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Idea frame: {IDEA_FRAMER_OUTPUT}
+Market research summary: {MARKET_RESEARCHER_OUTPUT}
+Chosen revenue model:
+[/INPUTS]
+```
+
+Note: `Chosen revenue model:` is left blank — the Business-Modeler agent contains its own hard pause and will ask the founder.
+
+Extract `[BUSINESS-MODELER OUTPUT]...[/BUSINESS-MODELER OUTPUT]`. Store as BUSINESS_MODELER_OUTPUT.
+
+Write venture checkpoint for stage `business-modeler`.
+
+---
+
+### Stage 4: GTM-Strategist
+
+Skip if VENTURE_CHECKPOINT shows `stages.gtm-strategist.status: "completed"`. Restore GTM_OUTPUT from checkpoint.
+
+Read `{SKILL_BASE_DIR}/gtm-strategist/SKILL.md`. Dispatch with `model: agents.models["gtm-strategist"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/gtm-strategist/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Idea frame: {IDEA_FRAMER_OUTPUT}
+Revenue model: {Revenue model field from BUSINESS_MODELER_OUTPUT}
+Priority channels:
+[/INPUTS]
+```
+
+Note: `Priority channels:` is left blank — the GTM-Strategist agent contains its own hard pause and will ask the founder.
+
+Extract `[GTM-STRATEGIST OUTPUT]...[/GTM-STRATEGIST OUTPUT]`. Store as GTM_OUTPUT.
+
+Write venture checkpoint for stage `gtm-strategist`.
+
+---
+
+### Stage 5: Financial-Modeler
+
+Skip if VENTURE_CHECKPOINT shows `stages.financial-modeler.status: "completed"`. Restore FINANCIAL_OUTPUT from checkpoint.
+
+Read `{SKILL_BASE_DIR}/financial-modeler/SKILL.md`. Dispatch with `model: agents.models["financial-modeler"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/financial-modeler/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Revenue model: {Revenue model field from BUSINESS_MODELER_OUTPUT}
+Key assumptions: {Key assumptions field from BUSINESS_MODELER_OUTPUT}
+North star metric: {North star metric field from GTM_OUTPUT}
+Month 3 target: {Month 3 target field from GTM_OUTPUT}
+[/INPUTS]
+```
+
+Extract `[FINANCIAL-MODELER OUTPUT]...[/FINANCIAL-MODELER OUTPUT]`. Store as FINANCIAL_OUTPUT.
+
+**Soft review**: if `Flag:` in FINANCIAL_OUTPUT is not `none`, print the flag message to the user. Then print: "Financial modeling complete. Running venture review..."
+
+Write venture checkpoint for stage `financial-modeler`.
+
+---
+
+### Stage 6: Venture-Reviewer
+
+Skip if VENTURE_CHECKPOINT shows `stages.venture-reviewer.status: "completed"`. Restore REVIEWER_OUTPUT from checkpoint.
+
+Read `{SKILL_BASE_DIR}/venture-reviewer/SKILL.md`. Dispatch with `model: agents.models["venture-reviewer"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/venture-reviewer/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Idea framer output: {IDEA_FRAMER_OUTPUT}
+Market researcher output: {MARKET_RESEARCHER_OUTPUT}
+Business modeler output: {BUSINESS_MODELER_OUTPUT}
+GTM strategist output: {GTM_OUTPUT}
+Financial modeler output: {FINANCIAL_OUTPUT}
+[/INPUTS]
+```
+
+Extract `[VENTURE-REVIEWER OUTPUT]...[/VENTURE-REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT.
+
+Write venture checkpoint for stage `venture-reviewer`.
+
+---
+
+### Dev pipeline handoff
+
+Read `needs_dev:` from REVIEWER_OUTPUT.
+
+If reviewer `Status: FAIL`:
+- Print: "Venture review found critical issues. Please address them before proceeding to technical implementation:"
+- Print each item from the `Issues:` list in REVIEWER_OUTPUT.
+- Jump to Venture terminal summary.
+
+If `needs_dev: false`:
+- Print: "No technical implementation needed for this venture type."
+- Jump to Venture terminal summary.
+
+If `needs_dev: true` and status is `PASS` or `NEEDS WORK`:
+- Print: "Venture pipeline complete. Artifacts saved to `docs/venture/`. Ready to move into technical implementation? (yes / not yet)"
+- Wait for response.
+- If **yes**: re-run the hub from Step 2 with intent set to `nob docs/venture/venture-spec.md`. This will detect `Spec → Code` workflow and run the full dev pipeline.
+- If **not yet**: jump to Venture terminal summary and exit.
+
+---
+
+### Venture terminal summary
+
+Print this block:
+
+```
+─────────────────────────────────────
+  Nob Venture Pipeline — Complete
+─────────────────────────────────────
+
+Idea: {Problem field from IDEA_FRAMER_OUTPUT}
+
+Stage results:
+  Idea Frame       ✓  docs/venture/idea-frame.md
+  Market Research  ✓  docs/venture/market-research.md
+  Business Model   ✓  docs/venture/business-model.md
+  GTM Strategy     ✓  docs/venture/gtm-strategy.md
+  Financial Model  ✓  docs/venture/financial-model.md
+  Venture Review   {Status from REVIEWER_OUTPUT}
+
+Venture Spec: docs/venture/venture-spec.md
+{if needs_dev: false: "No technical implementation needed."}
+{if status FAIL: "Critical issues found — see above before continuing."}
+
+Checkpoint: {checkpoint.path}venture-checkpoint.json
+When done: rm {checkpoint.path}venture-checkpoint.json
+─────────────────────────────────────
+```
+
+---
+
 ## Phase 0: Resume scan
 
 If `agents.checkpoint.enabled` is false, skip this phase entirely and proceed to Phase 1.

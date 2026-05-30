@@ -829,6 +829,8 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 
 **If workflow is `Init`, use this summary:**
 
+**If workflow is `Venture`**: summary is printed inline in the `## Venture Workflow` section above. This section is not reached for Venture runs.
+
 ```
 Nob init complete.
 

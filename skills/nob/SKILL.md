@@ -121,7 +121,7 @@ Also extract:
 | "fix [file]", "there's a bug in [area]", "bug report [file]" | Bug → Fix |
 | "sync clients", "api changed", "update clients after [change]" | API → Sync |
 | "nob init", "initialize project", "scaffold project", "init" (standalone) | Init |
-| "I want to build", "I have an idea", "bring to market", "startup", "business idea", "validate my idea", "launch a", "nob venture" | Venture |
+| "I want to build", "I have an idea", "bring to market", "startup", "business idea", "validate my idea", "launch a startup", "launch a product", "launch a company", "nob venture" | Venture |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
 > "Is this a new feature to implement, a bug to fix, an API contract sync, or a business idea you'd like to validate?"

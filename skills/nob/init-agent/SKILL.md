@@ -1312,8 +1312,18 @@ Write `CLAUDE.md`:
 - Database: [PostgreSQL | SQLite]
 
 ## Folder Structure
-- /frontend — [framework] app
-- /backend — [framework] API
+- apps/frontend/ — [framework] app. Deployable target. No business logic.
+- apps/backend/ — [framework] API. Deployable target. No shared contracts here.
+- shared/core/contracts/ — Source of truth for types and API shapes.
+- shared/core/schema/ — Source of truth for database schema and migrations.
+
+## AI Agent Rules
+- Feature work → edit apps/
+- Shared types or API shape changes → edit shared/core/contracts/
+- Database changes → edit shared/core/schema/
+- Adding a new domain → create shared/[domain]/contracts/ and shared/[domain]/schema/
+- Never put app-specific logic in shared/
+- Never put shared contracts inside apps/
 
 ## API Conventions
 - Base URL: /api/v1
@@ -1364,6 +1374,8 @@ stack:
     type: [node | python | go]
     enabled: true
     path: apps/backend/
+  shared:
+    core: shared/core/
 
 agents:
   enabled: [planner, pm-agent, backend-agent, frontend-agent, qa-agent, reviewer]

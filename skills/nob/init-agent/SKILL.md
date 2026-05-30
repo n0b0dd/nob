@@ -10,6 +10,14 @@ Bootstrap a new fullstack project from scratch. Understand what the user is buil
 
 ---
 
+## Inputs
+
+Provided by the hub in the `[INPUTS]` block:
+- `Working directory` — absolute path to the target project directory
+- `User intent` — the user's original message (e.g., "nob init")
+
+---
+
 ## Step 1: Check directory is empty
 
 Run via Bash: `ls -A .`
@@ -475,6 +483,7 @@ Write `frontend/tsconfig.json`:
 {
   "compilerOptions": {
     "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -909,7 +918,8 @@ app.include_router(items.router, prefix="/api/v1")
 ```
 
 Write `backend/routes/__init__.py`:
-(empty file)
+```python
+```
 
 Write `backend/routes/health.py`:
 ```python
@@ -938,7 +948,12 @@ Write `backend/.env.example`:
 DATABASE_URL=postgresql://localhost:5432/myapp
 ```
 
-Note: FastAPI runs on port 8000 by default (`uvicorn main:app --reload`). Update the frontend `.env.example` API URL to `http://localhost:8000` when this backend is confirmed.
+**If BACKEND_TYPE = `fastapi`:** After writing all backend files, also update the frontend `.env.example`:
+- If FRONTEND_TYPE = `next`: overwrite `frontend/.env.example` with `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- If FRONTEND_TYPE = `react-vite` or `vue`: overwrite `frontend/.env.example` with `VITE_API_URL=http://localhost:8000`
+- If FRONTEND_TYPE = `flutter`: update the `_base` constant in `frontend/lib/services/api_service.dart` from `http://localhost:3001` to `http://localhost:8000`
+
+FastAPI serves on port 8000 by default (`uvicorn main:app --reload`). Mismatched ports cause silent CORS failures.
 
 ---
 
@@ -946,11 +961,11 @@ Note: FastAPI runs on port 8000 by default (`uvicorn main:app --reload`). Update
 
 Run: `mkdir -p backend/handlers`
 
-Slugify PROJECT_NAME to lowercase hyphenated form (e.g., "Task Tracker" → "task-tracker"). Store as MODULE_NAME.
+Slugify PROJECT_NAME to lowercase hyphenated form (e.g., "Task Tracker" → "task-tracker"). Store as MODULE_NAME. The full Go module path is `example.com/[MODULE_NAME]` — use this in go.mod and all import paths.
 
 Write `backend/go.mod`:
 ```
-module [MODULE_NAME]
+module example.com/[MODULE_NAME]
 
 go 1.22
 
@@ -970,7 +985,7 @@ import (
 	"net/http"
 	"os"
 
-	"[MODULE_NAME]/handlers"
+	"example.com/[MODULE_NAME]/handlers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -1177,7 +1192,7 @@ Emit:
 
 ```
 [INIT-AGENT OUTPUT]
-Status: [complete | partial]
+Status: [complete | partial | aborted]
 Project: [PROJECT_NAME]
 Frontend: [FRONTEND_TYPE]
 Backend: [BACKEND_TYPE]

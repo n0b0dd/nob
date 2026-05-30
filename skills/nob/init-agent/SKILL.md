@@ -20,7 +20,7 @@ Provided by the hub in the `[INPUTS]` block:
 
 ## Setup
 
-Extract `Working directory` from the `[INPUTS]` block. Store it as WORKING_DIR. All Bash commands and Write tool calls in this skill use WORKING_DIR as the base path (e.g., `ls -A {WORKING_DIR}`, `mkdir -p {WORKING_DIR}/frontend/src/app`).
+Extract `Working directory` from the `[INPUTS]` block. Store it as WORKING_DIR. All Bash commands and Write tool calls in this skill use WORKING_DIR as the base path (e.g., `ls -A {WORKING_DIR}`, `mkdir -p {WORKING_DIR}/apps/frontend/src/app`).
 
 ## Step 1: Check directory is empty
 
@@ -131,9 +131,9 @@ vendor/
 
 ### If FRONTEND_TYPE = `next`
 
-Run: `mkdir -p frontend/src/app frontend/src/lib`
+Run: `mkdir -p apps/frontend/src/app frontend/src/lib`
 
-Write `frontend/package.json`:
+Write `apps/frontend/package.json`:
 ```json
 {
   "name": "frontend",
@@ -160,7 +160,7 @@ Write `frontend/package.json`:
 }
 ```
 
-Write `frontend/tsconfig.json`:
+Write `apps/frontend/tsconfig.json`:
 ```json
 {
   "compilerOptions": {
@@ -185,7 +185,7 @@ Write `frontend/tsconfig.json`:
 }
 ```
 
-Write `frontend/tailwind.config.ts`:
+Write `apps/frontend/tailwind.config.ts`:
 ```typescript
 import type { Config } from 'tailwindcss'
 
@@ -198,28 +198,28 @@ const config: Config = {
 export default config
 ```
 
-Write `frontend/postcss.config.js`:
+Write `apps/frontend/postcss.config.js`:
 ```javascript
 module.exports = {
   plugins: { tailwindcss: {}, autoprefixer: {} },
 }
 ```
 
-Write `frontend/next.config.js`:
+Write `apps/frontend/next.config.js`:
 ```javascript
 /** @type {import('next').NextConfig} */
 const nextConfig = {}
 module.exports = nextConfig
 ```
 
-Write `frontend/src/app/globals.css`:
+Write `apps/frontend/src/app/globals.css`:
 ```css
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 ```
 
-Write `frontend/src/app/layout.tsx`:
+Write `apps/frontend/src/app/layout.tsx`:
 ```tsx
 import type { Metadata } from 'next'
 import './globals.css'
@@ -238,7 +238,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-Write `frontend/src/app/page.tsx`:
+Write `apps/frontend/src/app/page.tsx`:
 ```tsx
 'use client'
 
@@ -267,7 +267,7 @@ export default function Home() {
 }
 ```
 
-Write `frontend/src/lib/api.ts`:
+Write `apps/frontend/src/lib/api.ts`:
 ```typescript
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
@@ -279,7 +279,7 @@ export async function fetchItems(): Promise<string[]> {
 }
 ```
 
-Write `frontend/.env.example`:
+Write `apps/frontend/.env.example`:
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3001
 ```
@@ -288,9 +288,9 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 ### If FRONTEND_TYPE = `react-vite`
 
-Run: `mkdir -p frontend/src/lib`
+Run: `mkdir -p apps/frontend/src/lib`
 
-Write `frontend/package.json`:
+Write `apps/frontend/package.json`:
 ```json
 {
   "name": "frontend",
@@ -318,7 +318,7 @@ Write `frontend/package.json`:
 }
 ```
 
-Write `frontend/tsconfig.json`:
+Write `apps/frontend/tsconfig.json`:
 ```json
 {
   "compilerOptions": {
@@ -338,7 +338,7 @@ Write `frontend/tsconfig.json`:
 }
 ```
 
-Write `frontend/vite.config.ts`:
+Write `apps/frontend/vite.config.ts`:
 ```typescript
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -353,7 +353,7 @@ export default defineConfig({
 })
 ```
 
-Write `frontend/tailwind.config.ts`:
+Write `apps/frontend/tailwind.config.ts`:
 ```typescript
 import type { Config } from 'tailwindcss'
 
@@ -366,12 +366,12 @@ const config: Config = {
 export default config
 ```
 
-Write `frontend/postcss.config.js`:
+Write `apps/frontend/postcss.config.js`:
 ```javascript
 module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }
 ```
 
-Write `frontend/index.html`:
+Write `apps/frontend/index.html`:
 ```html
 <!doctype html>
 <html lang="en">
@@ -387,7 +387,7 @@ Write `frontend/index.html`:
 </html>
 ```
 
-Write `frontend/src/main.tsx`:
+Write `apps/frontend/src/main.tsx`:
 ```tsx
 import React from 'react'
 import ReactDOM from 'react-dom/client'
@@ -399,14 +399,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 )
 ```
 
-Write `frontend/src/index.css`:
+Write `apps/frontend/src/index.css`:
 ```css
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 ```
 
-Write `frontend/src/App.tsx`:
+Write `apps/frontend/src/App.tsx`:
 ```tsx
 import { useEffect, useState } from 'react'
 import { fetchItems } from './lib/api'
@@ -433,7 +433,7 @@ export default function App() {
 }
 ```
 
-Write `frontend/src/lib/api.ts`:
+Write `apps/frontend/src/lib/api.ts`:
 ```typescript
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
@@ -445,7 +445,7 @@ export async function fetchItems(): Promise<string[]> {
 }
 ```
 
-Write `frontend/.env.example`:
+Write `apps/frontend/.env.example`:
 ```
 VITE_API_URL=http://localhost:3001
 ```
@@ -454,9 +454,9 @@ VITE_API_URL=http://localhost:3001
 
 ### If FRONTEND_TYPE = `vue`
 
-Run: `mkdir -p frontend/src/lib`
+Run: `mkdir -p apps/frontend/src/lib`
 
-Write `frontend/package.json`:
+Write `apps/frontend/package.json`:
 ```json
 {
   "name": "frontend",
@@ -482,7 +482,7 @@ Write `frontend/package.json`:
 }
 ```
 
-Write `frontend/tsconfig.json`:
+Write `apps/frontend/tsconfig.json`:
 ```json
 {
   "compilerOptions": {
@@ -498,7 +498,7 @@ Write `frontend/tsconfig.json`:
 }
 ```
 
-Write `frontend/vite.config.ts`:
+Write `apps/frontend/vite.config.ts`:
 ```typescript
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -513,7 +513,7 @@ export default defineConfig({
 })
 ```
 
-Write `frontend/tailwind.config.ts`:
+Write `apps/frontend/tailwind.config.ts`:
 ```typescript
 import type { Config } from 'tailwindcss'
 
@@ -526,12 +526,12 @@ const config: Config = {
 export default config
 ```
 
-Write `frontend/postcss.config.js`:
+Write `apps/frontend/postcss.config.js`:
 ```javascript
 module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }
 ```
 
-Write `frontend/index.html`:
+Write `apps/frontend/index.html`:
 ```html
 <!doctype html>
 <html lang="en">
@@ -547,7 +547,7 @@ Write `frontend/index.html`:
 </html>
 ```
 
-Write `frontend/src/main.ts`:
+Write `apps/frontend/src/main.ts`:
 ```typescript
 import { createApp } from 'vue'
 import App from './App.vue'
@@ -556,14 +556,14 @@ import './index.css'
 createApp(App).mount('#app')
 ```
 
-Write `frontend/src/index.css`:
+Write `apps/frontend/src/index.css`:
 ```css
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 ```
 
-Write `frontend/src/App.vue`:
+Write `apps/frontend/src/App.vue`:
 ```vue
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
@@ -592,7 +592,7 @@ onMounted(async () => {
 </template>
 ```
 
-Write `frontend/src/lib/api.ts`:
+Write `apps/frontend/src/lib/api.ts`:
 ```typescript
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
@@ -604,7 +604,7 @@ export async function fetchItems(): Promise<string[]> {
 }
 ```
 
-Write `frontend/.env.example`:
+Write `apps/frontend/.env.example`:
 ```
 VITE_API_URL=http://localhost:3001
 ```
@@ -613,9 +613,9 @@ VITE_API_URL=http://localhost:3001
 
 ### If FRONTEND_TYPE = `flutter`
 
-Run: `mkdir -p frontend/lib/screens frontend/lib/services`
+Run: `mkdir -p apps/frontend/lib/screens frontend/lib/services`
 
-Write `frontend/pubspec.yaml`:
+Write `apps/frontend/pubspec.yaml`:
 ```yaml
 name: frontend
 description: A Flutter app
@@ -639,7 +639,7 @@ flutter:
   uses-material-design: true
 ```
 
-Write `frontend/lib/main.dart`:
+Write `apps/frontend/lib/main.dart`:
 ```dart
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
@@ -665,7 +665,7 @@ class MyApp extends StatelessWidget {
 }
 ```
 
-Write `frontend/lib/screens/home_screen.dart`:
+Write `apps/frontend/lib/screens/home_screen.dart`:
 ```dart
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
@@ -711,7 +711,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 ```
 
-Write `frontend/lib/services/api_service.dart`:
+Write `apps/frontend/lib/services/api_service.dart`:
 ```dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -734,9 +734,9 @@ class ApiService {
 
 ### If BACKEND_TYPE = `express`
 
-Run: `mkdir -p backend/src/routes backend/src/middleware`
+Run: `mkdir -p apps/backend/src/routes backend/src/middleware`
 
-Write `backend/package.json`:
+Write `apps/backend/package.json`:
 ```json
 {
   "name": "backend",
@@ -767,7 +767,7 @@ Write `backend/package.json`:
 }
 ```
 
-Write `backend/tsconfig.json`:
+Write `apps/backend/tsconfig.json`:
 ```json
 {
   "compilerOptions": {
@@ -786,7 +786,7 @@ Write `backend/tsconfig.json`:
 }
 ```
 
-Write `backend/jest.config.js`:
+Write `apps/backend/jest.config.js`:
 ```javascript
 module.exports = {
   preset: 'ts-jest',
@@ -795,7 +795,7 @@ module.exports = {
 }
 ```
 
-Write `backend/src/index.ts`:
+Write `apps/backend/src/index.ts`:
 ```typescript
 import express from 'express'
 import cors from 'cors'
@@ -820,7 +820,7 @@ app.listen(PORT, () => {
 export default app
 ```
 
-Write `backend/src/routes/index.ts`:
+Write `apps/backend/src/routes/index.ts`:
 ```typescript
 import { Router } from 'express'
 import healthRouter from './health'
@@ -834,7 +834,7 @@ router.use('/api/v1', itemsRouter)
 export default router
 ```
 
-Write `backend/src/routes/health.ts`:
+Write `apps/backend/src/routes/health.ts`:
 ```typescript
 import { Router, Request, Response } from 'express'
 
@@ -847,7 +847,7 @@ router.get('/health', (_req: Request, res: Response) => {
 export default router
 ```
 
-Write `backend/src/routes/items.ts`:
+Write `apps/backend/src/routes/items.ts`:
 ```typescript
 import { Router, Request, Response } from 'express'
 
@@ -860,7 +860,7 @@ router.get('/items', (_req: Request, res: Response) => {
 export default router
 ```
 
-Write `backend/src/middleware/errorHandler.ts`:
+Write `apps/backend/src/middleware/errorHandler.ts`:
 ```typescript
 import { Request, Response, NextFunction } from 'express'
 
@@ -877,7 +877,7 @@ export function errorHandler(
 }
 ```
 
-Write `backend/.env.example`:
+Write `apps/backend/.env.example`:
 ```
 PORT=3001
 DATABASE_URL=postgresql://localhost:5432/myapp
@@ -887,9 +887,9 @@ DATABASE_URL=postgresql://localhost:5432/myapp
 
 ### If BACKEND_TYPE = `fastapi`
 
-Run: `mkdir -p backend/routes`
+Run: `mkdir -p apps/backend/routes`
 
-Write `backend/requirements.txt`:
+Write `apps/backend/requirements.txt`:
 ```
 fastapi==0.110.0
 uvicorn[standard]==0.27.1
@@ -899,7 +899,7 @@ pytest==8.1.1
 pytest-asyncio==0.23.5
 ```
 
-Write `backend/main.py`:
+Write `apps/backend/main.py`:
 ```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -921,11 +921,11 @@ app.include_router(health.router)
 app.include_router(items.router, prefix="/api/v1")
 ```
 
-Write `backend/routes/__init__.py`:
+Write `apps/backend/routes/__init__.py`:
 ```python
 ```
 
-Write `backend/routes/health.py`:
+Write `apps/backend/routes/health.py`:
 ```python
 from fastapi import APIRouter
 
@@ -936,7 +936,7 @@ def health_check():
     return {"status": "ok"}
 ```
 
-Write `backend/routes/items.py`:
+Write `apps/backend/routes/items.py`:
 ```python
 from fastapi import APIRouter
 
@@ -947,15 +947,15 @@ def get_items():
     return {"items": ["item-1", "item-2", "item-3"]}
 ```
 
-Write `backend/.env.example`:
+Write `apps/backend/.env.example`:
 ```
 DATABASE_URL=postgresql://localhost:5432/myapp
 ```
 
 **If BACKEND_TYPE = `fastapi`:** After writing all backend files, also update the frontend `.env.example`:
-- If FRONTEND_TYPE = `next`: overwrite `frontend/.env.example` with `NEXT_PUBLIC_API_URL=http://localhost:8000`
-- If FRONTEND_TYPE = `react-vite` or `vue`: overwrite `frontend/.env.example` with `VITE_API_URL=http://localhost:8000`
-- If FRONTEND_TYPE = `flutter`: update the `_base` constant in `frontend/lib/services/api_service.dart` from `http://localhost:3001` to `http://localhost:8000`
+- If FRONTEND_TYPE = `next`: overwrite `apps/frontend/.env.example` with `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- If FRONTEND_TYPE = `react-vite` or `vue`: overwrite `apps/frontend/.env.example` with `VITE_API_URL=http://localhost:8000`
+- If FRONTEND_TYPE = `flutter`: update the `_base` constant in `apps/frontend/lib/services/api_service.dart` from `http://localhost:3001` to `http://localhost:8000`
 
 FastAPI serves on port 8000 by default (`uvicorn main:app --reload`). Mismatched ports cause silent CORS failures.
 
@@ -963,11 +963,11 @@ FastAPI serves on port 8000 by default (`uvicorn main:app --reload`). Mismatched
 
 ### If BACKEND_TYPE = `go`
 
-Run: `mkdir -p backend/handlers`
+Run: `mkdir -p apps/backend/handlers`
 
 Slugify PROJECT_NAME to lowercase hyphenated form (e.g., "Task Tracker" → "task-tracker"). Store as MODULE_NAME. The full Go module path is `example.com/[MODULE_NAME]` — use this in go.mod and all import paths.
 
-Write `backend/go.mod`:
+Write `apps/backend/go.mod`:
 ```
 module example.com/[MODULE_NAME]
 
@@ -979,7 +979,7 @@ require (
 )
 ```
 
-Write `backend/main.go`:
+Write `apps/backend/main.go`:
 ```go
 package main
 
@@ -1029,7 +1029,7 @@ func corsMiddleware() gin.HandlerFunc {
 }
 ```
 
-Write `backend/handlers/health.go`:
+Write `apps/backend/handlers/health.go`:
 ```go
 package handlers
 
@@ -1044,7 +1044,7 @@ func Health(c *gin.Context) {
 }
 ```
 
-Write `backend/handlers/items.go`:
+Write `apps/backend/handlers/items.go`:
 ```go
 package handlers
 
@@ -1061,13 +1061,13 @@ func GetItems(c *gin.Context) {
 }
 ```
 
-Write `backend/.env.example`:
+Write `apps/backend/.env.example`:
 ```
 PORT=3001
 DATABASE_URL=postgresql://localhost:5432/myapp
 ```
 
-After writing all Go files, run from `backend/`: `go mod tidy`
+After writing all Go files, run from `apps/backend/`: `go mod tidy`
 
 ---
 
@@ -1076,15 +1076,15 @@ After writing all Go files, run from `backend/`: `go mod tidy`
 Write `CLAUDE.md` at the working directory root. Use confirmed stack values — no placeholder text.
 
 Determine frontend start command:
-- `next` → `cd frontend && npm run dev`
-- `react-vite` → `cd frontend && npm run dev`
-- `vue` → `cd frontend && npm run dev`
-- `flutter` → `cd frontend && flutter run`
+- `next` → `cd apps/frontend && npm run dev`
+- `react-vite` → `cd apps/frontend && npm run dev`
+- `vue` → `cd apps/frontend && npm run dev`
+- `flutter` → `cd apps/frontend && flutter run`
 
 Determine backend start command:
-- `express` → `cd backend && npm run dev`
-- `fastapi` → `cd backend && uvicorn main:app --reload`
-- `go` → `cd backend && go run main.go`
+- `express` → `cd apps/backend && npm run dev`
+- `fastapi` → `cd apps/backend && uvicorn main:app --reload`
+- `go` → `cd apps/backend && go run main.go`
 
 Write `CLAUDE.md`:
 
@@ -1107,21 +1107,21 @@ Write `CLAUDE.md`:
 ## Frontend Conventions
 [if next/react-vite/vue:]
 - Components: functional, hooks only
-- API client: /frontend/src/lib/api.ts
+- API client: /apps/frontend/src/lib/api.ts
 [if flutter:]
-- API client: /frontend/lib/services/api_service.dart
+- API client: /apps/frontend/lib/services/api_service.dart
 
 ## Backend Conventions
 [if express:]
-- Routes: /backend/src/routes/ — one Router file per resource
-- Error handler: /backend/src/middleware/errorHandler.ts
-- Tests: Jest + Supertest — run `npm test` from /backend
+- Routes: /apps/backend/src/routes/ — one Router file per resource
+- Error handler: /apps/backend/src/middleware/errorHandler.ts
+- Tests: Jest + Supertest — run `npm test` from /apps/backend
 [if fastapi:]
-- Routes: /backend/routes/ — one file per resource
-- Tests: pytest — run `pytest` from /backend
+- Routes: /apps/backend/routes/ — one file per resource
+- Tests: pytest — run `pytest` from /apps/backend
 [if go:]
-- Handlers: /backend/handlers/ — one file per resource
-- Tests: go test — run `go test ./...` from /backend
+- Handlers: /apps/backend/handlers/ — one file per resource
+- Tests: go test — run `go test ./...` from /apps/backend
 
 ## Dev Commands
 - Start backend:  [backend start command]
@@ -1144,11 +1144,11 @@ stack:
   frontend:
     type: [FRONTEND_TYPE]
     enabled: true
-    path: frontend/
+    path: apps/frontend/
   backend:
     type: [node | python | go]
     enabled: true
-    path: backend/
+    path: apps/backend/
 
 agents:
   enabled: [planner, pm-agent, backend-agent, frontend-agent, qa-agent, reviewer]
@@ -1173,19 +1173,19 @@ agents:
 Run the install command for each layer. Capture exit codes. Continue on failure — do not stop.
 
 **If FRONTEND_TYPE = `next`, `react-vite`, or `vue`:**
-Run from `frontend/`: `npm install`
+Run from `apps/frontend/`: `npm install`
 
 **If FRONTEND_TYPE = `flutter`:**
-Run from `frontend/`: `flutter pub get`
+Run from `apps/frontend/`: `flutter pub get`
 
 **If BACKEND_TYPE = `express`:**
-Run from `backend/`: `npm install`
+Run from `apps/backend/`: `npm install`
 
 **If BACKEND_TYPE = `fastapi`:**
-Run from `backend/`: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+Run from `apps/backend/`: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 
 **If BACKEND_TYPE = `go`:**
-Run from `backend/`: `go mod tidy` (already run in Step 4; skip if already done)
+Run from `apps/backend/`: `go mod tidy` (already run in Step 4; skip if already done)
 
 For each command that fails (non-zero exit code): record `{layer}: FAILED — {error summary}`. Collect all failures for the output block.
 
@@ -1215,9 +1215,9 @@ Install errors — run manually:
   [cd <dir> && <exact command>]
 
 Frontend start command: [command]
-Frontend directory: frontend/
+Frontend directory: apps/frontend/
 Backend start command: [command]
-Backend directory: backend/
+Backend directory: apps/backend/
 [/INIT-AGENT OUTPUT]
 ```
 

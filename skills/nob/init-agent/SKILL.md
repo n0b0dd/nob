@@ -82,12 +82,13 @@ Recommended stack for your project:
 
 Frontend:  [framework + version + styling]
 Backend:   [language + framework]
-Database:  [database]
+Database:  [database + ORM, e.g. "PostgreSQL + Prisma ORM" or "PostgreSQL + Alembic"]
+Packages:  shared/core ([ORM name] schema + [TypeScript contracts | OpenAPI spec])
 
 Why: [2–3 sentences tying the recommendation to what the user described]
 
 Does this stack work for you? Or would you like to change any layer?
-(e.g. "use Python for backend", "use SQLite instead of PostgreSQL")
+(e.g. "use Python for backend", "use SQLite instead of PostgreSQL", "use Drizzle instead of Prisma")
 ```
 
 Parse the user's response:
@@ -99,6 +100,12 @@ Store confirmed values:
 - FRONTEND_TYPE: `next` | `react-vite` | `vue` | `flutter`
 - BACKEND_TYPE: `express` | `fastapi` | `go`
 - DATABASE_TYPE: `postgres` | `sqlite`
+- ORM_TYPE: determined by rules below
+
+Determine ORM_TYPE from confirmed stack:
+- BACKEND_TYPE = `express` (any DATABASE_TYPE) → `prisma` (default). If user says "use Drizzle" → `drizzle`. If user says "use Kysely" → `kysely`. Any other Node ORM override → `other-node-orm`.
+- BACKEND_TYPE = `fastapi` → `alembic`
+- BACKEND_TYPE = `go` → `goose`
 
 Extract PROJECT_NAME from PROJECT_DESCRIPTION: 2–3 words, title case (e.g., "Task Tracker", "File Sharing Platform").
 

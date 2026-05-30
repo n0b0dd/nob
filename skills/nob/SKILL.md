@@ -88,7 +88,15 @@ agents:
     qa-agent: haiku
     reviewer: haiku
     init-agent: sonnet
+    idea-framer: haiku
+    market-researcher: sonnet
+    business-modeler: haiku
+    gtm-strategist: haiku
+    financial-modeler: haiku
+    venture-reviewer: haiku
   max_parallel_slices: 3
+  venture:
+    enabled: true
   checkpoint:
     enabled: true
     path: .nob/

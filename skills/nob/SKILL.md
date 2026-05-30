@@ -25,7 +25,7 @@ Example: if the system context shows `Base directory for this skill: /home/user/
 Run `git branch --show-current` to get the current branch name.
 
 If the current branch is `main` or `master`:
-- Derive a branch name from the source file: `nob/<spec-or-bug-filename-without-extension>` (e.g. `nob/user-profile` from `test-spec-user-profile.md`). If no source file exists in the intent (e.g., intent is `nob init`), use `nob/init`.
+- Derive a branch name from the source file: `nob/<spec-or-bug-filename-without-extension>` (e.g. `nob/user-profile` from `test-spec-user-profile.md`). If no source file exists in the intent: use `nob/init` for Init workflows, use `nob/venture` for Venture workflows, otherwise use `nob/unnamed`.
 - Run `git checkout -b <branch-name>` to create and switch to the branch
 - Confirm to the user: "Created branch `<branch-name>`"
 
@@ -170,21 +170,20 @@ Store the user's original message as VENTURE_IDEA.
 
 ### Checkpoint setup
 
-Create directories if they do not exist:
-```bash
-mkdir -p docs/venture
-mkdir -p {checkpoint.path}
-```
+Create `docs/venture/` if it does not exist: `mkdir -p docs/venture`
 
-Ensure `.nob/` appears in `.gitignore` at the repo root. If the line is absent, append it using the Edit tool.
+If `agents.checkpoint.enabled` is true:
+- Run `mkdir -p {checkpoint.path}`
+- Ensure `.nob/` appears in `.gitignore` at the repo root. If absent, append it using the Edit tool.
+- Read `{checkpoint.path}venture-checkpoint.json` if it exists. Store as VENTURE_CHECKPOINT (null if not found or not parseable).
 
-Read `{checkpoint.path}venture-checkpoint.json` if it exists. Store as VENTURE_CHECKPOINT (null if not found or not parseable).
+If `agents.checkpoint.enabled` is false: set VENTURE_CHECKPOINT to null and skip all checkpoint writes in this workflow.
 
 Stage order: `[idea-framer, market-researcher, business-modeler, gtm-strategist, financial-modeler, venture-reviewer]`
 
 For each stage in order: if VENTURE_CHECKPOINT has `stages.[stage-name].status: "completed"`, restore its output from `stages.[stage-name].output` and skip re-running it.
 
-Helper — write venture checkpoint after each stage completes: Read the current `{checkpoint.path}venture-checkpoint.json` (or start with `{}`), update only `stages.[stage-name]` to `{status: "completed", output: "[extracted output block]", output_file: "[file path]"}`, write back using the Write tool.
+Helper — write venture checkpoint after each stage completes (only if `agents.checkpoint.enabled` is true): Read the current `{checkpoint.path}venture-checkpoint.json` (or start with `{}`), update only `stages.[stage-name]` to `{status: "completed", output: "[extracted output block]"}`, write back using the Write tool.
 
 ---
 
@@ -362,7 +361,7 @@ If `needs_dev: false`:
 If `needs_dev: true` and status is `PASS` or `NEEDS WORK`:
 - Print: "Venture pipeline complete. Artifacts saved to `docs/venture/`. Ready to move into technical implementation? (yes / not yet)"
 - Wait for response.
-- If **yes**: re-run the hub from Step 2 with intent set to `nob docs/venture/venture-spec.md`. This will detect `Spec → Code` workflow and run the full dev pipeline.
+- If **yes**: Print: "Run `/nob docs/venture/venture-spec.md` to start technical implementation." Then jump to Venture terminal summary and exit. The user's next `/nob` invocation will detect `Spec → Code` workflow and run the full dev pipeline.
 - If **not yet**: jump to Venture terminal summary and exit.
 
 ---

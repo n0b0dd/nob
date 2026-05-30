@@ -80,13 +80,11 @@ Create `docs/venture/` if it does not exist, then write `docs/venture/venture-sp
 - [ ] GTM tracking is in place for priority channels
 - [ ] Financial model assumptions are testable via product instrumentation
 
-[PM-AGENT REQUIREMENTS]
-Problem: [one-line]
-Target user: [one-line]
-Revenue model: [one-line]
+## Implementation Notes
+Problem to solve: [one-line from idea-frame.md]
+Target user: [one-line persona]
+Revenue model: [one-line chosen model]
 MVP scope: [2-3 sentences on what the minimum viable product must do]
-needs_dev: [true | false]
-[/PM-AGENT REQUIREMENTS]
 ```
 
 Set `needs_dev: true` if the solution requires software. Set `needs_dev: false` for non-tech businesses (retail, consulting, physical product, service business).

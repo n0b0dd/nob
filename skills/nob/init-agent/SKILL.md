@@ -1397,16 +1397,14 @@ agents:
 
 ## Step 7: Install dependencies
 
-Run the install command for each layer. Capture exit codes. Continue on failure — do not stop.
+Run the install commands below. Capture exit codes. Continue on failure — do not stop.
 
-**If FRONTEND_TYPE = `next`, `react-vite`, or `vue`:**
-Run from `apps/frontend/`: `npm install`
+**If any JS/TS app exists (FRONTEND_TYPE is `next`, `react-vite`, or `vue`, OR BACKEND_TYPE is `express`):**
+Run from repo root: `pnpm install`
+This installs all `apps/*` and `shared/*` workspaces in one command.
 
 **If FRONTEND_TYPE = `flutter`:**
 Run from `apps/frontend/`: `flutter pub get`
-
-**If BACKEND_TYPE = `express`:**
-Run from `apps/backend/`: `npm install`
 
 **If BACKEND_TYPE = `fastapi`:**
 Run from `apps/backend/`: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`

@@ -33,8 +33,17 @@ agents:
     pm-agent: haiku
     qa-agent: haiku
     reviewer: haiku
+    idea-framer: haiku           # venture pipeline agents
+    market-researcher: sonnet    # web research needs sonnet
+    business-modeler: haiku
+    gtm-strategist: haiku
+    financial-modeler: haiku
+    venture-reviewer: haiku
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
+
+  venture:
+    enabled: true           # set false to disable /nob venture detection
 
   checkpoint:
     enabled: true           # write/read checkpoint files on disk (default: true)

@@ -17,7 +17,7 @@ Provided by the hub in the `[INPUTS]` block:
 - `Detected source paths` — frontend and backend dirs detected by the hub (e.g. `frontend/`, `backend/`), or "unknown"
 - `Stack type` — if known from hub auto-detection or `.nob.yml` (e.g. `node`, `python`, `go`), or "unknown"
 - `Original user intent` — the user's original message
-- `Refactor mode` — `explicit` (standalone `/nob refactor`) or `mid-run` (auto-detected mismatch)
+- `Refactor mode` — `explicit` (standalone `/nob refactor`) or `mid-run` (auto-detected mismatch). In `mid-run` mode the hub has already obtained user consent to proceed; Step 3's approval prompt is still shown to confirm the specific plan.
 
 ---
 
@@ -27,14 +27,19 @@ Extract `Working directory` from `[INPUTS]`. Store as WORKING_DIR.
 
 Run `ls -A {WORKING_DIR}` to list all top-level entries.
 
-**Determine stack type** — use `Stack type` from inputs if provided and not "unknown"; otherwise detect from WORKING_DIR:
-- Root `package.json` exists → JS/TS. Read it and check `dependencies` for `next` → `next`, `vue` → `vue`, `react` or `react-dom` → `react`, `express`/`fastify`/`koa` → `node`.
-- Root `pyproject.toml` or `requirements.txt` → `python`.
-- Root `go.mod` → `go`.
-- `pubspec.yaml` → `flutter`.
-- Cannot determine → store as "unknown".
+**Determine stack type** — use `Stack type` from inputs if provided and not "unknown". Otherwise detect from WORKING_DIR and the identified source directories:
 
-Store as STACK_TYPE and FRONTEND_TYPE (the frontend framework name) and BACKEND_TYPE (the backend framework name).
+To set FRONTEND_TYPE: check for a `package.json` in SOURCE_FRONTEND (if non-null), then fall back to root. Check `dependencies` for `next` → `next`, `vue` → `vue`, `react` or `react-dom` → `react`. Also check: `pubspec.yaml` → `flutter`.
+
+To set BACKEND_TYPE: check for a `package.json` in SOURCE_BACKEND (if non-null), then fall back to root. Check `dependencies` for `express`/`fastify`/`koa` → `node`. Also check: `pyproject.toml` or `requirements.txt` → `python`; `go.mod` → `go`.
+
+If FRONTEND_TYPE cannot be determined: set to "unknown".
+If BACKEND_TYPE cannot be determined: set to "unknown".
+
+STACK_TYPE is JS/TS if either FRONTEND_TYPE is `react`, `vue`, or `next`, or BACKEND_TYPE is `node`.
+STACK_TYPE is `python` if BACKEND_TYPE is `python`.
+STACK_TYPE is `go` if BACKEND_TYPE is `go`.
+STACK_TYPE is `flutter` if FRONTEND_TYPE is `flutter`.
 
 **Check git**: run `git -C {WORKING_DIR} status`. Exit code 0 → IS_GIT_REPO = true. Otherwise IS_GIT_REPO = false.
 
@@ -43,19 +48,19 @@ Store as STACK_TYPE and FRONTEND_TYPE (the frontend framework name) and BACKEND_
 - SOURCE_BACKEND: first existing directory among `backend/`, `server/`, `api/` that is NOT `apps/backend/`. Skip if `apps/backend/` already exists.
 - If neither can be determined, set to null.
 
-**Estimate import count**: if SOURCE_FRONTEND and SOURCE_BACKEND are both non-null and STACK_TYPE is JS/TS or Python, run:
+**Estimate import count**: if SOURCE_FRONTEND and SOURCE_BACKEND are both non-null, extract the basename of SOURCE_BACKEND (e.g. `backend` from `backend/`). Store as BACKEND_BASENAME.
 
-For JS/TS:
+For JS/TS stack:
 ```bash
-grep -r "\.\./[frontend-or-backend-dirname]" {WORKING_DIR} --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" -l 2>/dev/null | wc -l
+grep -r "\.\./${BACKEND_BASENAME}" {WORKING_DIR} --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" -l 2>/dev/null | wc -l
 ```
 
-For Python:
+For Python stack:
 ```bash
-grep -r "^from backend\.\|^import backend\." {WORKING_DIR} --include="*.py" -l 2>/dev/null | wc -l
+grep -r "^from ${BACKEND_BASENAME}\.\|^import ${BACKEND_BASENAME}\." {WORKING_DIR} --include="*.py" -l 2>/dev/null | wc -l
 ```
 
-Store result as IMPORT_FILE_COUNT. If command fails or returns 0: set IMPORT_FILE_COUNT = 0.
+Store result as IMPORT_FILE_COUNT. If the command fails or returns empty: set IMPORT_FILE_COUNT = 0.
 
 ---
 
@@ -65,7 +70,8 @@ Construct:
 - MOVES: array of `{from, to}` pairs — only include dirs that exist and are not already at the target path:
   - If SOURCE_FRONTEND is non-null: `{from: SOURCE_FRONTEND, to: "apps/frontend"}`
   - If SOURCE_BACKEND is non-null: `{from: SOURCE_BACKEND, to: "apps/backend"}`
-- NEW_DIRS: always `shared/core/contracts` and `shared/core/schema`; add `shared/core/package.json` if STACK_TYPE is JS/TS
+- NEW_DIRS: always `shared/core/contracts` and `shared/core/schema`
+- NEW_FILES: `shared/core/package.json` if STACK_TYPE is JS/TS
 - IMPORT_FILE_COUNT from Step 1
 - CONFIG_FILES: `CLAUDE.md`, `.nob.yml`
 
@@ -158,15 +164,17 @@ If STACK_TYPE is JS/TS: write `{WORKING_DIR}/shared/core/package.json`:
 
 ### 4d. Rewrite imports
 
-Walk all source files recursively in `{WORKING_DIR}/apps/frontend/` and `{WORKING_DIR}/apps/backend/`.
+Check whether `{WORKING_DIR}/apps/frontend/` and `{WORKING_DIR}/apps/backend/` exist before walking. If neither exists, set IMPORTS_REWRITTEN = 0 and IMPORT_WARNINGS = [] and skip to Step 5.
+
+Walk all source files recursively in whichever of `{WORKING_DIR}/apps/frontend/` and `{WORKING_DIR}/apps/backend/` exist.
 
 **JS/TS files** (`.ts`, `.tsx`, `.js`, `.jsx`):
 
-For each import or require statement referencing the old frontend or backend directory name:
-1. Identify the old path string (e.g. `'../backend/utils'`).
-2. Resolve it to an absolute path using the importing file's pre-move location.
-3. Compute the new relative path: from the importing file's current location inside `apps/` to the resolved target's new location inside `apps/`. Example: a file now at `apps/frontend/src/api/client.ts` importing `apps/backend/src/utils/auth.ts` gets the path `../../../backend/src/utils/auth`.
-4. Replace the old path string with the computed path.
+For each import or require statement where the path string contains BACKEND_BASENAME (e.g. `'../backend/utils'` or `'../../backend/auth'`):
+1. Identify the old path string.
+2. Resolve it relative to the importing file's current location to get the target's absolute path (e.g. `{WORKING_DIR}/apps/backend/utils`).
+3. Compute a new relative path from the importing file's current location to that same absolute target. Example: a file at `apps/frontend/src/api/client.ts` targeting `apps/backend/src/utils/auth` resolves to `../../../backend/src/utils/auth`.
+4. Replace the old path string with the newly computed relative path.
 
 If a file contains a dynamic `require()` (variable as argument), a barrel re-export that can't be traced, or the path cannot be resolved: skip that file, add its path to IMPORT_WARNINGS.
 
@@ -182,7 +190,7 @@ Use the Edit tool with `replace_all: true` for each pattern per file.
 
 **Go files** (`.go` and `go.mod`):
 
-Read `{WORKING_DIR}/go.mod`. If the module path references the old backend directory name, update it. Update all matching `import` blocks in `.go` files.
+Read `{WORKING_DIR}/go.mod`. If the `module` declaration contains `/{BACKEND_BASENAME}` as a path component, replace that component with `/apps/backend`. Then in every `.go` file under `{WORKING_DIR}/apps/`, find import strings containing the old module path prefix and update them to the new module path. Use the Edit tool for all changes.
 
 Count total files where at least one import was rewritten. Store as IMPORTS_REWRITTEN.
 Store skipped file paths as IMPORT_WARNINGS.
@@ -258,11 +266,13 @@ agents:
 [REFACTOR-AGENT OUTPUT]
 Status: complete
 Moves:
-  {for each move: "{from} → {to}: success | skipped | failed"}
+  [list each move as: "{from} → {to}: success | skipped | failed", one per line]
 Shared: created
 Imports rewritten: {IMPORTS_REWRITTEN}
 Config: CLAUDE.md written, .nob.yml written
-Warnings:
+Move warnings:
+  {MOVE_WARNINGS joined by newline, or "none"}
+Import warnings:
   {IMPORT_WARNINGS joined by newline, or "none"}
 [/REFACTOR-AGENT OUTPUT]
 ```

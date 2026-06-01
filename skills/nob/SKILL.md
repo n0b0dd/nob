@@ -33,6 +33,51 @@ If already on a non-main branch, proceed without creating a new branch.
 
 If git is not available or the working directory is not a git repo, skip this step and note it in the terminal summary.
 
+## Step 0.5: Structure Check
+
+Skip this step entirely if workflow is `Init` or `Venture`.
+
+Check for structure mismatch in this order:
+
+1. If `.nob.yml` exists and `stack.frontend.path` is `apps/frontend/` and `stack.backend.path` is `apps/backend/` → **no mismatch**. Skip this step.
+2. If the working directory is empty (no files other than `.git`/`.gitignore`) → **no mismatch**. Skip this step.
+3. If `apps/frontend/` or `apps/backend/` is missing AND a recognisable source directory exists elsewhere (`frontend/`, `web/`, `client/`, `src/`, `backend/`, `server/`, `api/`) → **mismatch**.
+4. If `apps/` layout is correct but `shared/core/` is absent → **partial mismatch**.
+
+When mismatch detected, store detected dir names as DETECTED_DIRS. Print:
+
+```
+Detected project structure doesn't match nob's layout:
+  Found:    [DETECTED_DIRS]
+  Expected: apps/frontend/  +  apps/backend/  +  shared/core/
+
+Refactor now before proceeding? (yes / skip)
+```
+
+Wait for user response:
+- `yes` → read `{SKILL_BASE_DIR}/refactor-agent/SKILL.md`. Dispatch an Agent with `model: agents.models["refactor-agent"] ?? "sonnet"` and this prompt:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/refactor-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Detected source paths: {DETECTED_DIRS}
+Stack type: unknown
+Original user intent: {user's original message}
+Refactor mode: mid-run
+[/INPUTS]
+```
+
+Extract `[REFACTOR-AGENT OUTPUT]...[/REFACTOR-AGENT OUTPUT]`. Store as REFACTOR_OUTPUT.
+
+If `Status: complete` in REFACTOR_OUTPUT: print "Refactor complete. Continuing with your original request..." then proceed to Step 1.
+If `Status: cancelled` or `Status: failed`: proceed to Step 1 without changes. Note the skip in the terminal summary.
+
+- `skip` or any non-yes response → set STRUCTURE_CHECK_SKIPPED = true. Proceed to Step 1 unchanged. Do not offer again in this run.
+
 ## Step 1: Read project config
 
 Read `CLAUDE.md` at the repo root. If not found, note it and continue.

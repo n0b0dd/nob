@@ -1,6 +1,6 @@
 ---
 name: nob
-description: 'Use when asked to implement a feature spec, fix a bug, or sync clients after an API change across a fullstack monorepo. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob [intent]". Orchestrates Planner → PM Agent → Backend Agent → Frontend Agent → Reviewer in sequence.'
+description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, or migrate an existing project to nob''s monorepo structure. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [intent]". Orchestrates Planner → PM Agent → Backend Agent → Frontend Agent → Reviewer in sequence. Also auto-detects structure mismatch on any run and offers refactor before proceeding.'
 ---
 
 # Nob — Hub Orchestrator
@@ -901,6 +901,29 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 
 **If workflow is `Venture`**: summary is printed inline in the `## Venture Workflow` section above. This section is not reached for Venture runs.
 
+**If workflow is `Refactor`**, use this summary. Populate each field from the corresponding field in REFACTOR_OUTPUT. Mark ✓ for success/created, ✗ for failed.
+
+```
+Nob refactor complete.
+
+Moves:       [source] → apps/frontend/  ✓ | ✗
+             [source] → apps/backend/   ✓ | ✗
+Shared:      shared/core/contracts/     ✓ | ✗
+             shared/core/schema/        ✓ | ✗
+Imports:     [N] files rewritten        ✓ | ✗
+Config:      CLAUDE.md                  ✓ | ✗
+             .nob.yml                   ✓ | ✗
+
+[if move or import warnings in REFACTOR_OUTPUT:]
+Manual review needed:
+  [list warnings from REFACTOR_OUTPUT Move warnings and Import warnings fields]
+
+Next: /nob implement docs/specs/your-feature.md
+```
+
+If REFACTOR_OUTPUT Status is `cancelled`: print "Refactor cancelled. No changes made." and exit.
+If REFACTOR_OUTPUT Status is `failed`: print the failure details from REFACTOR_OUTPUT and exit.
+
 ```
 Nob init complete.
 
@@ -977,3 +1000,4 @@ Next steps:
 - **Reviewer status is FAIL**: print all failing items prominently; do NOT auto-retry or attempt to fix automatically
 - **Non-slice agent result missing expected output block**: re-dispatch once; if still missing, report raw agent output and stop
 - **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
+- **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

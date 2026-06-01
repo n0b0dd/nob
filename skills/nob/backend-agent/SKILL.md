@@ -14,7 +14,7 @@ Implement backend changes by reading requirements from the [PM-AGENT OUTPUT] blo
 Get `stack.backend.type` and `stack.backend.path` from the `.nob.yml contents` field in your `[INPUTS]` block. Do not read `.nob.yml` from disk — the hub has already resolved it.
 
 ### Step 1.5: Select stack guidance
-Read `stack.backend.type` from your `[INPUTS]`. Find the matching subsection under `## Stack-specific guidance` at the bottom of this file and follow it throughout your implementation. If your stack type has no matching subsection, skip this step and rely on codebase exploration alone. If the actual codebase contradicts the guidance (e.g., uses a different validation library), the codebase wins.
+Read `stack.backend.type` from your `[INPUTS]`. Find the matching subsection under `## Stack-specific guidance` at the bottom of this file and use it as your default implementation pattern. If your stack type has no matching subsection, skip this step and rely on codebase exploration alone. Once you read the codebase in Step 4, prefer whatever patterns already exist there — the guidance is a starting point, not a rule.
 
 ### Step 2: Read CLAUDE.md
 Read `CLAUDE.md` for backend conventions: route patterns, auth middleware, error format, test commands.
@@ -170,7 +170,9 @@ async def get_me(current_user: User = Depends(get_current_user)):
 Manual validation in the handler, or struct tags with `github.com/go-playground/validator`:
 ```go
 if req.Name == "" {
-    http.Error(w, `{"error":"name is required"}`, http.StatusBadRequest)
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusBadRequest)
+    json.NewEncoder(w).Encode(map[string]string{"error": "name is required"})
     return
 }
 ```
@@ -229,7 +231,10 @@ public ResponseEntity<ItemResponse> create(@Valid @RequestBody CreateItemRequest
 ```java
 @ExceptionHandler(MethodArgumentNotValidException.class)
 public ResponseEntity<Map<String,String>> handleValidation(MethodArgumentNotValidException ex) {
-    return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+    String msg = ex.getBindingResult().getFieldErrors().stream()
+        .map(e -> e.getField() + ": " + e.getDefaultMessage())
+        .collect(Collectors.joining("; "));
+    return ResponseEntity.badRequest().body(Map.of("error", msg));
 }
 ```
 

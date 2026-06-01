@@ -42,20 +42,14 @@ Only write tests for files that were actually changed. Do not write tests specul
 ### Step 5: Run backend tests
 If backend was involved (`[BACKEND-AGENT OUTPUT]` exists and backend is enabled):
 
-Run the backend test command from CLAUDE.md, or default to:
-```
-Use the command from `## Stack-specific guidance` for `stack.backend.type`, or fall back to the CLAUDE.md test command.
-```
+Use the command from `## Stack-specific guidance` for `stack.backend.type`. If there is no matching subsection, fall back to the CLAUDE.md test command.
 
 Capture: total tests, passed, failed, any error output for failed tests.
 
 ### Step 6: Run frontend tests
 If frontend was involved (`[FRONTEND-AGENT OUTPUT]` exists and frontend is enabled):
 
-Run the frontend test command from CLAUDE.md, or default to:
-```
-Use the command from `## Stack-specific guidance` for `stack.frontend.type`, or fall back to the CLAUDE.md test command.
-```
+Use the command from `## Stack-specific guidance` for `stack.frontend.type`. If there is no matching subsection, fall back to the CLAUDE.md test command.
 
 Capture: total tests, passed, failed, any error output for failed tests.
 
@@ -104,7 +98,7 @@ Overall: PASS | FAIL | SKIPPED
 
 #### node
 **Command:** `cd {backend.path} && npm test`
-**Pass:** Exit code 0; output contains `Tests: X passed`
+**Pass:** Exit code 0 and output contains `Tests: X passed`. If exit code 0 but no `Tests:` line appears, mark as SKIPPED with reason "no test files found".
 **Fail:** Any line containing `FAIL` or `X failed`; capture the failing test name and error message
 
 #### python
@@ -118,9 +112,10 @@ Overall: PASS | FAIL | SKIPPED
 **Fail:** Any line starting with `FAIL`; capture `--- FAIL: TestName` lines for details
 
 #### java
-**Command:** `cd {backend.path} && ./mvnw test`
-**Pass:** `BUILD SUCCESS` and `Failures: 0, Errors: 0` in surefire summary
-**Fail:** `BUILD FAILURE` or non-zero `Failures:` / `Errors:` count; capture failing test class and message
+**Command:** If `./mvnw` exists: `cd {backend.path} && ./mvnw test`. If `./gradlew` exists: `cd {backend.path} && ./gradlew test`. Check with `ls {backend.path}` before running.
+**Pass (Maven):** `BUILD SUCCESS` and `Failures: 0, Errors: 0` in surefire summary
+**Pass (Gradle):** `BUILD SUCCESSFUL` and no failure count in test summary
+**Fail:** `BUILD FAILURE` / `BUILD FAILED` or non-zero failures/errors count; capture failing test class and message
 
 ---
 
@@ -128,7 +123,7 @@ Overall: PASS | FAIL | SKIPPED
 
 #### react / react-native
 **Command:** `cd {frontend.path} && npm test -- --watchAll=false`
-**Pass:** Exit code 0; output contains `Tests: X passed`
+**Pass:** Exit code 0 and output contains `Tests: X passed`. If exit code 0 but no `Tests:` line, mark as SKIPPED with reason "no test files found".
 **Fail:** Any line containing `FAIL` or `X failed`
 
 #### next
@@ -137,8 +132,8 @@ Overall: PASS | FAIL | SKIPPED
 
 #### vue
 **Command:** `cd {frontend.path} && npx vitest run`
-**Pass:** Output contains `X tests passed` with no failures line
-**Fail:** Any line containing `X tests failed`; capture test name and diff
+**Pass:** Output contains `passed` with no `failed` count (vitest prints `Tests  X passed (X)`)
+**Fail:** Output contains `failed` (vitest prints `Tests  X failed`); capture test name and diff
 
 #### flutter
 **Command:** `cd {frontend.path} && flutter test`
@@ -151,7 +146,7 @@ Overall: PASS | FAIL | SKIPPED
 **Fail:** `BUILD FAILED` or non-zero failure count; check `build/reports/tests/` for HTML report path
 
 #### ios
-**Command:** `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' 2>&1 | xcpretty`
+**Command:** `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,name=iPhone 16'`
 Note: replace `iPhone 16` with a simulator available on the machine (`xcrun simctl list devices available` to check).
 **Pass:** Final line is `** TEST SUCCEEDED **`
 **Fail:** Final line is `** TEST FAILED **`; capture failing test class and assertion

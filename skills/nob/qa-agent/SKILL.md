@@ -14,6 +14,9 @@ Verify that what was implemented actually works. Write tests for uncovered chang
 Get `stack.backend.path` and `stack.frontend.path` from the `.nob.yml contents` field in your `[INPUTS]` block. Do not read `.nob.yml` from disk — the hub has already resolved it.
 Read `CLAUDE.md` for test commands and test file conventions.
 
+### Step 1.5: Select stack guidance
+Read `stack.backend.type` and `stack.frontend.type` from your `[INPUTS]`. Find the matching subsections under `## Stack-specific guidance` at the bottom of this file. Use the listed test commands and pass/fail interpretation for each stack. If a stack type has no matching subsection, fall back to the CLAUDE.md test command or the default `npm test`.
+
 ### Step 2: Read implementation output blocks
 Find `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` in context.
 
@@ -41,7 +44,7 @@ If backend was involved (`[BACKEND-AGENT OUTPUT]` exists and backend is enabled)
 
 Run the backend test command from CLAUDE.md, or default to:
 ```
-cd {backend.path} && npm test
+Use the command from `## Stack-specific guidance` for `stack.backend.type`, or fall back to the CLAUDE.md test command.
 ```
 
 Capture: total tests, passed, failed, any error output for failed tests.
@@ -51,7 +54,7 @@ If frontend was involved (`[FRONTEND-AGENT OUTPUT]` exists and frontend is enabl
 
 Run the frontend test command from CLAUDE.md, or default to:
 ```
-cd {frontend.path} && npm test
+Use the command from `## Stack-specific guidance` for `stack.frontend.type`, or fall back to the CLAUDE.md test command.
 ```
 
 Capture: total tests, passed, failed, any error output for failed tests.
@@ -92,3 +95,63 @@ Overall: PASS | FAIL | SKIPPED
 - **Test command not found / node_modules missing**: mark as SKIPPED with reason; do not attempt to install deps
 - **Test suite times out**: mark as FAIL; include timeout in failures list
 - **Test file already exists for a changed file**: do not overwrite — run existing tests as-is; only add a new test file if there is zero coverage
+
+---
+
+## Stack-specific guidance
+
+### Backend stacks
+
+#### node
+**Command:** `cd {backend.path} && npm test`
+**Pass:** Exit code 0; output contains `Tests: X passed`
+**Fail:** Any line containing `FAIL` or `X failed`; capture the failing test name and error message
+
+#### python
+**Command:** `cd {backend.path} && pytest -v`
+**Pass:** Last line contains `X passed` with no `failed` or `error` count
+**Fail:** Any line starting with `FAILED`; capture test path and assertion message
+
+#### go
+**Command:** `cd {backend.path} && go test ./...`
+**Pass:** Every package line starts with `ok`
+**Fail:** Any line starting with `FAIL`; capture `--- FAIL: TestName` lines for details
+
+#### java
+**Command:** `cd {backend.path} && ./mvnw test`
+**Pass:** `BUILD SUCCESS` and `Failures: 0, Errors: 0` in surefire summary
+**Fail:** `BUILD FAILURE` or non-zero `Failures:` / `Errors:` count; capture failing test class and message
+
+---
+
+### Frontend stacks
+
+#### react / react-native
+**Command:** `cd {frontend.path} && npm test -- --watchAll=false`
+**Pass:** Exit code 0; output contains `Tests: X passed`
+**Fail:** Any line containing `FAIL` or `X failed`
+
+#### next
+**Command:** `cd {frontend.path} && npm test -- --watchAll=false`
+**Pass / Fail:** Same as react above
+
+#### vue
+**Command:** `cd {frontend.path} && npx vitest run`
+**Pass:** Output contains `X tests passed` with no failures line
+**Fail:** Any line containing `X tests failed`; capture test name and diff
+
+#### flutter
+**Command:** `cd {frontend.path} && flutter test`
+**Pass:** Final line is `All tests passed!`
+**Fail:** Any line containing `FAILED`; capture test description and error
+
+#### android
+**Command:** `cd {frontend.path} && ./gradlew test`
+**Pass:** `BUILD SUCCESSFUL` and no `X tests failed` in test summary
+**Fail:** `BUILD FAILED` or non-zero failure count; check `build/reports/tests/` for HTML report path
+
+#### ios
+**Command:** `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16' 2>&1 | xcpretty`
+Note: replace `iPhone 16` with a simulator available on the machine (`xcrun simctl list devices available` to check).
+**Pass:** Final line is `** TEST SUCCEEDED **`
+**Fail:** Final line is `** TEST FAILED **`; capture failing test class and assertion

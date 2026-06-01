@@ -251,7 +251,7 @@ class ItemControllerTest {
     }
 }
 ```
-Run: `cd {backend.path} && ./mvnw test`
+Run: If `./mvnw` exists: `cd {backend.path} && ./mvnw test`. If `./gradlew` exists: `cd {backend.path} && ./gradlew test`.
 
 **Auth pattern:**
 `@PreAuthorize` on the controller method, or `SecurityFilterChain` bean in a `@Configuration` class:

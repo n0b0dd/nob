@@ -15,7 +15,7 @@ Get `stack.backend.path` and `stack.frontend.path` from the `.nob.yml contents` 
 Read `CLAUDE.md` for test commands and test file conventions.
 
 ### Step 1.5: Select stack guidance
-Read `stack.backend.type` and `stack.frontend.type` from your `[INPUTS]`. Find the matching subsections under `## Stack-specific guidance` at the bottom of this file. Use the listed test commands and pass/fail interpretation for each stack. If a stack type has no matching subsection, fall back to the CLAUDE.md test command or the default `npm test`.
+Read `stack.backend.type` and `stack.frontend.type` from your `[INPUTS]`. Find the matching subsections under `## Stack-specific guidance` at the bottom of this file. Use the listed test commands and pass/fail interpretation for each stack. If a stack type has no matching subsection, fall back to the CLAUDE.md test command or the default `npm test`. When writing missing tests in Step 4, prefer whatever test patterns already exist in the codebase — the guidance is a starting point, not a rule.
 
 ### Step 2: Read implementation output blocks
 Find `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` in context.
@@ -34,8 +34,8 @@ For each changed/created implementation file from Step 2:
 For any changed file with no test coverage:
 - Read the implementation file
 - Write a test file following the existing test patterns in the codebase (read one existing test file first to match the style)
-- Backend tests: use Jest + Supertest pattern found in `{backend.path}/tests/`
-- Frontend tests: use Vitest + Testing Library pattern found in `{frontend.path}/src/__tests__/`
+- Backend tests: use the test pattern for `stack.backend.type` from `## Stack-specific guidance`
+- Frontend tests: use the test pattern for `stack.frontend.type` from `## Stack-specific guidance`
 
 Only write tests for files that were actually changed. Do not write tests speculatively.
 

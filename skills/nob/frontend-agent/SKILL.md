@@ -290,7 +290,7 @@ func testCreateItem() async throws {
     XCTAssertEqual(item.name, mockInput.name)
 }
 ```
-Run: `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16'`
+Run: `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,name=iPhone 16'`
 Note: replace `iPhone 16` with a simulator available on the machine (`xcrun simctl list devices available` to check).
 
 ---

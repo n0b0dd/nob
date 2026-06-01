@@ -194,7 +194,7 @@ Run: `cd {frontend.path} && npx vitest run`
 `Provider` or `Riverpod`. For Provider: extend `ChangeNotifier`, expose via `ChangeNotifierProvider` in the widget tree. For Riverpod: `StateNotifierProvider` with `StateNotifier` subclass.
 
 **API client:**
-`http` or `dio` package. Service class with typed async methods:
+`dio` package (preferred for typed clients). Service class with typed async methods:
 ```dart
 Future<Item> createItem(CreateItemInput input) async {
   final res = await _client.post('/items', data: input.toJson());
@@ -244,12 +244,12 @@ interface ItemApi {
 Add a `<fragment>` destination to the nav graph XML, then navigate with `findNavController().navigate(R.id.action_...)`.
 
 **Test pattern:**
-`JUnit4` + `MockK` for unit tests; `Espresso` for UI tests:
+`JUnit4` + `MockK` for ViewModel unit tests:
 ```kotlin
-@Test fun `createItem returns success`() = runTest {
+@Test fun `createItem updates uiState to Success`() = runTest {
     coEvery { api.createItem(any()) } returns mockResponse
-    val result = viewModel.createItem(input)
-    assertEquals(Result.Success(mockResponse), result)
+    viewModel.createItem(input)
+    assertEquals(UiState.Success(mockResponse), viewModel.uiState.value)
 }
 ```
 Run: `cd {frontend.path} && ./gradlew test`
@@ -290,7 +290,8 @@ func testCreateItem() async throws {
     XCTAssertEqual(item.name, mockInput.name)
 }
 ```
-Run: `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,name=iPhone 15'`
+Run: `xcodebuild test -scheme {AppScheme} -destination 'platform=iOS Simulator,OS=latest,name=iPhone 16'`
+Note: replace `iPhone 16` with a simulator available on the machine (`xcrun simctl list devices available` to check).
 
 ---
 

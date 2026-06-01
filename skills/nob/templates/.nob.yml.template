@@ -42,6 +42,7 @@ agents:
     gtm-strategist: haiku
     financial-modeler: haiku
     venture-reviewer: haiku
+    refactor-agent: sonnet      # project migration agent
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
 

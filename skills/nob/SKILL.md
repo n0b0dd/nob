@@ -25,7 +25,7 @@ Example: if the system context shows `Base directory for this skill: /home/user/
 Run `git branch --show-current` to get the current branch name.
 
 If the current branch is `main` or `master`:
-- Derive a branch name from the source file: `nob/<spec-or-bug-filename-without-extension>` (e.g. `nob/user-profile` from `test-spec-user-profile.md`). If no source file exists in the intent: use `nob/init` for Init workflows, use `nob/venture` for Venture workflows, otherwise use `nob/unnamed`.
+- Derive a branch name from the source file: `nob/<spec-or-bug-filename-without-extension>` (e.g. `nob/user-profile` from `test-spec-user-profile.md`). If no source file exists in the intent: use `nob/init` for Init workflows, use `nob/venture` for Venture workflows, use `nob/refactor` for Refactor workflows, otherwise use `nob/unnamed`.
 - Run `git checkout -b <branch-name>` to create and switch to the branch
 - Confirm to the user: "Created branch `<branch-name>`"
 
@@ -35,7 +35,12 @@ If git is not available or the working directory is not a git repo, skip this st
 
 ## Step 0.5: Structure Check
 
-Skip this step entirely if workflow is `Init` or `Venture`.
+Skip this step entirely if the user's intent clearly matches any of these patterns (checked against the user's original message, before workflow identification):
+- Init patterns: "nob init", "initialize project", "scaffold project"
+- Venture patterns: "startup idea", "business idea", "I have an idea", "nob venture", "build a startup", "build a product", "build a company", "validate my idea", "launch a startup", "launch a product", "launch a company", "bring to market"
+- Refactor patterns: "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure"
+
+If the intent matches any of these patterns, skip this step entirely.
 
 Check for structure mismatch in this order:
 
@@ -55,7 +60,7 @@ Refactor now before proceeding? (yes / skip)
 ```
 
 Wait for user response:
-- `yes` → read `{SKILL_BASE_DIR}/refactor-agent/SKILL.md`. Dispatch an Agent with `model: agents.models["refactor-agent"] ?? "sonnet"` and this prompt:
+- `yes` → read `{SKILL_BASE_DIR}/refactor-agent/SKILL.md`. Dispatch an Agent with `model: "sonnet"` and this prompt:
 
 ```
 [INSTRUCTIONS]
@@ -897,8 +902,6 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 
 ## Step 4: Print terminal summary
 
-**If workflow is `Init`, use this summary:**
-
 **If workflow is `Venture`**: summary is printed inline in the `## Venture Workflow` section above. This section is not reached for Venture runs.
 
 **If workflow is `Refactor`**, use this summary. Populate each field from the corresponding field in REFACTOR_OUTPUT. Mark ✓ for success/created, ✗ for failed.
@@ -906,11 +909,11 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 ```
 Nob refactor complete.
 
-Moves:       [source] → apps/frontend/  ✓ | ✗
-             [source] → apps/backend/   ✓ | ✗
-Shared:      shared/core/contracts/     ✓ | ✗
-             shared/core/schema/        ✓ | ✗
-Imports:     [N] files rewritten        ✓ | ✗
+Moves:       [for each move in REFACTOR_OUTPUT Moves field, print one line:
+             "{from} → {to}: ✓" or "{from} → {to}: ✗"]
+             [if no moves: "None"]
+Shared:      shared/core/             [✓ if REFACTOR_OUTPUT Shared is "created", ✗ otherwise]
+Imports rewritten: [N from REFACTOR_OUTPUT "Imports rewritten:" field]
 Config:      CLAUDE.md                  ✓ | ✗
              .nob.yml                   ✓ | ✗
 
@@ -923,6 +926,8 @@ Next: /nob implement docs/specs/your-feature.md
 
 If REFACTOR_OUTPUT Status is `cancelled`: print "Refactor cancelled. No changes made." and exit.
 If REFACTOR_OUTPUT Status is `failed`: print the failure details from REFACTOR_OUTPUT and exit.
+
+**If workflow is `Init`, use this summary:**
 
 ```
 Nob init complete.

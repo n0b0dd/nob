@@ -168,13 +168,16 @@ Also extract:
 | "sync clients", "api changed", "update clients after [change]" | API → Sync |
 | "nob init", "initialize project", "scaffold project", "init" (standalone) | Init |
 | "I want to build a startup", "I want to build a product", "I want to build a company", "I have an idea", "bring to market", "startup idea", "business idea", "validate my idea", "launch a startup", "launch a product", "launch a company", "nob venture" | Venture |
+| "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure" | Refactor |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
-> "Is this a new feature to implement, a bug to fix, an API contract sync, or a business idea you'd like to validate?"
+> "Is this a new feature to implement, a bug to fix, an API contract sync, a business idea you'd like to validate, or a project to restructure?"
 
 Do NOT guess the workflow type. If ambiguous, ask.
 
 If the identified workflow is `Init`, skip to the **Init workflow early exit** section immediately below before proceeding to Phase 0.
+
+If the identified workflow is `Refactor`, skip to the **Refactor workflow early exit** section immediately below before proceeding to Phase 0.
 
 ## Init workflow early exit
 
@@ -441,6 +444,28 @@ When done: rm {checkpoint.path}venture-checkpoint.json
 ```
 
 ---
+
+## Refactor workflow early exit
+
+If the identified workflow is `Refactor`:
+- Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
+- Read `{SKILL_BASE_DIR}/refactor-agent/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["refactor-agent"] ?? "sonnet"` and this prompt:
+
+    [INSTRUCTIONS]
+    {full contents of {SKILL_BASE_DIR}/refactor-agent/SKILL.md}
+    [/INSTRUCTIONS]
+
+    [INPUTS]
+    Working directory: {current working directory path}
+    Detected source paths: unknown
+    Stack type: unknown
+    Original user intent: {user's original message}
+    Refactor mode: explicit
+    [/INPUTS]
+
+- Extract `[REFACTOR-AGENT OUTPUT]...[/REFACTOR-AGENT OUTPUT]` from the result. Store as REFACTOR_OUTPUT.
+- Jump directly to Step 4 (Print terminal summary) using the Refactor terminal summary format.
 
 ## Phase 0: Resume scan
 

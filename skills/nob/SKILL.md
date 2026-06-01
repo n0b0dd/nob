@@ -94,6 +94,7 @@ agents:
     gtm-strategist: haiku
     financial-modeler: haiku
     venture-reviewer: haiku
+    refactor-agent: sonnet
   max_parallel_slices: 3
   venture:
     enabled: true

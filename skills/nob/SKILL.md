@@ -1217,17 +1217,17 @@ Next steps:
 If `Overall status: PASS`:
 - Run: `git -C {WORKTREE_PATH} add -A`
 - Run: `git -C {WORKTREE_PATH} commit -m "nob: {run-id}"` (skip commit if nothing to commit)
-- Run: `git worktree remove .nob/worktrees/<run-id>`
+- Run: `git worktree remove {WORKTREE_PATH}`
 - Print: `Worktree committed and removed. Branch: {WORKTREE_BRANCH}`
 - Print: `Next: git push -u origin {WORKTREE_BRANCH}`
 
 If `Overall status: FAIL` or `NEEDS REVIEW`:
 - Preserve the worktree for inspection.
-- Print: `Worktree preserved at .nob/worktrees/<run-id> for inspection.`
-- Print: `To clean up: git worktree remove .nob/worktrees/<run-id> --force`
+- Print: `Worktree preserved at {WORKTREE_PATH} for inspection.`
+- Print: `To clean up: git worktree remove {WORKTREE_PATH} --force`
 
 If the run was cancelled or hit an unrecoverable error:
-- Run: `git worktree remove .nob/worktrees/<run-id> --force`
+- Run: `git worktree remove {WORKTREE_PATH} --force`
 - Print: `Run cancelled — worktree cleaned up.`
 
 If WORKTREE_PATH equals the current working directory (git not available): skip teardown entirely.

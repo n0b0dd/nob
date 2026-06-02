@@ -22,6 +22,7 @@ Read `CLAUDE.md` for backend conventions: route patterns, auth middleware, error
 ### Step 3: Read context blocks
 From the current session context:
 1. Find and read `[PM-AGENT OUTPUT]` — extract "Backend changes needed" (includes specific file paths). If not found, stop: "Backend Agent cannot proceed — no [PM-AGENT OUTPUT] found in context. Ensure pm-agent ran before backend-agent."
+   Also extract `API contracts:` from `[PM-AGENT OUTPUT]`. Store as PM_API_CONTRACTS. If the field reads `none`, set PM_API_CONTRACTS to null.
 2. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Backend", "Affected files: Schema", and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
 
 ### Step 4: Explore existing backend codebase
@@ -45,6 +46,8 @@ Do NOT skip this step. Implementing without reading leads to pattern violations.
 
 ### Step 5: Implement
 Write the minimum code to satisfy the "Backend changes needed" requirements from [PM-AGENT OUTPUT]. Follow the exact patterns observed in Step 4:
+
+**API contract enforcement**: when PM_API_CONTRACTS is non-null, implement each listed endpoint exactly — HTTP method, path, and request/response shapes are non-negotiable. Any necessary deviation (e.g. the path conflicts with an existing route, or a field name clashes with the schema) must be documented in `Items not implemented (needs human)` with: the PM-specified contract, what was implemented instead, and the reason.
 - Same middleware usage as existing routes
 - Same error response format
 - Same file organization

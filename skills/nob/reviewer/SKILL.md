@@ -41,16 +41,18 @@ If either test result is FAIL, overall tests are FAIL — the overall review sta
 
 ### Step 3.5: Cross-layer contract check
 
-Compare "New/Updated API contracts" from [BACKEND-AGENT OUTPUT] against "API endpoints consumed" from [FRONTEND-AGENT OUTPUT].
+Extract `API contracts:` from `[PM-AGENT OUTPUT]`. Run three checks:
 
-For each endpoint the frontend consumes:
-- Find the matching contract in [BACKEND-AGENT OUTPUT]
-- Verify HTTP method and path match exactly
-- Verify the response shape the frontend expects matches what backend outputs
+**1. PM → Backend** (skip if `API contracts: none` in PM output, or if `[BACKEND-AGENT OUTPUT]` is absent):
+For each contract in PM `API contracts:`, find the matching entry in `[BACKEND-AGENT OUTPUT]` `New API contracts:`. Flag as CONTRACT VIOLATION if HTTP method, path, or response shape differs.
 
-Flag any mismatch as a CONTRACT VIOLATION and add it to "Items for human review" regardless of criterion status.
+**2. PM → Frontend** (skip if `API contracts: none` in PM output, or if `[FRONTEND-AGENT OUTPUT]` is absent):
+For each contract in PM `API contracts:`, find the matching entry in `[FRONTEND-AGENT OUTPUT]` `API endpoints consumed:`. Flag as CONTRACT VIOLATION if HTTP method or path differs.
 
-Skip this step if [BACKEND-AGENT OUTPUT] is absent (API→Sync or backend disabled) or [FRONTEND-AGENT OUTPUT] is absent (frontend disabled).
+**3. Backend → Frontend** (skip if `[BACKEND-AGENT OUTPUT]` or `[FRONTEND-AGENT OUTPUT]` is absent):
+For each endpoint the frontend consumes, find the matching contract in `[BACKEND-AGENT OUTPUT]`. Verify HTTP method and path match exactly. Verify the response shape the frontend expects matches what backend outputs.
+
+Add all CONTRACT VIOLATIONS to "Items for human review" regardless of criterion status.
 
 ### Step 4: Check each criterion individually
 For every acceptance criterion from [PM-AGENT OUTPUT]:
@@ -77,7 +79,10 @@ Test results:
   Backend: [PASS | FAIL — N failed | SKIPPED — reason]
   Frontend: [PASS | FAIL — N failed | SKIPPED — reason]
 
-Contract check: [PASS — all endpoints match | VIOLATIONS: list | SKIPPED — no cross-layer integration]
+Contract check:
+  PM → Backend:       [PASS | VIOLATIONS: list | SKIPPED — reason]
+  PM → Frontend:      [PASS | VIOLATIONS: list | SKIPPED — reason]
+  Backend → Frontend: [PASS | VIOLATIONS: list | SKIPPED — reason]
 
 Criteria check:
 - [criterion 1]: ✓ implemented in [exact file path]

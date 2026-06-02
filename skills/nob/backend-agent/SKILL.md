@@ -195,16 +195,33 @@ Write or update tests for every new or changed endpoint.
 
 ### Step 5.5: Run tests and verify
 
-Run the full backend test suite using the command for your stack (see Stack-specific guidance). Capture the output.
+Run the full backend test suite using the command for your stack (see Stack-specific guidance). Then run the type-checker/compiler if applicable:
+- TS: `npx tsc --noEmit`
+- Go: `go build ./...`
+- Python: `mypy .` (if mypy is installed)
+
+Capture stdout + stderr combined. If output exceeds 80 lines, keep the last 80 lines and prepend `[truncated — showing last 80 lines]`.
 
 Record:
 - **New tests**: PASS / FAIL (number failed)
 - **Existing tests (regression)**: PASS / FAIL (number failed, list file names)
 
+Include the verbatim captured output in `Test output:` in your output block. If no test command is detected, write `SKIPPED — no test command found`.
+
 If tests fail: attempt to fix. If the fix requires more than ~5 lines of non-obvious changes, stop and flag it in "Items not implemented (needs human)" — do not spiral.
 
 ### Step 6: Output
 List every file changed or created with a one-sentence reason. List every new or changed API contract.
+
+## Output Format Requirement
+
+Your output block must:
+- Begin with `[BACKEND-AGENT OUTPUT]` on its own line (no leading spaces or characters)
+- End with `[/BACKEND-AGENT OUTPUT]` on its own line
+- Include every required field: `Files changed:`, `New API contracts:`, `Items not implemented:`, `Test results:`, `Test output:`
+- Use the exact field names listed — no synonyms, no omissions
+
+Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.
 
 ## Output Format
 
@@ -232,6 +249,14 @@ Test results:
   Command: [exact command run]
   New tests: [PASS | FAIL — N failed]
   Regression check: [PASS | FAIL — N failed, list files | SKIPPED — reason]
+
+Test output:
+  [verbatim last 80 lines of test runner + compiler stdout/stderr]
+  (or: SKIPPED — no test command found)
+  (or: SKIPPED — compile-only project, no test suite)
+
+Deferred items:
+- [item not implemented due to scope limit, or: none]
 
 Items not implemented (needs human):
 - [specific item and reason, or: none]

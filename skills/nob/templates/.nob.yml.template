@@ -27,7 +27,7 @@ agents:
     - pm-agent
     - backend-agent
     - frontend-agent
-    - qa-agent
+    - security-agent
     - reviewer
   models:
     backend-agent: sonnet   # code-writing agents need sonnet
@@ -36,6 +36,7 @@ agents:
     pm-agent: haiku
     qa-agent: haiku
     reviewer: haiku
+    security-agent: haiku       # security review agent
     idea-framer: haiku           # venture pipeline agents
     market-researcher: sonnet    # web research needs sonnet
     business-modeler: haiku

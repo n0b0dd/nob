@@ -129,13 +129,14 @@ Proceed once answered.
 
 ```yaml
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, reviewer]
+  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer]
   models:
     backend-agent: sonnet
     frontend-agent: sonnet
     planner: haiku
     pm-agent: haiku
     reviewer: haiku
+    security-agent: haiku
     init-agent: sonnet
     idea-framer: haiku
     market-researcher: sonnet

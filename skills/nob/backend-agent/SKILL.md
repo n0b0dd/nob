@@ -218,7 +218,7 @@ List every file changed or created with a one-sentence reason. List every new or
 Your output block must:
 - Begin with `[BACKEND-AGENT OUTPUT]` on its own line (no leading spaces or characters)
 - End with `[/BACKEND-AGENT OUTPUT]` on its own line
-- Include every required field: `Files changed:`, `New API contracts:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:`
+- Include every required field: `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`
 - Use the exact field names listed — no synonyms, no omissions
 
 Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.

@@ -532,9 +532,9 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 | Agent | Required fields |
 |---|---|
 | Planner | `Workflow:`, `Mode:`, `Affected layers:`, `Risks:`, `Ambiguities:` |
-| PM Agent | `Requirements:`, `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
-| Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:` |
-| Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:` |
+| PM Agent | `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
+| Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:` |
+| Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:` |
 | Security Agent | `Status:`, `Findings:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:` |
 

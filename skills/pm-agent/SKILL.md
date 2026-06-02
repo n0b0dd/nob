@@ -173,7 +173,7 @@ Do NOT add anything not in the spec. Mark missing items as "not specified" and l
 Your output block must:
 - Begin with `[PM-AGENT OUTPUT]` on its own line (no leading spaces or characters)
 - End with `[/PM-AGENT OUTPUT]` on its own line
-- Include every required field: `Requirements:`, `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:`
+- Include every required field: `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:`
 - Use the exact field names listed — no synonyms, no omissions
 
 Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.

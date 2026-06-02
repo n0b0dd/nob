@@ -19,17 +19,27 @@ Read `stack.backend.type` from your `[INPUTS]`. Find the matching subsection und
 ### Step 2: Read CLAUDE.md
 Read `CLAUDE.md` for backend conventions: route patterns, auth middleware, error format, test commands.
 
-### Step 3: Read the [PM-AGENT OUTPUT] block
-From the current session context, find and read the `[PM-AGENT OUTPUT]` block. Extract the "Backend changes needed" section.
-
-If there is no [PM-AGENT OUTPUT] in context, stop and output: "Backend Agent cannot proceed — no [PM-AGENT OUTPUT] found in context. Ensure pm-agent ran before backend-agent."
+### Step 3: Read context blocks
+From the current session context:
+1. Find and read `[PM-AGENT OUTPUT]` — extract "Backend changes needed" (includes specific file paths). If not found, stop: "Backend Agent cannot proceed — no [PM-AGENT OUTPUT] found in context. Ensure pm-agent ran before backend-agent."
+2. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Backend", "Affected files: Schema", and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
 
 ### Step 4: Explore existing backend codebase
-Before writing any code, read at minimum:
+Before writing any code:
+
+**1. Start from identified files** — read the files named in "Backend changes needed" from [PM-AGENT OUTPUT] and "Affected files:" from [PLAN OUTPUT] directly. These are your primary targets.
+
+**2. Fill gaps via exploration** — for any context not already covered, also read:
 - The main routes file or router index at `{backend.path}/src/routes/` (or equivalent)
 - One existing route file to understand the pattern (handler structure, middleware usage, response format)
 - The existing model or data layer for the resource being modified
-- The existing test file for a similar route (to understand test patterns)
+- One existing test file for a similar route (to understand test patterns)
+
+**3. Act on PLAN_RISKS**:
+- `[AUTH]` — read the existing auth middleware; note exactly how it is applied to routes (argument position, decorator, etc.)
+- `[MIGRATION]` — read existing schema/migration files to understand the migration pattern; you will create one in Step 5
+- `[BREAKING]` — read the existing endpoint being changed; grep for its callers across the codebase
+- `[SHARED]` — read shared utilities being touched; understand all callers before modifying
 
 Do NOT skip this step. Implementing without reading leads to pattern violations.
 
@@ -41,6 +51,22 @@ Write the minimum code to satisfy the "Backend changes needed" requirements from
 - Same import style
 
 Write or update tests for every new or changed endpoint.
+
+**If `[MIGRATION]` in PLAN_RISKS**: after updating the schema/model, create a migration file following the existing migration pattern. If no migration tooling is detected, note it under "Items not implemented (needs human)".
+
+**If `[AUTH]` in PLAN_RISKS**: verify every new/changed endpoint applies auth middleware the same way comparable existing routes do. If no comparable routes use auth, do not add it — flag it instead.
+
+**If `[BREAKING]` in PLAN_RISKS**: list any callers of the old contract found in Step 4 under "Items not implemented (needs human)" — do not silently break them.
+
+### Step 5.5: Run tests and verify
+
+Run the full backend test suite using the command for your stack (see Stack-specific guidance). Capture the output.
+
+Record:
+- **New tests**: PASS / FAIL (number failed)
+- **Existing tests (regression)**: PASS / FAIL (number failed, list file names)
+
+If tests fail: attempt to fix. If the fix requires more than ~5 lines of non-obvious changes, stop and flag it in "Items not implemented (needs human)" — do not spiral.
 
 ### Step 6: Output
 List every file changed or created with a one-sentence reason. List every new or changed API contract.
@@ -66,6 +92,11 @@ Updated API contracts:
 
 Tests written:
 - [exact/path/to/test.js]: [what is tested]
+
+Test results:
+  Command: [exact command run]
+  New tests: [PASS | FAIL — N failed]
+  Regression check: [PASS | FAIL — N failed, list files | SKIPPED — reason]
 
 Items not implemented (needs human):
 - [specific item and reason, or: none]

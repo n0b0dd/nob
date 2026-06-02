@@ -28,18 +28,25 @@ Read `CLAUDE.md` for frontend conventions: component pattern, state management, 
 
 ### Step 3: Read context blocks
 From the current session context:
-1. Find and read `[PM-AGENT OUTPUT]` — extract "Frontend changes needed"
-2. Find and read `[BACKEND-AGENT OUTPUT]` — extract "New API contracts" and "Updated API contracts"
+1. Find and read `[PM-AGENT OUTPUT]` — extract "Frontend changes needed" (includes specific file paths) and note any `## Error states` referenced. If not found, stop: "Frontend Agent cannot proceed — no [PM-AGENT OUTPUT] found in context."
+2. Find and read `[BACKEND-AGENT OUTPUT]` — extract "New API contracts" and "Updated API contracts". Use these as the source of truth for endpoints. Do NOT assume or invent API contracts.
+3. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Frontend" and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
 
-Use the API contracts from [BACKEND-AGENT OUTPUT] as the source of truth for what endpoints to call. Do NOT assume or invent API contracts.
-
-If there is no [PM-AGENT OUTPUT] in context, stop and output: "Frontend Agent cannot proceed — no [PM-AGENT OUTPUT] found in context."
+If there is no [BACKEND-AGENT OUTPUT]: proceed with API contracts from [PM-AGENT OUTPUT], note "No [BACKEND-AGENT OUTPUT] found — API contracts inferred from spec."
 
 ### Step 4: Explore existing frontend codebase
-Before writing any code, read at minimum:
+Before writing any code:
+
+**1. Start from identified files** — read the files named in "Frontend changes needed" from [PM-AGENT OUTPUT] and "Affected files: Frontend" from [PLAN OUTPUT] directly. These are your primary targets.
+
+**2. Fill gaps via exploration** — for any context not already covered, also read:
 - One existing component/screen/widget similar in complexity to what you are building
 - The API client or service file to understand how API calls are made
-- The routing/navigation file to understand how screens are registered
+- The routing/navigation file — **check whether a route for this feature already exists** before adding one
+
+**3. Act on PLAN_RISKS**:
+- `[AUTH]` — read how existing protected screens/routes enforce auth (guards, HOCs, middleware); apply the same pattern
+- `[SHARED]` — read shared components or utilities being touched; understand all current usages before modifying
 
 Do NOT skip this step. Implementing without reading leads to pattern violations.
 
@@ -49,6 +56,28 @@ Write the minimum code to satisfy "Frontend changes needed" from [PM-AGENT OUTPU
 - Same API client usage
 - Same state management approach
 - Same styling method
+
+**Implement all states, not just the happy path:**
+- Extract error states from the spec's `## Error states` section (via [PM-AGENT OUTPUT] or the spec file directly). Implement each one in the UI.
+- Add a loading state for every async operation (spinner, skeleton, disabled button — use the same pattern as existing components).
+- Add an empty/zero state if the feature can return no data.
+
+**Type safety (TypeScript stacks — react, next, vue, react-native):**
+- Define an interface or type for every API response shape consumed. Do not use `any`.
+- Import or co-locate types with the API service file, not inline in components.
+
+**Route deduplication:**
+- Confirm the route/path does not already exist in the routing file before adding it.
+
+### Step 5.5: Run tests and verify
+
+Run the full frontend test suite using the command for your stack (see Stack-specific guidance). Capture the output.
+
+Record:
+- **New tests**: PASS / FAIL (number failed)
+- **Existing tests (regression)**: PASS / FAIL (number failed, list file names)
+
+If tests fail: attempt to fix. If the fix requires more than ~5 lines of non-obvious changes, stop and flag it in "Items not implemented (needs human)" — do not spiral.
 
 ## Output Format
 
@@ -68,6 +97,11 @@ API endpoints consumed:
 
 Tests written:
 - [exact/path/to/test file]: [what is tested, or: none]
+
+Test results:
+  Command: [exact command run]
+  New tests: [PASS | FAIL — N failed]
+  Regression check: [PASS | FAIL — N failed, list files | SKIPPED — reason]
 
 Items not implemented (needs human):
 - [specific item and reason, or: none]

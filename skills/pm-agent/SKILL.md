@@ -53,9 +53,11 @@ Run stack auto-detection:
 Ask **one at a time** — wait for an answer before continuing:
 
 1. "Who are the users of this feature?" (e.g. authenticated users, admins, guests)
-2. "What is the core action they are trying to do? Describe the happy path in one sentence."
-3. "Any constraints? (e.g. must work on mobile, requires auth, performance-critical)" — accept "none" as valid
-4. "What is explicitly out of scope for this feature?" — accept "none" as valid
+2. "What is the core action they are trying to do? Describe the happy path step by step."
+3. "What existing features, screens, or data does this build on or extend?" — accept "none" as valid
+4. "Any constraints? (e.g. must work on mobile, requires auth, performance-critical)" — accept "none" as valid
+5. "What should happen when it fails? Describe the key error states or edge cases." — accept "none known" as valid
+6. "What is explicitly out of scope for this feature?" — accept "none" as valid
 
 Store answers as CLARIFICATIONS.
 
@@ -76,21 +78,38 @@ Write `docs/specs/YYYY-MM-DD-<slug>.md` using the Write tool with this structure
 ## Users
 [answer to question 1]
 
-## Constraints
-[answer to question 3, or: none]
+## User flow
+1. [first action the user takes — from answer to question 2]
+2. [system response or next step]
+3. [continue until the happy path is complete]
+[add alt paths if answer to question 2 implied them]
 
 ## Requirements
 - [requirement derived from the idea and clarifying answers — specific and testable]
 - [add as many as the idea and answers imply]
 
+## Acceptance criteria
+- [ ] [specific, testable criterion — each requirement maps to at least one checkbox]
+- [ ] [derived from the happy path in User flow]
+
+## Builds on
+[answer to question 3, or: none]
+
+## Constraints
+[answer to question 4, or: none]
+
+## Error states
+[answer to question 5, or: none specified]
+- [error condition]: [expected behavior]
+
 ## Out of scope
-- [answer to question 4, or: none specified]
+- [answer to question 6, or: none specified]
 
 ## Open questions
 - [any unresolved ambiguity, or: none]
 ```
 
-If there are no constraints, write 'none' in that section.
+If a section has no content, write the section header with 'none' rather than omitting it.
 
 Print: "Spec written to `docs/specs/<filename>.md`."
 
@@ -112,6 +131,25 @@ Ask:
 
 Use the Read tool to read the spec file path from the input (or from `[PLAN OUTPUT]` when called by the Nob hub).
 If `[PLAN OUTPUT]` is present, check its Ambiguities section. Any ambiguities that were already resolved by the user (answered before dispatch) should be treated as constraints during extraction — do not re-flag them.
+
+### Step 1b: Scan codebase for related existing files
+
+Read `CLAUDE.md` at the repo root if available (skip silently if not found).
+
+Extract 3–5 key entity, route, or component names from the spec (from its Feature name, Summary, or Requirements). For each key term, run targeted searches using the Bash tool:
+
+```bash
+# Backend — routes, services, models
+grep -rl "<term>" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --include="*.rb" . 2>/dev/null | grep -v node_modules | head -10
+
+# Schema / migrations
+find . \( -name "*.prisma" -o -name "schema.rb" -o -name "*.migration.*" -o -name "*.sql" \) 2>/dev/null | grep -v node_modules | head -5
+
+# Frontend — components, screens, pages
+grep -rl "<term>" --include="*.tsx" --include="*.jsx" --include="*.vue" --include="*.dart" . 2>/dev/null | grep -v node_modules | head -10
+```
+
+Store results as RELATED_FILES. When specifying backend/frontend changes in Step 2, reference these files explicitly (e.g. "add route to `src/routes/users.ts`") instead of describing changes abstractly. If searches return no matches, note "not yet in codebase — agent should create."
 
 ### Step 2: Extract requirements
 
@@ -143,11 +181,11 @@ Acceptance criteria:
 - [ ] [specific, testable criterion]
 
 Backend changes needed:
-- [HTTP method] [/path]: request: [shape] → response: [shape]
+- [HTTP method] [/path] in `[file from RELATED_FILES, or: new file to create]`: request: [shape] → response: [shape]
 - [or: not specified in spec — backend agent should infer from acceptance criteria]
 
 Frontend changes needed:
-- [screen/component]: [what changes]
+- [screen/component] in `[file from RELATED_FILES, or: new file to create]`: [what changes]
 - [or: not specified in spec — frontend agent should infer from acceptance criteria]
 
 Edge cases to handle:
@@ -157,7 +195,9 @@ Out of scope:
 - [item, or: none specified]
 
 Ambiguities flagged:
-- [question about ambiguous requirement, or: none]
+- [blocking] [question that must be answered before implementation can proceed]
+- [non-blocking] [question where implementation agent can make a safe assumption]
+(or: none)
 [/PM-AGENT OUTPUT]
 ```
 

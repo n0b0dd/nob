@@ -20,6 +20,25 @@ Read the file referenced in the user's intent (spec file, bug report, etc.) usin
 
 If the user's intent does not reference a specific file, note this and derive the work scope from the intent message directly. Skip Steps 2 reading and proceed to Step 3 using the intent message as the source.
 
+### Step 2.5: Discover affected files
+
+Extract 3–5 key entity, route, or component names from the source file. For each key term, run targeted searches using the Bash tool to find which existing files will likely change:
+
+```bash
+# Backend — routes, services, controllers, models
+grep -rl "<term>" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --include="*.rb" . 2>/dev/null | grep -v node_modules | head -10
+
+# Schema / migrations
+find . \( -name "*.prisma" -o -name "schema.rb" -o -name "*.migration.*" -o -name "*.sql" \) 2>/dev/null | grep -v node_modules | head -5
+
+# Frontend — components, screens, pages, views
+grep -rl "<term>" --include="*.tsx" --include="*.jsx" --include="*.vue" --include="*.dart" . 2>/dev/null | grep -v node_modules | head -10
+```
+
+Store results as AFFECTED_FILES = { backend: [...], schema: [...], frontend: [...] }. If a category returns no matches, set it to `[]` and note "not yet in codebase."
+
+Use AFFECTED_FILES in Steps 4 and 5 to write specific file-level task descriptions and flag file-level risks.
+
 ### Step 3: Identify affected layers
 Based on the source file content and `.nob.yml`:
 - Does this change require backend work? (new/changed API endpoints, data models, business logic)
@@ -49,15 +68,26 @@ All slices in a fan-out output must be fully independent — `Independent: yes` 
 
 Write 2-6 tasks. Each task must:
 - Name the agent that handles it
-- Describe what that agent should do in one specific sentence
+- Describe what that agent should do in one specific sentence — include file paths from AFFECTED_FILES where known (e.g. "Add `POST /api/profiles` in `src/routes/profiles.ts`, extend `prisma/schema.prisma` User model" not "implement backend profile changes")
 - State its dependency (what must complete before it can start)
 
 Agent names in the task list must match the names in the `agents.enabled` list from your [INPUTS] config. Do not use hardcoded names.
 
-### Step 5: Flag ambiguities
-List anything in the source file that is vague, contradictory, or missing. If there are ambiguities, list them. If none, write "none".
+### Step 5: Flag ambiguities and risks
 
-Do NOT ask the user about ambiguities here — list them in the output block. The hub will decide whether to pause and ask.
+**Ambiguities** — list anything in the source file that is vague, contradictory, or missing. Classify each:
+- `[blocking]` — must be resolved before implementation can proceed (e.g. unknown data shape, unclear auth requirement)
+- `[non-blocking]` — implementation agent can make a safe assumption
+
+If none, write "none". Do NOT ask the user about ambiguities here — list them in the output block. The hub will decide whether to pause and ask.
+
+**Risks** — flag any of these change types found in the source or AFFECTED_FILES:
+- `[AUTH]` — changes to authentication, authorization, permissions, or middleware
+- `[MIGRATION]` — changes to database schema, model fields, or existing data structure
+- `[BREAKING]` — changes to an existing API endpoint's contract (method, path, or request/response shape)
+- `[SHARED]` — changes to shared utilities, core modules, or types used across multiple layers
+
+If none apply, write "none".
 
 ## Output Format
 
@@ -70,6 +100,11 @@ Source file: [path as provided by user]
 Mode: single | fan-out
 Affected layers: [frontend | backend | frontend + backend]
 (use exactly one of these three values — no other format)
+
+Affected files:
+  Backend:  [list of file paths from AFFECTED_FILES.backend, or: none detected]
+  Schema:   [list of file paths from AFFECTED_FILES.schema, or: none detected]
+  Frontend: [list of file paths from AFFECTED_FILES.frontend, or: none detected]
 
 Slices (only present when Mode: fan-out):
   Slice 1 — [slug-name]
@@ -84,13 +119,19 @@ Slices (only present when Mode: fan-out):
 
 Tasks (in order, only present when Mode: single):
 1. [agent-name]: Read [source file] and extract structured requirements — depends on: none
-2. [agent-name]: Implement [specific backend changes from Task 1 output] — depends on: Task 1
-3. [agent-name]: Implement [specific frontend changes], consuming API contracts from Task 2 — depends on: Task 2
+2. [agent-name]: Implement [specific backend changes with file paths] — depends on: Task 1
+3. [agent-name]: Implement [specific frontend changes with file paths], consuming API contracts from Task 2 — depends on: Task 2
 4. [agent-name]: Validate all outputs against acceptance criteria — depends on: Task 1, Task 2, Task 3
 (use agent names from .nob.yml agents.enabled)
 
+Risks:
+- [AUTH | MIGRATION | BREAKING | SHARED] [description]
+(or: none)
+
 Ambiguities (human input needed before proceeding):
-- [specific ambiguity, or: none]
+- [blocking] [specific ambiguity]
+- [non-blocking] [specific ambiguity]
+(or: none)
 [/PLAN OUTPUT]
 ```
 

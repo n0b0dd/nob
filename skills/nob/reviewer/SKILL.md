@@ -18,8 +18,8 @@ Close the loop. Compare what was implemented against what was required. Produce 
 ### Step 0: Detect input mode
 Check the context provided by the hub:
 
-- **Single-slice mode**: context contains individual `[PM-AGENT OUTPUT]`, `[BACKEND-AGENT OUTPUT]`, `[FRONTEND-AGENT OUTPUT]`, `[QA-AGENT OUTPUT]` blocks → proceed to Step 1 as normal.
-- **Multi-slice mode**: context contains a `[MERGED SLICE OUTPUTS]` block with multiple named slice sections, each containing its own PM/Backend/Frontend/QA output blocks → repeat Steps 1–5 once per slice, collecting all criteria and review items, then produce one combined `[REVIEWER OUTPUT]` covering the full feature. The overall status is the worst status across all slices (one FAIL → overall FAIL; any NEEDS REVIEW and no FAIL → overall NEEDS REVIEW).
+- **Single-slice mode**: context contains individual `[PM-AGENT OUTPUT]`, `[BACKEND-AGENT OUTPUT]`, `[FRONTEND-AGENT OUTPUT]` blocks → proceed to Step 1 as normal.
+- **Multi-slice mode**: context contains a `[MERGED SLICE OUTPUTS]` block with multiple named slice sections, each containing its own PM/Backend/Frontend output blocks → repeat Steps 1–5 once per slice, collecting all criteria and review items, then produce one combined `[REVIEWER OUTPUT]` covering the full feature. The overall status is the worst status across all slices (one FAIL → overall FAIL; any NEEDS REVIEW and no FAIL → overall NEEDS REVIEW).
 
 ### Step 1: Read the original source file
 Read the spec or bug report file using the Read tool. The path is in the `[PLAN OUTPUT]` block (field: "Source file").
@@ -30,25 +30,35 @@ If [PLAN OUTPUT] is not in context, look for the source file path in the user's 
 Find the acceptance criteria checklist. This is your primary validation list.
 
 ### Step 3: Read all implementation output blocks
-Read `[BACKEND-AGENT OUTPUT]`, `[FRONTEND-AGENT OUTPUT]`, and `[QA-AGENT OUTPUT]` from context.
+Read `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` from context.
 
-For each implementation block, look at:
+For each block, extract:
 - Files changed/created
 - Items not implemented
+- `Test results:` section — store as BACKEND_TEST_RESULTS and FRONTEND_TEST_RESULTS
 
-From `[QA-AGENT OUTPUT]`, look at:
-- Overall test status (PASS / FAIL / SKIPPED)
-- Any test failures listed
+If either test result is FAIL, overall tests are FAIL — the overall review status cannot be PASS. List each failing test as a human review item.
 
-If QA Overall is FAIL, the overall review status cannot be PASS — downgrade to at minimum NEEDS REVIEW, and list each test failure as a human review item.
+### Step 3.5: Cross-layer contract check
+
+Compare "New/Updated API contracts" from [BACKEND-AGENT OUTPUT] against "API endpoints consumed" from [FRONTEND-AGENT OUTPUT].
+
+For each endpoint the frontend consumes:
+- Find the matching contract in [BACKEND-AGENT OUTPUT]
+- Verify HTTP method and path match exactly
+- Verify the response shape the frontend expects matches what backend outputs
+
+Flag any mismatch as a CONTRACT VIOLATION and add it to "Items for human review" regardless of criterion status.
+
+Skip this step if [BACKEND-AGENT OUTPUT] is absent (API→Sync or backend disabled) or [FRONTEND-AGENT OUTPUT] is absent (frontend disabled).
 
 ### Step 4: Check each criterion individually
 For every acceptance criterion from [PM-AGENT OUTPUT]:
-- **✓ implemented**: you can point to a specific file in an output block that implements it
-- **✗ NOT implemented**: no file in any output block covers it AND it is not in an "items not implemented" list
-- **⚠ partial**: covered in an output block but also listed in "items not implemented", or only one layer implemented it when both were needed
+- **✓ implemented**: read the specific file named in the output block and confirm it contains evidence of the implementation (the route exists, the component renders, etc.) AND the relevant test layer reports PASS
+- **✗ NOT implemented**: no file in any output block covers it, or the file exists but reading it shows the implementation is missing
+- **⚠ partial**: covered in an output block but also listed in "items not implemented", only one layer implemented it when both were needed, or tests for that layer FAIL
 
-Do NOT batch-check criteria. Check each one individually against the output blocks.
+Do NOT batch-check criteria. Check each one individually. Do NOT mark ✓ based on a file existing alone — read it.
 
 ### Step 5: Determine overall status
 Apply the status definitions above exactly. Do not soften FAIL to NEEDS REVIEW.
@@ -63,6 +73,12 @@ For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete
 Source: [spec file path]
 Workflow: [Spec→Code | Bug→Fix | API→Sync]
 
+Test results:
+  Backend: [PASS | FAIL — N failed | SKIPPED — reason]
+  Frontend: [PASS | FAIL — N failed | SKIPPED — reason]
+
+Contract check: [PASS — all endpoints match | VIOLATIONS: list | SKIPPED — no cross-layer integration]
+
 Criteria check:
 - [criterion 1]: ✓ implemented in [exact file path]
 - [criterion 2]: ✗ NOT implemented — [reason]
@@ -76,6 +92,8 @@ Items for human review:
 ```
 
 ## Error Handling
-- **No [PM-AGENT OUTPUT] in context**: read the original spec directly and derive criteria yourself; note "Reviewer derived criteria from spec directly — no [PM-AGENT OUTPUT] found"
-- **No implementation output blocks in context**: output status FAIL; note "No implementation output blocks found in context — agents may not have run"
+- **No [PM-AGENT OUTPUT] in context**: read the original spec's `## Acceptance criteria` section directly; note "Reviewer derived criteria from spec — no [PM-AGENT OUTPUT] found"
+- **No implementation output blocks in context**: output status FAIL; note "No implementation output blocks found — agents may not have run"
+- **No Test results in an output block**: mark that layer's tests as SKIPPED — reason: "implementation agent did not report test results"
 - **Criterion is ambiguous**: mark it ⚠ and explain the ambiguity in the human review list
+- **Contract check finds no API contracts in backend output**: mark contract check as SKIPPED — reason: "backend agent reported no API contracts"

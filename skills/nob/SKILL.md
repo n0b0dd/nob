@@ -129,13 +129,12 @@ Proceed once answered.
 
 ```yaml
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, qa-agent, reviewer]
+  enabled: [planner, pm-agent, backend-agent, frontend-agent, reviewer]
   models:
     backend-agent: sonnet
     frontend-agent: sonnet
     planner: haiku
     pm-agent: haiku
-    qa-agent: haiku
     reviewer: haiku
     init-agent: sonnet
     idea-framer: haiku
@@ -543,7 +542,7 @@ Using the Write tool, write `{checkpoint.path}checkpoint.json`:
   "source": "{source file path}",
   "phases_completed": ["phase1"],
   "slices": {
-    "{slice-name}": { "status": "pending", "pm_output": null, "backend_output": null, "frontend_output": null, "qa_output": null }
+    "{slice-name}": { "status": "pending", "pm_output": null, "backend_output": null, "frontend_output": null }
   },
   "reviewer_output": null
 }
@@ -556,7 +555,7 @@ One entry per slice in the `slices` object.
 
 ### Single-slice path (Mode: single)
 
-Run PM Agent first (sequential), then Backend Agent and Frontend Agent concurrently, then QA Agent. Skip conditions for each agent are unchanged.
+Run PM Agent first (sequential), then Backend Agent and Frontend Agent concurrently. Skip conditions for each agent are unchanged.
 
 **Agent 1 — PM Agent**
 
@@ -655,39 +654,7 @@ Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Store as FRONTEND_
 
 ---
 
-**Agent 4 — QA Agent**
-
-Skip if both `stack.backend.enabled: false` and `stack.frontend.enabled: false`. Store QA_OUTPUT as "QA agent was skipped (both backend and frontend disabled in config)."
-
-If only one agent was skipped, QA still runs. It receives skip-message strings verbatim as inputs; the QA sub-skill handles them gracefully.
-
-Otherwise read `{SKILL_BASE_DIR}/qa-agent/SKILL.md`. Dispatch with `model: agents.models["qa-agent"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/qa-agent/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-
-.nob.yml contents:
-{.nob.yml content}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: "CLAUDE.md not found"}
-
-Backend implementation:
-{BACKEND_OUTPUT}
-
-Frontend implementation:
-{FRONTEND_OUTPUT}
-[/INPUTS]
-```
-
-Extract `[QA-AGENT OUTPUT]...[/QA-AGENT OUTPUT]`. Store as QA_OUTPUT.
-
-Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT, qa_output: QA_OUTPUT}]
+Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
 
 Proceed to Phase 3.
 
@@ -699,7 +666,6 @@ Read these sub-skill files once and store their full contents:
 - `{SKILL_BASE_DIR}/../pm-agent/SKILL.md` → PM_SKILL
 - `{SKILL_BASE_DIR}/backend-agent/SKILL.md` → BACKEND_SKILL
 - `{SKILL_BASE_DIR}/frontend-agent/SKILL.md` → FRONTEND_SKILL
-- `{SKILL_BASE_DIR}/qa-agent/SKILL.md` → QA_SKILL
 
 Filter SLICES to only those with `status: pending` or `status: in_progress` (skip `status: completed` — their outputs are already in the checkpoint).
 
@@ -709,7 +675,7 @@ Group pending SLICES into batches of `max_parallel_slices`. For each batch:
 
 ```
 [INSTRUCTIONS]
-You are a Nob slice runner. Execute a complete PM → (Backend+Frontend concurrent) → QA pipeline for one slice of a larger feature. The Agent tool is available to you — use it to dispatch Backend and Frontend as concurrent sub-agents.
+You are a Nob slice runner. Execute a complete PM → (Backend+Frontend concurrent) pipeline for one slice of a larger feature. The Agent tool is available to you — use it to dispatch Backend and Frontend as concurrent sub-agents.
 
 Run the pipeline in this order:
 
@@ -757,16 +723,12 @@ After both Agent calls return:
 - Extract `[BACKEND-AGENT OUTPUT]...[/BACKEND-AGENT OUTPUT]` from Backend's response. Store as BACKEND_OUTPUT.
 - Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]` from Frontend's response. Store as FRONTEND_OUTPUT.
 
-**Step 3 — QA Agent (in-session)**
-Follow the QA Agent instructions below using this session. Pass BACKEND_OUTPUT and FRONTEND_OUTPUT. Emit `[QA-AGENT OUTPUT]`.
-
-After all steps complete, wrap all four output blocks in `[SLICE OUTPUT: {slice-name}]...[/SLICE OUTPUT: {slice-name}]`.
+After both steps complete, wrap all three output blocks in `[SLICE OUTPUT: {slice-name}]...[/SLICE OUTPUT: {slice-name}]`.
 
 Stack skip rules (from the `.nob.yml contents` field in your [INPUTS]) apply:
 - If `stack.backend.enabled: false`: skip Backend Agent dispatch; set BACKEND_OUTPUT = `"Backend agent was skipped (disabled in config)"`; emit `[BACKEND-AGENT OUTPUT]Backend agent was skipped (disabled in config)[/BACKEND-AGENT OUTPUT]`.
 - If workflow is `API→Sync`: skip Backend Agent dispatch; set BACKEND_OUTPUT = `"Backend agent was skipped (API→Sync workflow — backend already changed)"`; emit `[BACKEND-AGENT OUTPUT]Backend agent was skipped (API→Sync workflow — backend already changed)[/BACKEND-AGENT OUTPUT]`.
 - If `stack.frontend.enabled: false`: skip Frontend Agent dispatch; set FRONTEND_OUTPUT = `"Frontend agent was skipped (disabled in config)"`; emit `[FRONTEND-AGENT OUTPUT]Frontend agent was skipped (disabled in config)[/FRONTEND-AGENT OUTPUT]`.
-- If both are disabled: skip QA Agent; emit `[QA-AGENT OUTPUT]QA agent was skipped (both backend and frontend disabled in config)[/QA-AGENT OUTPUT]`. Wrap all four blocks in `[SLICE OUTPUT]` and stop.
 
 --- PM AGENT INSTRUCTIONS ---
 {PM_SKILL}
@@ -780,13 +742,9 @@ Stack skip rules (from the `.nob.yml contents` field in your [INPUTS]) apply:
 {FRONTEND_SKILL}
 --- END FRONTEND AGENT INSTRUCTIONS ---
 
---- QA AGENT INSTRUCTIONS ---
-{QA_SKILL}
---- END QA AGENT INSTRUCTIONS ---
-
-After all four agents complete, wrap all four output blocks inside:
+After all agents complete, wrap all three output blocks inside:
 [SLICE OUTPUT: {slice-name}]
-...all four output blocks concatenated here...
+...all three output blocks concatenated here...
 [/SLICE OUTPUT: {slice-name}]
 [/INSTRUCTIONS]
 
@@ -828,7 +786,7 @@ After all batches complete:
 
 **Prepare Reviewer input:**
 
-If Mode: single — pass outputs directly as individual labeled blocks (PM_OUTPUT, BACKEND_OUTPUT, FRONTEND_OUTPUT, QA_OUTPUT).
+If Mode: single — pass outputs directly as individual labeled blocks (PM_OUTPUT, BACKEND_OUTPUT, FRONTEND_OUTPUT).
 
 If Mode: fan-out — construct a merged context:
 ```
@@ -867,8 +825,6 @@ All agent outputs for review:
 {BACKEND_OUTPUT}
 
 {FRONTEND_OUTPUT}
-
-{QA_OUTPUT}
 [/INPUTS]
 ```
 
@@ -976,7 +932,7 @@ Slices:
   [slice-name]: [PASS | FAIL | SKIPPED]
   ...
 
-Tests:     Backend [PASS | FAIL | SKIPPED] · Frontend [PASS | FAIL | SKIPPED]
+Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
 Review status: [PASS | NEEDS REVIEW | FAIL]
 [if NEEDS REVIEW or FAIL: list items from REVIEWER OUTPUT "Items for human review" section]
 

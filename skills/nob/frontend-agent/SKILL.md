@@ -229,7 +229,7 @@ If tests fail: attempt to fix. If the fix requires more than ~5 lines of non-obv
 Your output block must:
 - Begin with `[FRONTEND-AGENT OUTPUT]` on its own line (no leading spaces or characters)
 - End with `[/FRONTEND-AGENT OUTPUT]` on its own line
-- Include every required field: `Files changed:`, `API endpoints consumed:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:`
+- Include every required field: `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`
 - Use the exact field names listed — no synonyms, no omissions
 
 Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.

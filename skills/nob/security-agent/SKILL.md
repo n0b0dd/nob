@@ -81,7 +81,7 @@ You are a security specialist focused on hardcoded secrets and credentials. Read
 - Auth tokens hardcoded in request headers: `Authorization: Bearer <literal-token>`
 - JWT secrets hardcoded in string literals: `secret = "my-jwt-secret"`, `JWT_SECRET = "hardcoded"`
 
-Files to read and review:
+Files to read and review (source files, dependency manifests, and infra/config files — scan all of them):
 {all paths from CHANGED_FILES}
 
 Output one line per finding in this exact format:
@@ -99,8 +99,8 @@ You are a security specialist focused on dependency vulnerabilities. Read each d
 
 Focus on packages with known: prototype pollution, ReDoS (catastrophic backtracking), path traversal, remote code execution, or data exfiltration vulnerabilities. Pay attention to the pinned version — a vulnerable version range is a finding even if a patched version exists.
 
-Files to read and review:
-{all dependency file paths from CHANGED_FILES: package.json, requirements.txt, pyproject.toml, pubspec.yaml, go.mod, Gemfile, Cargo.toml}
+Files to read and review (manifest files only — skip lockfiles like package-lock.json and yarn.lock as they contain no additional version information useful for CVE checks):
+{all dependency manifest file paths from CHANGED_FILES: package.json, requirements.txt, pyproject.toml, pubspec.yaml, go.mod, Gemfile, Cargo.toml}
 
 Output one line per finding in this exact format:
 [CRITICAL|MEDIUM|LOW] deps | {file} | {package}@{version}: {vulnerability class and CVE if known}
@@ -172,13 +172,11 @@ Read all files in CHANGED_FILES. For each file, check all four categories inline
 
 Group all findings into Critical, Medium, Low. Set Status = PASS if none found, else FINDINGS.
 
-## Step 4: Output (simple path)
-
-Emit the `[SECURITY-AGENT OUTPUT]` block as defined in Output Format below.
+Proceed to Step 5 (Output).
 
 ---
 
-## Output Format
+## Step 5: Output
 
 ```
 [SECURITY-AGENT OUTPUT]

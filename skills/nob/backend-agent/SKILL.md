@@ -36,7 +36,7 @@ From `[PLAN OUTPUT]`, read `Complexity: Backend:`.
 
 ## Coordinator Mode (complex path only)
 
-Enter this section only when `Complexity: Backend: complex` from Step 3.5. This replaces Steps 4, 5, and 5.5. After completing Step 7-C, skip to Step 6 (Output).
+Enter this section only when `Complexity: Backend: complex` from Step 3.5. This replaces Steps 4, 5, and 5.5. After completing Step 7-C, the coordinator is done — do not continue to Steps 4, 5, or 5.5.
 
 ### Step 4-C: Dispatch Exploration Agent
 
@@ -75,18 +75,22 @@ Relevant snippets:
 
 Extract `[BACKEND-EXPLORATION CONTEXT]...[/BACKEND-EXPLORATION CONTEXT]`. Store as EXPLORATION_CONTEXT.
 
+If EXPLORATION_CONTEXT is empty or the block was not found, stop with: "Backend coordinator cannot proceed — exploration agent returned no [BACKEND-EXPLORATION CONTEXT] block. Re-run or switch to in-session path."
+
 ### Step 5-C: Determine Task List (in-session, no dispatch)
 
-Based on EXPLORATION_CONTEXT and PM_OUTPUT "Backend changes needed", decide which tasks are needed. Only include tasks that have actual work to do.
+Based on EXPLORATION_CONTEXT and the "Backend changes needed" section from [PM-AGENT OUTPUT], decide which tasks are needed. Only include tasks that have actual work to do.
 
 Evaluate in this order:
 
 1. **schema** — create/update schema and migration file. Include if `[MIGRATION]` in PLAN_RISKS or PM_OUTPUT requires new or changed model fields.
 2. **service** — implement business logic and data access. Include if new service methods or data layer changes are needed.
 3. **routes** — implement HTTP handlers and register routes. Include if new or changed endpoints are required.
-4. **tests** — write tests for all new or changed endpoints and service methods. Always include.
+4. **tests** — write tests for all new or changed endpoints and service methods. Always include. For `target_files`, use the test file paths that correspond to the routes and service files implemented in previous tasks (e.g. if routes task creates `src/routes/users.ts`, target `tests/routes/users.test.ts`).
 
 Store as TASK_LIST = ordered array of objects: `{ name: string, description: string, target_files: string[] }`.
+
+If TASK_LIST is empty after this evaluation, stop with: "Backend coordinator: no tasks identified — verify [PM-AGENT OUTPUT] contains 'Backend changes needed' content."
 
 ### Step 6-C: Dispatch Sequential Task Sub-Agents
 
@@ -106,7 +110,7 @@ Target files (implement only these): {task.target_files}
 [/BACKEND-EXPLORATION CONTEXT]
 
 Backend changes needed (from PM Agent):
-{PM_OUTPUT "Backend changes needed" section}
+{the "Backend changes needed" section from [PM-AGENT OUTPUT]}
 
 {if this is not the first task:
 Previous task output:
@@ -127,6 +131,8 @@ Files created:
   - [path]: [reason]
 New API contracts (routes task only):
   - [METHOD] [/path]: request: [shape] → response: [shape]
+Updated API contracts (routes task only):
+  - [METHOD] [/path]: [what changed]
 Test results (tests task only):
   Command: [exact command run]
   New tests: [PASS | FAIL — N failed]

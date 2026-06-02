@@ -657,7 +657,7 @@ Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Store as FRONTEND_
 
 Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
 
-Proceed to Phase 3.
+Proceed to Phase 2.5.
 
 ---
 
@@ -779,7 +779,76 @@ Before dispatching each slice agent, update this slice's checkpoint status to `i
 
 After all batches complete:
 - If SLICE_RESULTS is empty (all slices failed): stop. Print terminal summary listing all failures. Do not dispatch Reviewer.
-- Otherwise: SLICE_RESULTS is now fully populated from in-memory accumulation during dispatch. Proceed to Phase 3.
+- Otherwise: SLICE_RESULTS is now fully populated from in-memory accumulation during dispatch. Proceed to Phase 2.5.
+
+---
+
+## Phase 2.5: Security review
+
+If `security-agent` is not in `agents.enabled`: set SECURITY_OUTPUT = "" and skip the rest of this phase. Proceed to Phase 3.
+
+**Prepare Security Agent input:**
+
+If Mode: single — BACKEND_OUTPUT and FRONTEND_OUTPUT are already in context from Phase 2. Pass them directly.
+
+If Mode: fan-out — construct MERGED_OUTPUTS by concatenating all SLICE OUTPUT blocks from SLICE_RESULTS:
+```
+[MERGED SLICE OUTPUTS]
+{all SLICE OUTPUT blocks from SLICE_RESULTS concatenated}
+[/MERGED SLICE OUTPUTS]
+```
+
+**Dispatch Security Agent:**
+
+Read `{SKILL_BASE_DIR}/security-agent/SKILL.md`. Dispatch with `model: agents.models["security-agent"] ?? "haiku"`:
+
+For Mode: single:
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/security-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+
+[BACKEND-AGENT OUTPUT]
+{BACKEND_OUTPUT}
+[/BACKEND-AGENT OUTPUT]
+
+[FRONTEND-AGENT OUTPUT]
+{FRONTEND_OUTPUT}
+[/FRONTEND-AGENT OUTPUT]
+[/INPUTS]
+```
+
+For Mode: fan-out:
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/security-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+
+{MERGED_OUTPUTS block}
+[/INPUTS]
+```
+
+Extract `[SECURITY-AGENT OUTPUT]...[/SECURITY-AGENT OUTPUT]`. Store as SECURITY_OUTPUT.
+
+**Apply severity gate:**
+
+Check SECURITY_OUTPUT for any `[CRITICAL]` lines.
+
+If one or more `[CRITICAL]` lines are present:
+1. Count them as N.
+2. Print each critical finding to the user.
+3. Print: "Security Agent found N critical issue(s) listed above. Fix and re-run, or skip security check? (fix / skip)"
+4. Wait for user response.
+   - `fix` or any non-skip response: exit. Print "Fix the issues above and re-run `/nob` to continue." Do not proceed to Phase 3.
+   - `skip`: set SECURITY_OUTPUT = "[SECURITY-SKIPPED]". Print "Security check skipped — findings will be noted in the Reviewer report." Proceed to Phase 3.
+
+If no `[CRITICAL]` lines: proceed to Phase 3 with SECURITY_OUTPUT as-is.
 
 ---
 
@@ -826,6 +895,9 @@ All agent outputs for review:
 {BACKEND_OUTPUT}
 
 {FRONTEND_OUTPUT}
+
+Security Agent output:
+{SECURITY_OUTPUT}
 [/INPUTS]
 ```
 
@@ -847,6 +919,9 @@ All agent outputs for review:
 {PLAN_OUTPUT}
 
 {MERGED SLICE OUTPUTS block constructed above}
+
+Security Agent output:
+{SECURITY_OUTPUT}
 [/INPUTS]
 ```
 
@@ -1047,6 +1122,7 @@ Slices:
   ...
 
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
+Security:  [derive from SECURITY_OUTPUT: if empty string → "SKIPPED (disabled)", if "[SECURITY-SKIPPED]" → "SKIPPED (user)", if "Status: PASS" → "PASS", if "Status: FINDINGS" → count [MEDIUM] and [LOW] lines and print "FINDINGS: N medium, M low"]
 Review status: [PASS | NEEDS REVIEW | FAIL]
 [if RETRY_RAN = true: "Retry:     ran  →  Final review: [Overall status from final REVIEWER_OUTPUT]"]
 [if RETRY_RAN = false and first review was not PASS: "Retry:     skipped"]

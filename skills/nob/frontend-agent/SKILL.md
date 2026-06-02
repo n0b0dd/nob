@@ -29,7 +29,8 @@ Read `CLAUDE.md` for frontend conventions: component pattern, state management, 
 ### Step 3: Read context blocks
 From the current session context:
 1. Find and read `[PM-AGENT OUTPUT]` — extract "Frontend changes needed" (includes specific file paths) and note any `## Error states` referenced. If not found, stop: "Frontend Agent cannot proceed — no [PM-AGENT OUTPUT] found in context."
-2. Find and read `[BACKEND-AGENT OUTPUT]` — extract "New API contracts" and "Updated API contracts". Use these as the source of truth for endpoints. Do NOT assume or invent API contracts.
+   Also extract `API contracts:` from `[PM-AGENT OUTPUT]`. Store as PM_API_CONTRACTS. If the field reads `none`, set PM_API_CONTRACTS to null.
+2. Find and read `[BACKEND-AGENT OUTPUT]` — extract "New API contracts" and "Updated API contracts". If available, these take precedence over PM_API_CONTRACTS as the authoritative endpoint source — use them for all API calls. Do NOT assume or invent API contracts beyond what either source provides.
 3. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Frontend" and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
 
 If there is no [BACKEND-AGENT OUTPUT]: proceed with API contracts from [PM-AGENT OUTPUT], note "No [BACKEND-AGENT OUTPUT] found — API contracts inferred from spec."
@@ -52,6 +53,8 @@ Do NOT skip this step. Implementing without reading leads to pattern violations.
 
 ### Step 5: Implement
 Write the minimum code to satisfy "Frontend changes needed" from [PM-AGENT OUTPUT]. Follow the exact patterns observed in Step 4:
+
+**API endpoint source of truth**: when calling backend endpoints, use the contracts from `[BACKEND-AGENT OUTPUT]` if available (takes precedence). If `[BACKEND-AGENT OUTPUT]` is not available (running concurrently with Backend Agent), use PM_API_CONTRACTS — do not infer or adjust paths, methods, or shapes from the prose in "Frontend changes needed:". If PM_API_CONTRACTS is also null, infer from "Frontend changes needed:" and note "No API contracts available — endpoint inferred from spec" in `Items not implemented (needs human)`.
 - Same component/widget structure
 - Same API client usage
 - Same state management approach

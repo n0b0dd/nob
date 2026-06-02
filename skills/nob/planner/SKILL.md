@@ -61,19 +61,6 @@ Cap slices at `max_parallel_slices` from `.nob.yml` (default: 3). If more indepe
 
 When in doubt: `Mode: single`. Do not force fan-out on ambiguous specs.
 
-### Step 3.6: Score per-layer complexity
-
-For each enabled layer (backend, frontend), assign a complexity score based on AFFECTED_FILES and the Risks identified in Step 5.
-
-**`complex`** if any of these apply to that layer:
-- 3 or more files in AFFECTED_FILES for that layer
-- Any `[MIGRATION]`, `[AUTH]`, `[BREAKING]`, or `[SHARED]` risk applies to that layer
-- The spec involves multiple independent concerns within the same layer (e.g. two unrelated models, or a component and a routing change that touch different parts of the codebase)
-
-**`simple`** otherwise: 1–2 files, no risk flags, single concern.
-
-Store as COMPLEXITY = `{ backend: "simple" | "complex", frontend: "simple" | "complex" }`. If only one layer is enabled, set the disabled layer's score to `"simple"`.
-
 All slices in a fan-out output must be fully independent — `Independent: yes` is the only valid value in the Slices section. If two work streams are not fully independent, do not include them as separate slices; keep Mode: single instead.
 
 ### Step 4: Break into ordered tasks
@@ -102,6 +89,19 @@ If none, write "none". Do NOT ask the user about ambiguities here — list them 
 
 If none apply, write "none".
 
+### Step 5.5: Score per-layer complexity
+
+For each enabled layer (backend, frontend), assign a complexity score based on AFFECTED_FILES and the Risks identified above.
+
+**`complex`** if any of these apply to that layer:
+- 3 or more files in AFFECTED_FILES for that layer
+- Any `[MIGRATION]`, `[AUTH]`, `[BREAKING]`, or `[SHARED]` risk applies to that layer
+- The spec involves multiple independent concerns within the same layer (e.g. two unrelated models, or a component and a routing change that touch different parts of the codebase)
+
+**`simple`** otherwise: 1–2 files, no risk flags, single concern.
+
+Store as COMPLEXITY = `{ backend: "simple" | "complex", frontend: "simple" | "complex" }`. If only one layer is enabled, set the disabled layer's score to `"n/a"`.
+
 ## Output Format
 
 Return this exact block. For `Mode: single`, omit the `Slices:` section entirely — the `Tasks` section is used instead (backward compatible with Phase 2).
@@ -120,8 +120,8 @@ Affected files:
   Frontend: [list of file paths from AFFECTED_FILES.frontend, or: none detected]
 
 Complexity:
-  Backend: simple | complex
-  Frontend: simple | complex
+  Backend: simple | complex | n/a
+  Frontend: simple | complex | n/a
 
 Slices (only present when Mode: fan-out):
   Slice 1 — [slug-name]

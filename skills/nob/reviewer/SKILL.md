@@ -54,6 +54,21 @@ For each endpoint the frontend consumes, find the matching contract in `[BACKEND
 
 Add all CONTRACT VIOLATIONS to "Items for human review" regardless of criterion status.
 
+### Step 3.6: Read security findings
+
+Check context for `[SECURITY-AGENT OUTPUT]` or `[SECURITY-SKIPPED]`.
+
+- If `[SECURITY-SKIPPED]` is present: store SECURITY_STATUS = "SKIPPED".
+- If `[SECURITY-AGENT OUTPUT]` is present:
+  - If `Status: PASS`: store SECURITY_STATUS = "PASS". No findings to record.
+  - If `Status: FINDINGS`:
+    - Extract all `[MEDIUM]` lines. Store as SECURITY_MEDIUM.
+    - Extract all `[LOW]` lines. Store as SECURITY_LOW.
+    - Store SECURITY_STATUS = "FINDINGS".
+    - If SECURITY_MEDIUM is non-empty: the overall review status cannot be PASS — at minimum NEEDS REVIEW. Add each medium finding to "Items for human review".
+    - Low findings are informational only — add them to the Security section of the output but do not affect overall status.
+- If neither block is present: store SECURITY_STATUS = "NOT RUN — security agent output missing from context".
+
 ### Step 4: Check each criterion individually
 For every acceptance criterion from [PM-AGENT OUTPUT]:
 - **✓ implemented**: read the specific file named in the output block and confirm it contains evidence of the implementation (the route exists, the component renders, etc.) AND the relevant test layer reports PASS
@@ -64,6 +79,8 @@ Do NOT batch-check criteria. Check each one individually. Do NOT mark ✓ based 
 
 ### Step 5: Determine overall status
 Apply the status definitions above exactly. Do not soften FAIL to NEEDS REVIEW.
+
+Additional rule: if SECURITY_STATUS is "FINDINGS" and SECURITY_MEDIUM is non-empty, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓. Security medium findings require human attention before the feature ships.
 
 ### Step 6: List human review items
 For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete: name the missing feature and why it wasn't implemented (from the "items not implemented" field if available).
@@ -83,6 +100,11 @@ Contract check:
   PM → Backend:       [PASS | VIOLATIONS: list | SKIPPED — reason]
   PM → Frontend:      [PASS | VIOLATIONS: list | SKIPPED — reason]
   Backend → Frontend: [PASS | VIOLATIONS: list | SKIPPED — reason]
+
+Security:
+  Status: [PASS | FINDINGS: N medium, M low | SKIPPED — security check was skipped by user | NOT RUN — security agent output missing]
+  [if FINDINGS: list each medium finding as "- [MEDIUM] {category} | {file}:{line} | {description}"]
+  [if FINDINGS and low items: list each low finding as "- [LOW] {category} | {file}:{line} | {description}"]
 
 Criteria check:
 - [criterion 1]: ✓ implemented in [exact file path]

@@ -218,10 +218,12 @@ List every file changed or created with a one-sentence reason. List every new or
 Your output block must:
 - Begin with `[BACKEND-AGENT OUTPUT]` on its own line (no leading spaces or characters)
 - End with `[/BACKEND-AGENT OUTPUT]` on its own line
-- Include every required field: `Files changed:`, `New API contracts:`, `Items not implemented:`, `Test results:`, `Test output:`
+- Include every required field: `Files changed:`, `New API contracts:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:`
 - Use the exact field names listed — no synonyms, no omissions
 
 Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.
+
+Note: `Deferred items:` is for scope decisions the agent made autonomously (items it chose not to implement to stay within the 15-file limit). `Items not implemented (needs human):` is for blockers that require human intervention to resolve.
 
 ## Output Format
 
@@ -252,6 +254,7 @@ Test results:
 
 Test output:
   [verbatim last 80 lines of test runner + compiler stdout/stderr]
+  (if >80 lines: prepend "[truncated — showing last 80 lines]" as first line)
   (or: SKIPPED — no test command found)
   (or: SKIPPED — compile-only project, no test suite)
 

@@ -25,6 +25,132 @@ From the current session context:
    Also extract `API contracts:` from `[PM-AGENT OUTPUT]`. Store as PM_API_CONTRACTS. If the field reads `none`, set PM_API_CONTRACTS to null.
 2. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Backend", "Affected files: Schema", and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
 
+### Step 3.5: Select execution path
+
+From `[PLAN OUTPUT]`, read `Complexity: Backend:`.
+
+- If `simple` or `n/a` (or if `[PLAN OUTPUT]` is not present): proceed with the **in-session path** — continue to Step 4 as normal.
+- If `complex`: enter **coordinator mode** — skip Steps 4, 5, and 5.5 entirely. Continue to the **Coordinator Mode** section below.
+
+---
+
+## Coordinator Mode (complex path only)
+
+Enter this section only when `Complexity: Backend: complex` from Step 3.5. This replaces Steps 4, 5, and 5.5. After completing Step 7-C, skip to Step 6 (Output).
+
+### Step 4-C: Dispatch Exploration Agent
+
+Dispatch a sub-agent with `model: haiku` and this prompt:
+
+```
+You are a backend codebase exploration agent. Read the relevant files and emit a compact summary. Do NOT implement anything.
+
+Read every file in this list:
+{every path from "Affected files: Backend" and "Affected files: Schema" in [PLAN OUTPUT]}
+
+Also read one representative example of each:
+- A route/handler file (to capture route structure, middleware usage, error response format)
+- A service or business-logic file
+- A test file (to capture test style, assertion patterns, setup approach)
+{if [AUTH] in PLAN_RISKS: - The auth middleware file}
+{if [MIGRATION] in PLAN_RISKS: - An existing schema file and an existing migration file}
+
+Emit this block:
+
+[BACKEND-EXPLORATION CONTEXT]
+Affected files:
+  - [path]: [one-sentence role]
+
+Patterns observed:
+  Route structure: [handler signature, how router is mounted]
+  Error format: [exact error response shape]
+  Test style: [file structure, assertion style, setup pattern]
+  Auth wiring: [how middleware is applied to routes, or: none detected]
+  Migration pattern: [how migrations are created and run, or: none detected]
+
+Relevant snippets:
+  [Function signatures, type shapes, and key lines only. No full file dumps. Keep this section under 1500 tokens.]
+[/BACKEND-EXPLORATION CONTEXT]
+```
+
+Extract `[BACKEND-EXPLORATION CONTEXT]...[/BACKEND-EXPLORATION CONTEXT]`. Store as EXPLORATION_CONTEXT.
+
+### Step 5-C: Determine Task List (in-session, no dispatch)
+
+Based on EXPLORATION_CONTEXT and PM_OUTPUT "Backend changes needed", decide which tasks are needed. Only include tasks that have actual work to do.
+
+Evaluate in this order:
+
+1. **schema** — create/update schema and migration file. Include if `[MIGRATION]` in PLAN_RISKS or PM_OUTPUT requires new or changed model fields.
+2. **service** — implement business logic and data access. Include if new service methods or data layer changes are needed.
+3. **routes** — implement HTTP handlers and register routes. Include if new or changed endpoints are required.
+4. **tests** — write tests for all new or changed endpoints and service methods. Always include.
+
+Store as TASK_LIST = ordered array of objects: `{ name: string, description: string, target_files: string[] }`.
+
+### Step 6-C: Dispatch Sequential Task Sub-Agents
+
+For each task in TASK_LIST **in order** (do not dispatch the next until the previous returns):
+
+Dispatch a sub-agent with the `backend-agent` model from `.nob.yml` (default: `sonnet`) and this prompt:
+
+```
+You are a focused backend implementation agent. Implement exactly one task. Do not read additional files — all context you need is provided below.
+
+Task: {task.name}
+Description: {task.description}
+Target files (implement only these): {task.target_files}
+
+[BACKEND-EXPLORATION CONTEXT]
+{EXPLORATION_CONTEXT}
+[/BACKEND-EXPLORATION CONTEXT]
+
+Backend changes needed (from PM Agent):
+{PM_OUTPUT "Backend changes needed" section}
+
+{if this is not the first task:
+Previous task output:
+{previous task's [TASK OUTPUT] block}
+}
+
+{if PM_API_CONTRACTS is non-null:
+API contracts (implement exactly — method, path, and shapes are non-negotiable):
+{PM_API_CONTRACTS}
+}
+
+Follow the patterns in [BACKEND-EXPLORATION CONTEXT] exactly. Emit:
+
+[TASK OUTPUT: {task.name}]
+Files changed:
+  - [path]: [reason]
+Files created:
+  - [path]: [reason]
+New API contracts (routes task only):
+  - [METHOD] [/path]: request: [shape] → response: [shape]
+Test results (tests task only):
+  Command: [exact command run]
+  New tests: [PASS | FAIL — N failed]
+  Regression check: [PASS | FAIL — N failed, list files | SKIPPED — reason]
+Items not implemented (needs human):
+  - [item and reason, or: none]
+[/TASK OUTPUT: {task.name}]
+```
+
+Store each result as TASK_OUTPUT_{task.name}. Pass it as "Previous task output" to the next sub-agent.
+
+### Step 7-C: Assemble Final Output
+
+Merge all TASK_OUTPUT blocks into the standard `[BACKEND-AGENT OUTPUT]` format. Combine across all tasks:
+- All `Files changed` entries
+- All `Files created` entries
+- All `New API contracts` and `Updated API contracts` entries (from routes task)
+- Test results from the tests task (if not present, write: `SKIPPED — run by coordinator task sub-agent`)
+- All `Items not implemented` entries (deduplicated)
+
+Then emit the `[BACKEND-AGENT OUTPUT]` block as defined in **## Output Format** below and stop. Do not continue to Steps 4, 5, or 5.5.
+
+---
+
 ### Step 4: Explore existing backend codebase
 Before writing any code:
 

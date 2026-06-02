@@ -785,7 +785,7 @@ After all batches complete:
 
 ## Phase 2.5: Security review
 
-If `security-agent` is not in `agents.enabled`: set SECURITY_OUTPUT = "" and skip the rest of this phase. Proceed to Phase 3.
+If `security-agent` is not in `agents.enabled`: set SECURITY_OUTPUT = "[SECURITY-DISABLED]" and skip the rest of this phase. Proceed to Phase 3.
 
 **Prepare Security Agent input:**
 
@@ -1122,7 +1122,7 @@ Slices:
   ...
 
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
-Security:  [derive from SECURITY_OUTPUT: if empty string → "SKIPPED (disabled)", if "[SECURITY-SKIPPED]" → "SKIPPED (user)", if "Status: PASS" → "PASS", if "Status: FINDINGS" → count [MEDIUM] and [LOW] lines and print "FINDINGS: N medium, M low"]
+Security:  [derive from SECURITY_OUTPUT: if "[SECURITY-DISABLED]" → "SKIPPED (disabled)", if "[SECURITY-SKIPPED]" → "SKIPPED (user)", if "Status: PASS" → "PASS", if "Status: FINDINGS" → count [MEDIUM] and [LOW] lines and print "FINDINGS: N medium, M low"]
 Review status: [PASS | NEEDS REVIEW | FAIL]
 [if RETRY_RAN = true: "Retry:     ran  →  Final review: [Overall status from final REVIEWER_OUTPUT]"]
 [if RETRY_RAN = false and first review was not PASS: "Retry:     skipped"]

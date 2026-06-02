@@ -56,9 +56,10 @@ Add all CONTRACT VIOLATIONS to "Items for human review" regardless of criterion 
 
 ### Step 3.6: Read security findings
 
-Check context for `[SECURITY-AGENT OUTPUT]` or `[SECURITY-SKIPPED]`.
+Check context for `[SECURITY-AGENT OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY-DISABLED]`.
 
-- If `[SECURITY-SKIPPED]` is present: store SECURITY_STATUS = "SKIPPED".
+- If `[SECURITY-DISABLED]` is present: store SECURITY_STATUS = "SKIPPED (disabled)".
+- If `[SECURITY-SKIPPED]` is present: store SECURITY_STATUS = "SKIPPED (user)".
 - If `[SECURITY-AGENT OUTPUT]` is present:
   - If `Status: PASS`: store SECURITY_STATUS = "PASS". No findings to record.
   - If `Status: FINDINGS`:
@@ -102,7 +103,7 @@ Contract check:
   Backend → Frontend: [PASS | VIOLATIONS: list | SKIPPED — reason]
 
 Security:
-  Status: [PASS | FINDINGS: N medium, M low | SKIPPED — security check was skipped by user | NOT RUN — security agent output missing]
+  Status: [PASS | FINDINGS: N medium, M low | SKIPPED (user) — security check was skipped by user | SKIPPED (disabled) — security-agent not in agents.enabled | NOT RUN — security agent output missing]
   [if FINDINGS: list each medium finding as "- [MEDIUM] {category} | {file}:{line} | {description}"]
   [if FINDINGS and low items: list each low finding as "- [LOW] {category} | {file}:{line} | {description}"]
 

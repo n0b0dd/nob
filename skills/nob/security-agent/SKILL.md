@@ -195,6 +195,16 @@ Proceed to Step 5 (Output).
 
 ---
 
+## Output Format Requirement
+
+Your output block must:
+- Begin with `[SECURITY-AGENT OUTPUT]` on its own line (no leading spaces or characters)
+- End with `[/SECURITY-AGENT OUTPUT]` on its own line
+- Include every required field: `Status:`, `Findings:`
+- Use the exact field names listed — no synonyms, no omissions
+
+Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.
+
 ## Step 5: Output
 
 ```

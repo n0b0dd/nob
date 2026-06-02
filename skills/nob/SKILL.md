@@ -525,6 +525,33 @@ Constraints: {parsed constraints, or: none}
 
 ---
 
+## Output Block Validation Procedure
+
+After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, apply this procedure before passing the output to the next agent. The required fields per agent are:
+
+| Agent | Required fields |
+|---|---|
+| Planner | `Workflow:`, `Mode:`, `Affected layers:`, `Risks:`, `Ambiguities:` |
+| PM Agent | `Requirements:`, `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
+| Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:` |
+| Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented:`, `Deferred items:`, `Test results:`, `Test output:` |
+| Security Agent | `Status:`, `Findings:` |
+| Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:` |
+
+**Validation steps:**
+1. Check that every required field for this agent appears as `FieldName:` on its own line within the extracted block.
+2. If all required fields are present: proceed normally.
+3. If any required field is missing:
+   - Re-dispatch the agent once, prepending to the original prompt:
+     > "Your previous response was missing these required fields: [list the missing fields].
+     > Re-emit the complete [X OUTPUT] block with ALL required fields present.
+     > Do not omit any field even if its value is 'none' or 'n/a'."
+4. If still missing after re-dispatch: mark the agent/slice status as `malformed`. Do not pass a malformed block to downstream agents. Treat `malformed` the same as `failed` for all pipeline flow decisions.
+
+Apply this procedure after every agent dispatch in Phases 1, 2, 2.5, and 3.
+
+---
+
 ## Phase 0: Resume scan
 
 If `agents.checkpoint.enabled` is false, skip this phase entirely and proceed to Phase 1.
@@ -575,7 +602,7 @@ Spec file contents:
 [/INPUTS]
 ```
 
-Extract `[PLAN OUTPUT]...[/PLAN OUTPUT]` from the result. Store as PLAN_OUTPUT.
+Extract `[PLAN OUTPUT]...[/PLAN OUTPUT]` from the result. Store as PLAN_OUTPUT. Apply the **Output Block Validation Procedure** for Planner before proceeding.
 
 If PLAN_OUTPUT ambiguities section contains anything other than "none": present them to the user as a numbered list and wait for answers before proceeding. Store answers for inclusion in subsequent agent prompts.
 
@@ -634,7 +661,7 @@ Plan context:
 [/INPUTS]
 ```
 
-Extract `[PM-AGENT OUTPUT]...[/PM-AGENT OUTPUT]`. Store as PM_OUTPUT.
+Extract `[PM-AGENT OUTPUT]...[/PM-AGENT OUTPUT]`. Store as PM_OUTPUT. Apply the **Output Block Validation Procedure** for PM Agent before proceeding.
 
 ---
 
@@ -890,7 +917,7 @@ Working directory: {current working directory path}
 [/INPUTS]
 ```
 
-Extract `[SECURITY-AGENT OUTPUT]...[/SECURITY-AGENT OUTPUT]`. Store as SECURITY_OUTPUT.
+Extract `[SECURITY-AGENT OUTPUT]...[/SECURITY-AGENT OUTPUT]`. Store as SECURITY_OUTPUT. Apply the **Output Block Validation Procedure** for Security Agent before proceeding.
 
 **Apply severity gate:**
 
@@ -981,7 +1008,7 @@ Security Agent output:
 [/INPUTS]
 ```
 
-Extract `[REVIEWER OUTPUT]...[/REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT.
+Extract `[REVIEWER OUTPUT]...[/REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT. Apply the **Output Block Validation Procedure** for Reviewer before proceeding.
 
 **Write final checkpoint** (if checkpoint.enabled):
 Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full REVIEWER_OUTPUT string. Write using the Write tool.

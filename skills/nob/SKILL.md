@@ -39,6 +39,7 @@ Skip this step entirely if the user's intent clearly matches any of these patter
 - Init patterns: "nob init", "initialize project", "scaffold project"
 - Venture patterns: "startup idea", "business idea", "I have an idea", "nob venture", "build a startup", "build a product", "build a company", "validate my idea", "launch a startup", "launch a product", "launch a company", "bring to market"
 - Refactor patterns: "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure"
+- Ideation patterns: "nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add"
 
 If the intent matches any of these patterns, skip this step entirely.
 
@@ -129,7 +130,7 @@ Proceed once answered.
 
 ```yaml
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer]
+  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer, ideation-agent]
   models:
     backend-agent: sonnet
     frontend-agent: sonnet
@@ -145,6 +146,7 @@ agents:
     financial-modeler: haiku
     venture-reviewer: haiku
     refactor-agent: sonnet
+    ideation-agent: haiku
   max_parallel_slices: 3
   venture:
     enabled: true
@@ -174,15 +176,18 @@ Also extract:
 | "nob init", "initialize project", "scaffold project", "init" (standalone) | Init |
 | "I want to build a startup", "I want to build a product", "I want to build a company", "I have an idea", "bring to market", "startup idea", "business idea", "validate my idea", "launch a startup", "launch a product", "launch a company", "nob venture" | Venture |
 | "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure" | Refactor |
+| "nob ideate", "ideate [direction]", "what should I build next", "suggest features for", "I want to add [vague goal]", "what feature should I add" | Ideate |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
-> "Is this a new feature to implement, a bug to fix, an API contract sync, a business idea you'd like to validate, or a project to restructure?"
+> "Is this a new feature to implement, a bug to fix, an API contract sync, a business idea you'd like to validate, a project to restructure, or feature ideation?"
 
 Do NOT guess the workflow type. If ambiguous, ask.
 
 If the identified workflow is `Init`, skip to the **Init workflow early exit** section immediately below before proceeding to Phase 0.
 
 If the identified workflow is `Refactor`, skip to the **Refactor workflow early exit** section immediately below before proceeding to Phase 0.
+
+If the identified workflow is `Ideate`, skip to the **Ideation workflow early exit** section immediately below before proceeding to Phase 0.
 
 ## Init workflow early exit
 
@@ -471,6 +476,33 @@ If the identified workflow is `Refactor`:
 
 - Extract `[REFACTOR-AGENT OUTPUT]...[/REFACTOR-AGENT OUTPUT]` from the result. Store as REFACTOR_OUTPUT.
 - Jump directly to Step 4 (Print terminal summary) using the Refactor terminal summary format.
+
+## Ideation workflow early exit
+
+If the identified workflow is `Ideate`:
+- Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
+- Parse the user's direction from the message: strip trigger phrases like "nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add". The remaining text is the direction. If nothing remains, direction = "general improvements".
+- Parse constraints from the message (explicit flags `--simple`, `--no-new-deps`, `--mobile-first`, `--backend-only`, `--frontend-only`; natural language "keep it simple", "no new dependencies", "mobile only", "backend only", "frontend only"). Store as a plain string, empty if none.
+- Read `{SKILL_BASE_DIR}/ideation-agent/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["ideation-agent"] ?? "haiku"` and this prompt:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/ideation-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Direction: {parsed direction}
+Constraints: {parsed constraints, or: none}
+[/INPUTS]
+```
+
+- Extract `[IDEATION-AGENT OUTPUT]...[/IDEATION-AGENT OUTPUT]` from the result. Store as IDEATION_OUTPUT.
+- If extraction fails: re-dispatch once with the same prompt. If still missing: print raw agent output and stop.
+- Jump directly to Step 4 (Print terminal summary) using the Ideation terminal summary format.
+
+---
 
 ## Phase 0: Resume scan
 
@@ -1051,6 +1083,21 @@ Write updated final checkpoint (if checkpoint.enabled): read checkpoint.json, up
 
 **If workflow is `Venture`**: summary is printed inline in the `## Venture Workflow` section above. This section is not reached for Venture runs.
 
+**If workflow is `Ideate`**, use this summary:
+
+```
+Nob ideation complete.
+
+Direction:   [Direction field from IDEATION_OUTPUT]
+Constraints: [Constraints field from IDEATION_OUTPUT]
+Ideas:       [Ideas generated field from IDEATION_OUTPUT]
+Chosen:      [Chosen field from IDEATION_OUTPUT]
+Spec:        [Spec saved field from IDEATION_OUTPUT]
+
+[if Spec saved is not "n/a":]
+Next: /nob implement [Spec saved field from IDEATION_OUTPUT]
+```
+
 **If workflow is `Refactor`**, use this summary. Populate each field from the corresponding field in REFACTOR_OUTPUT. Mark ✓ for success/created, ✗ for failed.
 
 ```
@@ -1156,3 +1203,4 @@ Next steps:
 - **Non-slice agent result missing expected output block**: re-dispatch once; if still missing, report raw agent output and stop
 - **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
+- **Ideation agent returns no [IDEATION-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

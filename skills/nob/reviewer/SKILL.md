@@ -29,6 +29,17 @@ If [PLAN OUTPUT] is not in context, look for the source file path in the user's 
 ### Step 2: Read [PM-AGENT OUTPUT]
 Find the acceptance criteria checklist. This is your primary validation list.
 
+### Step 2.5: Read Deferred items
+
+Check `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` for a `Deferred items:` field.
+
+For each deferred item listed (any line that is not `none`):
+- Find the acceptance criterion in `[PM-AGENT OUTPUT]` that most closely matches the deferred item description.
+- Mark that criterion `⚠ partial` with reason: "deferred by agent due to scope limit — [deferred item text]".
+- Add to "Items for human review": "Deferred: [deferred item text]".
+
+If `Deferred items:` is absent or reads `none` for both agents, skip this step.
+
 ### Step 3: Read all implementation output blocks
 Read `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` from context.
 
@@ -36,8 +47,15 @@ For each block, extract:
 - Files changed/created
 - Items not implemented
 - `Test results:` section — store as BACKEND_TEST_RESULTS and FRONTEND_TEST_RESULTS
+- `Test output:` section — store as BACKEND_TEST_OUTPUT and FRONTEND_TEST_OUTPUT
 
-If either test result is FAIL, overall tests are FAIL — the overall review status cannot be PASS. List each failing test as a human review item.
+**Test output corroboration (apply to each layer independently):**
+- If `Test output:` is absent → mark that layer's tests as `SKIPPED — agent did not provide raw test output`.
+- If `Test results: PASS` but `Test output:` contains any of these strings: `ERROR`, `FAILED`, `panic`, `tsc error`, `SyntaxError`, `TypeError`, `AssertionError` → downgrade to `FAIL` and add to "Items for human review": "Test results claim PASS but Test output contains failure indicators — verify manually."
+- If `Test results: FAIL` → copy the first 10 lines of `Test output:` verbatim into "Items for human review".
+- Never infer PASS from `Test results:` alone — it must be corroborated by `Test output:`.
+
+If either test result is FAIL (after corroboration), overall tests are FAIL — the overall review status cannot be PASS.
 
 ### Step 3.5: Cross-layer contract check
 

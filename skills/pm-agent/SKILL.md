@@ -162,6 +162,7 @@ From the spec, extract:
 5. **Edge cases** — explicitly mentioned only. If none: "none specified"
 6. **Out of scope** — explicitly excluded. If none: "none specified"
 7. **Ambiguities** — requirements that could be interpreted two ways, phrased as questions
+8. **API contracts** — derive a structured contract list from `Backend changes needed:`. For each backend change, extract: exact HTTP method, exact path, request body shape (field names and types), and response shape. Use exact field names from the spec where given. For any field whose type is not specified, write `any` and add it as a `[non-blocking]` ambiguity. If there are no backend API changes in scope, write `none`.
 
 ### Step 3: Never invent requirements
 
@@ -187,6 +188,11 @@ Backend changes needed:
 Frontend changes needed:
 - [screen/component] in `[file from RELATED_FILES, or: new file to create]`: [what changes]
 - [or: not specified in spec — frontend agent should infer from acceptance criteria]
+
+API contracts:
+- [METHOD] [/exact/path]: request: { field: type, ... } → response: { field: type, ... }
+- [METHOD] [/exact/path]: request: none → response: { field: type, ... }
+(or: none — no HTTP API changes in this feature)
 
 Edge cases to handle:
 - [case, or: none specified]

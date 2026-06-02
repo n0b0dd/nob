@@ -695,6 +695,8 @@ Requirements from PM Agent:
 {PM_OUTPUT}
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+
+SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
 [/INPUTS]
 ```
 
@@ -731,6 +733,8 @@ Backend Agent is running in parallel — use API contracts from PM Agent output 
 No [BACKEND-AGENT OUTPUT] will be provided.
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+
+SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
 [/INPUTS]
 ```
 
@@ -782,6 +786,8 @@ CLAUDE.md contents: {CLAUDE.md contents from your [INPUTS]}
 Requirements from PM Agent:
 {PM_OUTPUT}
 {if clarifications: Clarifications from user: {answers}}
+
+SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
 [/INPUTS]
 ```
 
@@ -800,6 +806,8 @@ Requirements from PM Agent:
 Backend Agent is running in parallel — use API contracts from PM Agent output above.
 No [BACKEND-AGENT OUTPUT] will be provided.
 {if clarifications: Clarifications from user: {answers}}
+
+SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
 [/INPUTS]
 ```
 
@@ -1228,6 +1236,16 @@ Review status: [PASS | NEEDS REVIEW | FAIL]
 [if RETRY_RAN = false and first review was not PASS: "Retry:     skipped"]
 [if NEEDS REVIEW or FAIL: list items from REVIEWER OUTPUT "Items for human review" section]
 
+[if any slice status is timed_out:]
+Timed out:
+  [slice-name]: timed out at [timed_out_at value]
+  Re-run `/nob [spec-file]` to resume — checkpoint skips completed slices.
+
+[if any slice status is malformed:]
+Malformed output:
+  [slice-name]: [agent-name] returned invalid output block after two attempts
+  Check agent output above, then re-run `/nob [spec-file]` to retry.
+
 [if checkpoint.enabled:]
 Checkpoint: {checkpoint.path}checkpoint.json
 When done: rm {checkpoint.path}checkpoint.json
@@ -1267,11 +1285,11 @@ If WORKTREE_PATH equals the current working directory (git not available): skip 
 - **Checkpoint file corrupted/unparseable**: warn user, start fresh run (Phase 0)
 - **Sub-skill file not found**: warn "sub-skill file {SKILL_BASE_DIR}/[name]/SKILL.md not found — ensure the nob plugin is installed correctly"
 - **Planner output has ambiguities**: pause and ask user before proceeding (Phase 1)
-- **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: failed`, continue other slices, report in terminal summary (Phase 2)
+- **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: timed_out` (store `timed_out_at: "phase2/slice-runner"`), continue other slices, report in terminal summary (Phase 2)
 - **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
 - **Reviewer status is FAIL**: print all failing items prominently; offer one targeted retry via Phase 3.5; do NOT offer a second retry
-- **Non-slice agent result missing expected output block**: re-dispatch once; if still missing, report raw agent output and stop
+- **Non-slice agent result missing expected output block**: re-dispatch once; if still missing after re-dispatch, mark status `timed_out` (store `timed_out_at: "<phase>/<agent-name>"`). Do NOT pass null output to downstream agents. For fan-out: skip this slice and continue remaining slices. For single mode: stop pipeline and skip Reviewer.
 - **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Ideation agent returns no [IDEATION-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

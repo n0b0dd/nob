@@ -33,6 +33,27 @@ If already on a non-main branch, proceed without creating a new branch.
 
 If git is not available or the working directory is not a git repo, skip this step and note it in the terminal summary.
 
+### Step 0.1: Create worktree
+
+After confirming the current branch (or creating a new one above):
+
+1. Derive run-id by taking the branch name, replacing `/` with `-`, then appending `-` and the source filename without extension.
+   - Example: branch `nob/user-profile` + spec `user-profile.md` → run-id `nob-user-profile-user-profile`
+   - For workflows with no source file (Init, Venture, Refactor, Ideate): use `<branch-name-with-dashes>-<workflow-lowercase>`
+
+2. Run: `git worktree add .nob/worktrees/<run-id> <current-branch-name>`
+   - If the path `.nob/worktrees/<run-id>` already exists: this is a resumed run — reuse it, skip creation.
+   - If a different collision: append `-2`, `-3`, etc. to run-id until unique.
+   - If `git worktree add` fails for any other reason: print the error and exit.
+
+3. Store `WORKTREE_PATH = .nob/worktrees/<run-id>` and `WORKTREE_BRANCH = <current-branch-name>`.
+
+4. Ensure `.nob/` appears in `.gitignore` at the repo root. If absent, append it using the Edit tool.
+
+5. From this point on, all agent dispatches must use `Working directory: {WORKTREE_PATH}` instead of the current directory path.
+
+If git is not available or not a git repo: skip Step 0.1 entirely. Set WORKTREE_PATH = current working directory. Note "No worktree created — not a git repo" in the terminal summary.
+
 ## Step 0.5: Structure Check
 
 Skip this step entirely if the user's intent clearly matches any of these patterns (checked against the user's original message, before workflow identification):
@@ -519,6 +540,7 @@ If the file exists and is valid JSON:
    - `status: in_progress` → treat as pending; re-run its full mini-pipeline in Phase 2 (partial output not trusted)
    - `status: pending` → run normally in Phase 2
 3. If `phases_completed` is empty → proceed to Phase 1 as normal.
+4. If `worktree_path` is set in the checkpoint: restore `WORKTREE_PATH` from it. If the path does not exist on disk, re-create the worktree: run `git worktree add {worktree_path} {worktree_branch}`.
 
 If the file exists but cannot be parsed as valid JSON: print "Warning: checkpoint file is corrupted — starting fresh run." Proceed to Phase 1 without resume.
 
@@ -570,12 +592,14 @@ Create the checkpoint directory if it does not exist: run `mkdir -p {checkpoint.
 Using the Write tool, write `{checkpoint.path}checkpoint.json`:
 ```json
 {
-  "run_id": "{current-branch}-{source-filename-without-extension}",
+  "run_id": "{run-id derived in Step 0.1}",
+  "worktree_path": "{WORKTREE_PATH}",
+  "worktree_branch": "{WORKTREE_BRANCH}",
   "workflow": "{workflow value from PLAN_OUTPUT}",
   "source": "{source file path}",
   "phases_completed": ["phase1"],
   "slices": {
-    "{slice-name}": { "status": "pending", "pm_output": null, "backend_output": null, "frontend_output": null }
+    "{slice-name}": { "status": "pending", "timed_out_at": null, "pm_output": null, "backend_output": null, "frontend_output": null }
   },
   "reviewer_output": null
 }
@@ -1187,6 +1211,26 @@ Next steps:
 - When satisfied: git add -p && git commit -m "feat: <spec name>"
 - Then: git push -u origin <branch-name>
 ```
+
+**Worktree teardown** (run after printing the terminal summary above):
+
+If `Overall status: PASS`:
+- Run: `git -C {WORKTREE_PATH} add -A`
+- Run: `git -C {WORKTREE_PATH} commit -m "nob: {run-id}"` (skip commit if nothing to commit)
+- Run: `git worktree remove .nob/worktrees/<run-id>`
+- Print: `Worktree committed and removed. Branch: {WORKTREE_BRANCH}`
+- Print: `Next: git push -u origin {WORKTREE_BRANCH}`
+
+If `Overall status: FAIL` or `NEEDS REVIEW`:
+- Preserve the worktree for inspection.
+- Print: `Worktree preserved at .nob/worktrees/<run-id> for inspection.`
+- Print: `To clean up: git worktree remove .nob/worktrees/<run-id> --force`
+
+If the run was cancelled or hit an unrecoverable error:
+- Run: `git worktree remove .nob/worktrees/<run-id> --force`
+- Print: `Run cancelled — worktree cleaned up.`
+
+If WORKTREE_PATH equals the current working directory (git not available): skip teardown entirely.
 
 ---
 

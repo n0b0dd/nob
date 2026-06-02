@@ -934,6 +934,8 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 
 ## Phase 3.5: Targeted retry
 
+Note: the Security Agent is not re-dispatched during retry. SECURITY_OUTPUT from Phase 2.5 carries through to the second Reviewer run unchanged — the retry fixes spec compliance failures, not security findings.
+
 Read `Overall status:` from REVIEWER_OUTPUT. Set RETRY_RAN = false.
 
 If `Overall status: PASS`: skip this phase entirely and proceed to Step 4.

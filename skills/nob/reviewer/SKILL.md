@@ -63,8 +63,8 @@ Check context for `[SECURITY-AGENT OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY
 - If `[SECURITY-AGENT OUTPUT]` is present:
   - If `Status: PASS`: store SECURITY_STATUS = "PASS". No findings to record.
   - If `Status: FINDINGS`:
-    - Extract all `[MEDIUM]` lines. Store as SECURITY_MEDIUM.
-    - Extract all `[LOW]` lines. Store as SECURITY_LOW.
+    - Extract all `[MEDIUM]` lines. Store as SECURITY_MEDIUM. Count them as SECURITY_MEDIUM_COUNT.
+    - Extract all `[LOW]` lines. Store as SECURITY_LOW. Count them as SECURITY_LOW_COUNT.
     - Store SECURITY_STATUS = "FINDINGS".
     - If SECURITY_MEDIUM is non-empty: the overall review status cannot be PASS — at minimum NEEDS REVIEW. Add each medium finding to "Items for human review".
     - Low findings are informational only — add them to the Security section of the output but do not affect overall status.

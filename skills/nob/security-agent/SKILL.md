@@ -1,6 +1,6 @@
 ---
 name: nob-security-agent
-description: Use after Backend and Frontend agents complete in a Nob workflow. Reads changed files from implementation outputs and checks them for security issues across four categories: OWASP Top 10, secrets, dependencies, and infra misconfigs. Outputs a structured [SECURITY-AGENT OUTPUT] block. Part of the Nob skill hub.
+description: Use after Backend and Frontend agents complete in a Nob workflow. Reads changed files from implementation outputs and checks them for security issues across four categories: OWASP/Mobile Top 10, secrets, dependencies, and infra misconfigs. Covers web and mobile stacks (Android, iOS, Flutter, React Native). Outputs a structured [SECURITY-AGENT OUTPUT] block. Part of the Nob skill hub.
 ---
 
 # Nob — Security Agent
@@ -22,8 +22,8 @@ Combine all extracted paths into CHANGED_FILES (deduplicated). If CHANGED_FILES 
 
 Also check CHANGED_FILES for the following file types:
 
-- **Dependency files**: `package.json`, `package-lock.json`, `yarn.lock`, `requirements.txt`, `pyproject.toml`, `pubspec.yaml`, `go.mod`, `Gemfile`, `Cargo.toml`
-- **Infra/config files**: `Dockerfile`, `docker-compose.yml`, any file under `.github/workflows/`, `.gitlab-ci.yml`, `.env`, `.env.example`, any `*.tf` file, any `*.yaml` or `*.yml` under `k8s/`, `helm/`, or `infra/`
+- **Dependency files**: `package.json`, `package-lock.json`, `yarn.lock`, `requirements.txt`, `pyproject.toml`, `pubspec.yaml`, `go.mod`, `Gemfile`, `Cargo.toml`, `build.gradle`, `build.gradle.kts`, `Podfile`, `Podfile.lock`
+- **Infra/config files**: `Dockerfile`, `docker-compose.yml`, any file under `.github/workflows/`, `.gitlab-ci.yml`, `.env`, `.env.example`, any `*.tf` file, any `*.yaml` or `*.yml` under `k8s/`, `helm/`, or `infra/`, `AndroidManifest.xml`, `Info.plist`
 
 Set HAS_DEP_FILES = true if any dependency files appear in CHANGED_FILES.
 Set HAS_INFRA_FILES = true if any infra/config files appear in CHANGED_FILES.
@@ -52,6 +52,7 @@ Dispatch all four in the same assistant turn — do not await any before dispatc
 ```
 You are a security specialist focused on OWASP Top 10 vulnerabilities. Read each file listed below and check for:
 
+Web OWASP Top 10:
 - SQL injection: string concatenation building query strings (e.g. `"SELECT " + userInput`, f-strings with user data in SQL, template literals in ORM raw() calls)
 - XSS: `innerHTML =` assignments, `dangerouslySetInnerHTML`, unescaped user input rendered as HTML, `document.write(userInput)`
 - CSRF: POST/PUT/DELETE/PATCH route handlers that modify state but have no CSRF token check and no same-site cookie attribute visible in the file
@@ -59,13 +60,21 @@ You are a security specialist focused on OWASP Top 10 vulnerabilities. Read each
 - Path traversal: `path.join(userInput)`, `fs.readFile(userInput)`, `open(userInput)` without path normalization or whitelist validation
 - Insecure deserialization: `pickle.loads` on non-literal input, `JSON.parse` on untrusted network data used in a security-sensitive context (eval, exec, dynamic require)
 
+Mobile OWASP Top 10 (check for mobile source files: .dart, .kt, .java, .swift, .m, .tsx/.ts in React Native):
+- Insecure local storage: sensitive data (tokens, passwords, PII) stored in `SharedPreferences`, `NSUserDefaults`, `getSharedPreferences`, unencrypted SQLite, or `AsyncStorage` without encryption → CRITICAL
+- Cleartext traffic: hardcoded `http://` URLs (not `https://`) for API calls in production code → MEDIUM
+- Debug logging of sensitive data: `Log.d`/`Log.e`/`print`/`NSLog` calls that output tokens, passwords, or PII → MEDIUM
+- Weak cryptography: use of `MD5`, `SHA1`, `DES`, `ECB` mode for sensitive data → MEDIUM
+- Certificate pinning bypass: `TrustManager` that accepts all certificates, `setHostnameVerifier` always returning true, `NSAllowsArbitraryLoads: true` in Info.plist → CRITICAL
+- Exported components without permission: Android `Activity`/`Service`/`BroadcastReceiver` with `android:exported="true"` and no `android:permission` attribute → MEDIUM
+
 Files to read and review:
 {all paths from CHANGED_FILES that are NOT dependency files and NOT infra/config files}
 
 Output one line per finding in this exact format:
 [CRITICAL|MEDIUM|LOW] owasp | {file}:{line} | {one-sentence description of the vulnerability}
 
-Severity guide: SQL injection, broken auth on user data → CRITICAL. XSS, CSRF on state-changing endpoints → MEDIUM. Path traversal with partial mitigation, insecure deserialization in low-risk context → LOW.
+Severity guide: SQL injection, broken auth, insecure local storage of credentials, cert bypass → CRITICAL. XSS, CSRF, cleartext HTTP, debug logging, exported components → MEDIUM. Path traversal with partial mitigation, weak crypto for non-sensitive data → LOW.
 
 If no issues found: output exactly the word: none
 ```
@@ -99,8 +108,8 @@ You are a security specialist focused on dependency vulnerabilities. Read each d
 
 Focus on packages with known: prototype pollution, ReDoS (catastrophic backtracking), path traversal, remote code execution, or data exfiltration vulnerabilities. Pay attention to the pinned version — a vulnerable version range is a finding even if a patched version exists.
 
-Files to read and review (manifest files only — skip lockfiles like package-lock.json and yarn.lock as they contain no additional version information useful for CVE checks):
-{all dependency manifest file paths from CHANGED_FILES: package.json, requirements.txt, pyproject.toml, pubspec.yaml, go.mod, Gemfile, Cargo.toml}
+Files to read and review (manifest files only — skip lockfiles like package-lock.json, yarn.lock, and Podfile.lock as they contain no additional version information useful for CVE checks):
+{all dependency manifest file paths from CHANGED_FILES: package.json, requirements.txt, pyproject.toml, pubspec.yaml, go.mod, Gemfile, Cargo.toml, build.gradle, build.gradle.kts, Podfile}
 
 Output one line per finding in this exact format:
 [CRITICAL|MEDIUM|LOW] deps | {file} | {package}@{version}: {vulnerability class and CVE if known}
@@ -120,6 +129,8 @@ You are a security specialist focused on infrastructure misconfigurations. Read 
 - docker-compose.yml: services with no `user:` setting AND privileged: true → MEDIUM; volumes mounting host root paths → MEDIUM
 - Terraform / k8s YAML: IAM policies with `"*"` as Action or Resource → MEDIUM; `allowPrivilegeEscalation: true` in pod specs → MEDIUM
 - CORS configuration: `Access-Control-Allow-Origin: *` with `Access-Control-Allow-Credentials: true` → CRITICAL; wildcard origins on non-public authenticated APIs → MEDIUM
+- AndroidManifest.xml: `android:debuggable="true"` in `<application>` → MEDIUM; `android:allowBackup="true"` without explicit justification → LOW; `android:exported="true"` on Activity/Service/Receiver with no `android:permission` → MEDIUM; `android:usesCleartextTraffic="true"` → MEDIUM
+- Info.plist: `NSAllowsArbitraryLoads: true` in `NSAppTransportSecurity` → CRITICAL; `NSExceptionAllowsInsecureHTTPLoads: true` for production domains → MEDIUM; `NSAppTransportSecurity` key missing entirely (older iOS default allows HTTP) → LOW
 
 Files to read and review:
 {all infra/config file paths from CHANGED_FILES}
@@ -148,13 +159,19 @@ Proceed to Step 5 (Output).
 
 Read all files in CHANGED_FILES. For each file, check all four categories inline:
 
-**OWASP Top 10** — check every source code file for:
-- SQL injection: string concatenation building queries (`"SELECT " + userInput`, f-strings with user data in SQL, template literals in ORM raw queries)
-- XSS: `innerHTML =`, `dangerouslySetInnerHTML`, unescaped variables in HTML template strings, `document.write(userInput)`
-- CSRF: POST/PUT/DELETE handlers that modify state but lack a CSRF token check
+**OWASP Top 10 (web + mobile)** — check every source code file for:
+- SQL injection: string concatenation building queries (`"SELECT " + userInput`, f-strings with user data in SQL)
+- XSS: `innerHTML =`, `dangerouslySetInnerHTML`, `document.write(userInput)`
+- CSRF: POST/PUT/DELETE handlers that modify state without a CSRF token check
 - Broken auth: routes accessing user data without auth middleware
-- Path traversal: `path.join(userInput)`, `fs.readFile(userInput)`, `open(userInput)` without sanitization
+- Path traversal: `path.join(userInput)`, `open(userInput)` without sanitization
 - Insecure deserialization: `pickle.loads` or `JSON.parse` on untrusted input in security-sensitive context
+- Mobile — insecure local storage: tokens/passwords stored in `SharedPreferences`, `NSUserDefaults`, `AsyncStorage` without encryption
+- Mobile — cleartext traffic: hardcoded `http://` API URLs in production code
+- Mobile — debug logging of sensitive data: `Log.d`/`NSLog`/`print` outputting tokens, passwords, or PII
+- Mobile — weak crypto: `MD5`, `SHA1`, `DES`, `ECB` mode for sensitive data
+- Mobile — cert bypass: `TrustManager` accepting all certs, `setHostnameVerifier` always returning true
+- Mobile — exported components: Android `Activity`/`Service`/`BroadcastReceiver` with `android:exported="true"` and no permission
 
 **Secrets** — check every file for:
 - API key patterns: strings starting with `sk-`, `pk_live_`, `AKIA`, `AIza`, `ghp_`, `glpat-`
@@ -162,13 +179,15 @@ Read all files in CHANGED_FILES. For each file, check all four categories inline
 - `-----BEGIN PRIVATE KEY-----` or `-----BEGIN RSA PRIVATE KEY-----` in any file
 - Hardcoded Bearer tokens in request headers
 
-**Dependencies** — for each dependency file in CHANGED_FILES, check newly added packages against known CVE patterns from training knowledge.
+**Dependencies** — for each dependency manifest file in CHANGED_FILES (`package.json`, `requirements.txt`, `pubspec.yaml`, `build.gradle`, `build.gradle.kts`, `Podfile`, `go.mod`, `Gemfile`, `Cargo.toml`), check newly added packages against known CVE patterns from training knowledge.
 
 **Infra** — for each infra/config file in CHANGED_FILES:
 - Dockerfile: no `USER` directive → MEDIUM; exposed sensitive ports → LOW
 - CI files: plaintext secrets → CRITICAL
 - CORS: `Access-Control-Allow-Origin: *` with credentials → CRITICAL; wildcard on non-public endpoints → MEDIUM
 - docker-compose: `privileged: true` → MEDIUM
+- AndroidManifest.xml: `debuggable="true"` → MEDIUM; `usesCleartextTraffic="true"` → MEDIUM; exported component with no permission → MEDIUM; `allowBackup="true"` → LOW
+- Info.plist: `NSAllowsArbitraryLoads: true` → CRITICAL; `NSExceptionAllowsInsecureHTTPLoads: true` for production domain → MEDIUM
 
 Group all findings into Critical, Medium, Low. Set Status = PASS if none found, else FINDINGS.
 

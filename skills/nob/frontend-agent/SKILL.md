@@ -33,7 +33,143 @@ From the current session context:
 2. Find and read `[BACKEND-AGENT OUTPUT]` — extract "New API contracts" and "Updated API contracts". If available, these take precedence over PM_API_CONTRACTS as the authoritative endpoint source — use them for all API calls. Do NOT assume or invent API contracts beyond what either source provides.
 3. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Frontend" and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
 
+### Step 3.5: Select execution path
+
+From `[PLAN OUTPUT]`, read `Complexity: Frontend:`.
+
+- If `simple` or `n/a` (or if `[PLAN OUTPUT]` is not present): proceed with the **in-session path** — continue to Step 4 as normal.
+- If `complex`: enter **coordinator mode** — skip Steps 4, 5, and 5.5 entirely. Continue to the **Coordinator Mode** section below.
+
 If there is no [BACKEND-AGENT OUTPUT]: proceed with API contracts from [PM-AGENT OUTPUT], note "No [BACKEND-AGENT OUTPUT] found — API contracts inferred from spec."
+
+---
+
+## Coordinator Mode (complex path only)
+
+Enter this section only when `Complexity: Frontend: complex` from Step 3.5. This replaces Steps 4, 5, and 5.5. After completing Step 7-C, the coordinator is done — do not continue to Steps 4, 5, or 5.5.
+
+### Step 4-C: Dispatch Exploration Agent
+
+Dispatch a sub-agent with `model: haiku` and this prompt:
+
+```
+You are a frontend codebase exploration agent. Read the relevant files and emit a compact summary. Do NOT implement anything.
+
+Read every file in this list:
+{every path from "Affected files: Frontend" in [PLAN OUTPUT]}
+
+Also read one representative example of each:
+- An existing component or screen similar in complexity to what the spec requires
+- The API client or service file (to capture how API calls are made)
+- The routing/navigation file (to capture how routes are registered)
+{if [AUTH] in PLAN_RISKS: - How an existing protected route or screen enforces auth}
+{if [SHARED] in PLAN_RISKS: - Shared components or utilities being touched}
+
+Emit this block:
+
+[FRONTEND-EXPLORATION CONTEXT]
+Affected files:
+  - [path]: [one-sentence role]
+
+Patterns observed:
+  Component structure: [file structure, props pattern, naming convention]
+  API client usage: [how API calls are made — axios instance, fetch wrapper, etc.]
+  State management: [useState/zustand/Pinia/Provider/etc. — how it is used in existing components]
+  Routing pattern: [how routes are registered, file-based vs config-based]
+  Auth pattern: [how protected screens enforce auth, or: none detected]
+  Test style: [file structure, render pattern, assertion style]
+
+Relevant snippets:
+  [Function signatures, type shapes, component skeletons, and key lines only. No full file dumps. Keep this section under 1500 tokens.]
+[/FRONTEND-EXPLORATION CONTEXT]
+```
+
+Extract `[FRONTEND-EXPLORATION CONTEXT]...[/FRONTEND-EXPLORATION CONTEXT]`. Store as EXPLORATION_CONTEXT.
+
+If EXPLORATION_CONTEXT is empty or the block was not found, stop with: "Frontend coordinator cannot proceed — exploration agent returned no [FRONTEND-EXPLORATION CONTEXT] block. Re-run or switch to in-session path."
+
+### Step 5-C: Determine Task List (in-session, no dispatch)
+
+Based on EXPLORATION_CONTEXT and the "Frontend changes needed" section from [PM-AGENT OUTPUT], decide which tasks are needed. Only include tasks that have actual work to do.
+
+Evaluate in this order:
+
+1. **types** — define TypeScript interfaces/types for all API response shapes consumed. Include if stack is TypeScript (react, next, vue, react-native) and new API shapes are introduced.
+2. **api-service** — implement API client functions for all endpoints consumed. Include if new endpoints are called.
+3. **component** — implement UI components, screens, or pages. Include if new or changed UI is required.
+4. **tests** — write tests for all new or changed components and service functions. Always include. For `target_files`, use the test file paths that correspond to the component and api-service files implemented in previous tasks.
+
+Store as TASK_LIST = ordered array of objects: `{ name: string, description: string, target_files: string[] }`.
+
+If TASK_LIST is empty after this evaluation, stop with: "Frontend coordinator: no tasks identified — verify [PM-AGENT OUTPUT] contains 'Frontend changes needed' content."
+
+### Step 6-C: Dispatch Sequential Task Sub-Agents
+
+For each task in TASK_LIST **in order** (do not dispatch the next until the previous returns):
+
+Dispatch a sub-agent with the `frontend-agent` model from `.nob.yml` (default: `sonnet`) and this prompt:
+
+```
+You are a focused frontend implementation agent. Implement exactly one task. Do not read additional files — all context you need is provided below.
+
+Task: {task.name}
+Description: {task.description}
+Target files (implement only these): {task.target_files}
+
+[FRONTEND-EXPLORATION CONTEXT]
+{EXPLORATION_CONTEXT}
+[/FRONTEND-EXPLORATION CONTEXT]
+
+Frontend changes needed (from PM Agent):
+{the "Frontend changes needed" section from [PM-AGENT OUTPUT]}
+
+{if [BACKEND-AGENT OUTPUT] is available and this is the component or api-service task:
+API contracts from Backend Agent (use these — they take precedence over PM contracts):
+{[BACKEND-AGENT OUTPUT] "New API contracts" and "Updated API contracts" sections}
+}
+
+{if PM_API_CONTRACTS is non-null and no [BACKEND-AGENT OUTPUT] is available:
+API contracts from PM Agent:
+{PM_API_CONTRACTS}
+}
+
+{if this is not the first task:
+Previous task output:
+{previous task's [TASK OUTPUT] block}
+}
+
+Follow the patterns in [FRONTEND-EXPLORATION CONTEXT] exactly. Implement all states: loading, error, empty, and success. Emit:
+
+[TASK OUTPUT: {task.name}]
+Files changed:
+  - [path]: [reason]
+Files created:
+  - [path]: [reason]
+API endpoints consumed (component and api-service tasks only):
+  - [METHOD] [/path]: [how used in the UI]
+Test results (tests task only):
+  Command: [exact command run]
+  New tests: [PASS | FAIL — N failed]
+  Regression check: [PASS | FAIL — N failed, list files | SKIPPED — reason]
+Items not implemented (needs human):
+  - [item and reason, or: none]
+[/TASK OUTPUT: {task.name}]
+```
+
+Store each result as TASK_OUTPUT_{task.name}. Pass it as "Previous task output" to the next sub-agent.
+
+### Step 7-C: Assemble Final Output
+
+Merge all TASK_OUTPUT blocks into the standard `[FRONTEND-AGENT OUTPUT]` format. Combine across all tasks:
+- All `Files changed` entries
+- All `Files created` entries
+- All `API endpoints consumed` entries (from component and api-service tasks)
+- Test results from the tests task (if not present, write: `SKIPPED — run by coordinator task sub-agent`)
+- All `Items not implemented` entries (deduplicated)
+
+Then emit the `[FRONTEND-AGENT OUTPUT]` block as defined in **## Output Format** below and stop. Do not continue to Steps 4, 5, or 5.5.
+
+---
 
 ### Step 4: Explore existing frontend codebase
 Before writing any code:

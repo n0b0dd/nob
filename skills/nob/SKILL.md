@@ -856,6 +856,119 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 
 ---
 
+## Phase 3.5: Targeted retry
+
+Read `Overall status:` from REVIEWER_OUTPUT. Set RETRY_RAN = false.
+
+If `Overall status: PASS`: skip this phase entirely and proceed to Step 4.
+
+If `Overall status: NEEDS REVIEW` or `Overall status: FAIL`:
+
+**Determine which agents to re-dispatch:**
+
+Extract from REVIEWER_OUTPUT:
+- `Test results: Backend: FAIL` → set RETRY_BACKEND = true
+- `Test results: Frontend: FAIL` → set RETRY_FRONTEND = true
+- For each `✗` or `⚠` criterion line: cross-reference its text against PM_OUTPUT's `Backend changes needed:` and `Frontend changes needed:` sections
+  - Found in `Backend changes needed:` → RETRY_BACKEND = true
+  - Found in `Frontend changes needed:` → RETRY_FRONTEND = true
+  - Found in both → set both to true
+- Any CONTRACT VIOLATION in contract check → RETRY_FRONTEND = true; also set CONTRACT_RETRY = true
+
+If RETRY_BACKEND and RETRY_FRONTEND are both false: no agent can auto-fix the remaining items. Skip retry (RETRY_RAN stays false). Proceed to Step 4.
+
+Collect RETRY_ITEMS = all `✗` criterion lines, all `⚠` criterion lines, and all CONTRACT VIOLATION lines from REVIEWER_OUTPUT.
+
+**Present and ask:**
+
+```
+Reviewer found N items:
+  [RETRY_ITEMS listed one per line]
+
+Attempt to auto-fix? (yes / no)
+```
+
+Wait for response.
+
+**If no:** RETRY_RAN stays false. Proceed to Step 4.
+
+**If yes:** Set RETRY_RAN = true. Dispatch flagged agents concurrently in the same assistant turn (do not await one before dispatching the other).
+
+**Backend retry** (only if RETRY_BACKEND = true):
+
+Read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`. Dispatch with `model: agents.models["backend-agent"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/backend-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+
+.nob.yml contents:
+{.nob.yml content}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: "CLAUDE.md not found"}
+
+Requirements from PM Agent:
+{PM_OUTPUT}
+
+Reviewer found these failures — fix only these items:
+{RETRY_ITEMS filtered to items found in Backend changes needed, plus backend test failures}
+
+{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+[/INPUTS]
+```
+
+Extract `[BACKEND-AGENT OUTPUT]...[/BACKEND-AGENT OUTPUT]`. Replace BACKEND_OUTPUT with this result.
+
+**Frontend retry** (only if RETRY_FRONTEND = true):
+
+Read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`. Dispatch with `model: agents.models["frontend-agent"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/frontend-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+
+.nob.yml contents:
+{.nob.yml content}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: "CLAUDE.md not found"}
+
+Requirements from PM Agent:
+{PM_OUTPUT}
+
+{if CONTRACT_RETRY = true:
+Backend Agent output (use these API contracts as the authoritative source of truth):
+{BACKEND_OUTPUT}
+}
+
+Reviewer found these failures — fix only these items:
+{RETRY_ITEMS filtered to items found in Frontend changes needed, frontend test failures, and contract violations}
+
+{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+[/INPUTS]
+```
+
+Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Replace FRONTEND_OUTPUT with this result.
+
+**After retry agents return:**
+
+Re-dispatch Reviewer with updated BACKEND_OUTPUT and FRONTEND_OUTPUT using the same prompt structure as Phase 3 (Mode: single path). Extract new REVIEWER_OUTPUT. This is the FINAL review — do not offer retry again regardless of status.
+
+Write updated final checkpoint (if checkpoint.enabled): read checkpoint.json, update `reviewer_output` to the new REVIEWER_OUTPUT, write back.
+
+**Fan-out mode:** When Mode is fan-out, REVIEWER_OUTPUT covers all slices in a single combined block. If retry is triggered, re-dispatch all slices as a new batch using the same batch structure and prompt as Phase 2 fan-out. After slices complete, merge their outputs and re-run Reviewer once. This is the FINAL review — do not offer retry again.
+
+---
+
 ## Step 4: Print terminal summary
 
 **If workflow is `Venture`**: summary is printed inline in the `## Venture Workflow` section above. This section is not reached for Venture runs.
@@ -934,6 +1047,8 @@ Slices:
 
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
 Review status: [PASS | NEEDS REVIEW | FAIL]
+[if RETRY_RAN = true: "Retry:     ran  →  Final review: [Overall status from final REVIEWER_OUTPUT]"]
+[if RETRY_RAN = false and first review was not PASS: "Retry:     skipped"]
 [if NEEDS REVIEW or FAIL: list items from REVIEWER OUTPUT "Items for human review" section]
 
 [if checkpoint.enabled:]
@@ -958,7 +1073,7 @@ Next steps:
 - **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: failed`, continue other slices, report in terminal summary (Phase 2)
 - **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
-- **Reviewer status is FAIL**: print all failing items prominently; do NOT auto-retry or attempt to fix automatically
+- **Reviewer status is FAIL**: print all failing items prominently; offer one targeted retry via Phase 3.5; do NOT offer a second retry
 - **Non-slice agent result missing expected output block**: re-dispatch once; if still missing, report raw agent output and stop
 - **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

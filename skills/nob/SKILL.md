@@ -622,9 +622,37 @@ Extract `[PLAN OUTPUT]...[/PLAN OUTPUT]` from the result. Store as PLAN_OUTPUT. 
 
 If PLAN_OUTPUT ambiguities section contains anything other than "none": present them to the user as a numbered list and wait for answers before proceeding. Store answers for inclusion in subsequent agent prompts.
 
+**L3: Complexity-based model override**
+
+Read `Complexity:` from PLAN_OUTPUT. Apply independently per layer:
+- If `Complexity.backend = "simple"` AND `backend-agent` key is absent from the user's `.nob.yml` `agents.models` block (or `.nob.yml` was not found): override backend-agent's resolved model to `haiku`. Store as BACKEND_MODEL_RESOLVED.
+- If `Complexity.frontend = "simple"` AND `frontend-agent` key is absent from the user's `.nob.yml` `agents.models` block: override frontend-agent's resolved model to `haiku`. Store as FRONTEND_MODEL_RESOLVED.
+- Otherwise: use the model values extracted from RESOLVED_CONFIG as-is.
+
+If PLAN_OUTPUT does not contain Complexity fields: apply no override (treat both as complex).
+
 **Determine mode from PLAN_OUTPUT:**
 - `Mode: single` → set SLICES = [{name: "main", scope: "full spec"}]
 - `Mode: fan-out` → parse each `Slice N — slug-name` / `Scope:` pair; set SLICES = array of {name, scope} objects
+
+**M3: --plan-only early exit**
+
+If PLAN_ONLY = true:
+- Print the full contents of PLAN_OUTPUT verbatim.
+- Print: `"Plan-only run complete. Re-run without --plan-only to execute."`
+- Exit. Do not write a checkpoint. Do not dispatch any further agents.
+
+**H1: Budget guard (fan-out only)**
+
+If `Mode: fan-out` AND `max_tokens_per_run` is set:
+- For each slice, assign a unit cost: sonnet = 2 units, haiku = 1 unit (based on BACKEND_MODEL_RESOLVED for that slice).
+- Estimated total = sum of unit costs across all slices.
+- If `estimated_total × 100000 > max_tokens_per_run`: print:
+  ```
+  Warning: fan-out with {N} slices (~{estimated_total × 100000} estimated tokens) may exceed max_tokens_per_run ({max_tokens_per_run}).
+  Continue? (yes / abort)
+  ```
+  Wait for response. If `abort`: exit. If `yes`: proceed.
 
 **Write Phase 1 checkpoint** (if checkpoint.enabled is true):
 

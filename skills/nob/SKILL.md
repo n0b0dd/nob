@@ -660,10 +660,13 @@ Ensure `.nob/` appears in `.gitignore` at the repo root. If the line is absent, 
 
 Create the checkpoint directory if it does not exist: run `mkdir -p {checkpoint.path}` using the Bash tool.
 
+Run `date -u +%FT%TZ` via the Bash tool and store as RUN_START_TIMESTAMP.
+
 Using the Write tool, write `{checkpoint.path}checkpoint.json`:
 ```json
 {
   "run_id": "{run-id derived in Step 0.1}",
+  "run_start_time": "{RUN_START_TIMESTAMP}",
   "worktree_path": "{WORKTREE_PATH}",
   "worktree_branch": "{WORKTREE_BRANCH}",
   "workflow": "{workflow value from PLAN_OUTPUT}",
@@ -672,10 +675,17 @@ Using the Write tool, write `{checkpoint.path}checkpoint.json`:
   "slices": {
     "{slice-name}": { "status": "pending", "timed_out_at": null, "pm_output": null, "backend_output": null, "frontend_output": null }
   },
+  "agents": {},
   "reviewer_output": null
 }
 ```
 One entry per slice in the `slices` object.
+
+**Create run log** (if checkpoint.enabled is true): using the Write tool, create `.nob/run-{run-id}.log` with this initial content:
+```
+{RUN_START_TIMESTAMP}  run            -       START   -
+```
+Store as RUN_LOG_PATH = `.nob/run-{run-id}.log`.
 
 ---
 

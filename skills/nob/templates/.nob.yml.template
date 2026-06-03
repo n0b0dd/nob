@@ -1,16 +1,19 @@
 # Nob configuration
 # Copy this file to your monorepo root as .nob.yml and fill in your stack details.
 
+structure:
+  check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected (off by default)
+
 stack:
   frontend:
     enabled: true
     type: react          # react | vue | next | flutter | android | ios | react-native
-    path: apps/frontend/   # path relative to repo root
+    path: apps/frontend/   # path relative to repo root — change to your actual directory
 
   backend:
     enabled: true
     type: node           # node | python | go | java | ruby
-    path: apps/backend/
+    path: apps/backend/  # path relative to repo root — change to your actual directory
 
   shared:
     core: shared/core/     # domain-organized shared contracts and schema

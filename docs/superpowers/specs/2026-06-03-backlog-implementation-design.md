@@ -142,7 +142,7 @@ Timing:  planner 4s · pm-agent 3s · backend-agent 18s · reviewer 8s
 ```
 Show only agents that ran. Omit milliseconds — round to nearest second.
 
-**Note on timestamps**: Hub cannot call `Date.now()` or `new Date()` directly; the hub runs as a Claude agent. Time values are approximated by asking the agent to note "start" and "end" in its reasoning, or left as placeholder `"recorded"` if not measurable. Duration display in the terminal summary shows wall-clock seconds where measurable, otherwise `"n/a"`.
+**Timestamps**: Hub records timestamps by running `date -u +%FT%TZ` via the Bash tool before and after each agent dispatch. Duration = end_epoch - start_epoch, computed via `date +%s`. Both calls are cheap single-line Bash commands. Duration display in the terminal summary rounds to nearest second.
 
 ---
 
@@ -176,7 +176,7 @@ No agents dispatched on any of these failures.
      ```
      gh pr create \
        --title "<spec filename without path and extension>" \
-       --body "<first 3000 chars of REVIEWER_OUTPUT>" \
+       --body "<first 3000 characters of REVIEWER_OUTPUT>" \
        --head <WORKTREE_BRANCH>
      ```
    - Print: `PR created: <returned URL>`

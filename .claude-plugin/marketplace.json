@@ -7,8 +7,8 @@
   "plugins": [
     {
       "name": "nob",
-      "description": "Orchestrates cross-layer fullstack monorepo development. New in 1.2.0: /nob refactor migrates existing projects to nob's monorepo structure (apps/frontend/, apps/backend/, shared/core/).",
-      "version": "1.2.0",
+      "description": "Orchestrates cross-layer fullstack monorepo development. New in 1.3.0: hub skill slimmed — venture pipeline and slice runner extracted to dedicated sub-skills.",
+      "version": "1.3.0",
       "source": "./",
       "author": {
         "name": "n0b0dd"

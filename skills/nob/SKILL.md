@@ -56,21 +56,19 @@ If git is not available or not a git repo: skip Step 0.1 entirely. Set WORKTREE_
 
 ## Step 0.5: Structure Check
 
-Skip this step entirely if the user's intent clearly matches any of these patterns (checked against the user's original message, before workflow identification):
-- Init patterns: "nob init", "initialize project", "scaffold project"
-- Venture patterns: "startup idea", "business idea", "I have an idea", "nob venture", "build a startup", "build a product", "build a company", "validate my idea", "launch a startup", "launch a product", "launch a company", "bring to market"
-- Refactor patterns: "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure"
-- Ideation patterns: "nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add"
+Skip this step entirely unless `.nob.yml` exists AND `structure.check: true` is explicitly set. Nob adapts to any project layout — this check is opt-in for teams that want a migration offer toward the nob monorepo layout.
 
-If the intent matches any of these patterns, skip this step entirely.
+Also skip if the user's intent matches any of:
+- Init: "nob init", "initialize project", "scaffold project"
+- Venture: "startup idea", "business idea", "I have an idea", "nob venture", "build a startup", "build a product", "build a company", "validate my idea", "launch a startup", "launch a product", "launch a company", "bring to market"
+- Refactor: "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure"
+- Ideation: "nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add"
 
-Check for structure mismatch in this order:
+If `structure.check: true` and intent does not match the skip patterns above, run mismatch detection:
 
-1. If `.nob.yml` exists AND `structure.check: false` → skip this step entirely.
-2. If `.nob.yml` exists AND both `stack.frontend.path` and `stack.backend.path` are present (any value) → user has declared their layout. Skip this step.
-3. If the working directory is empty (no files other than `.git`/`.gitignore`) → **no mismatch**. Skip this step.
-4. If `apps/frontend/` or `apps/backend/` is missing AND a recognisable source directory exists elsewhere (`frontend/`, `web/`, `client/`, `src/`, `backend/`, `server/`, `api/`) → **mismatch**.
-5. If `apps/` layout is correct but `shared/core/` is absent → **partial mismatch**.
+1. If the working directory is empty (no files other than `.git`/`.gitignore`) → no mismatch. Skip.
+2. If `apps/frontend/` or `apps/backend/` is missing AND a recognisable source directory exists elsewhere (`frontend/`, `web/`, `client/`, `src/`, `backend/`, `server/`, `api/`) → **mismatch**.
+3. If `apps/` layout is correct but `shared/core/` is absent → **partial mismatch**.
 
 When mismatch detected, store detected dir names as DETECTED_DIRS. Print:
 
@@ -118,36 +116,47 @@ If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG.
 
 ### Auto-detection
 
-**Frontend detection** (first match wins):
-1. Scan for `package.json` in `apps/frontend/`, `frontend/`, `web/`, `client/`, `app/`, `src/` (in that order). If found, read it and check `dependencies`:
-   - Contains `next` → type `next`
-   - Contains `vue` → type `vue`
-   - Contains `react` or `react-dom` → type `react`
-   - Framework not recognised → ask: "Found `package.json` in `[dir]` but couldn't identify the framework. What frontend type should I use? (react / vue / next / other)" Wait for answer.
-   - Path = the directory containing the matched `package.json`
-2. `pubspec.yaml` exists → type `flutter`, path = that directory
-3. `android/` directory exists → type `android`, path = `android/`
-4. `ios/Podfile` exists → type `ios`, path = `ios/`
-5. Multiple candidates found → ask: "I found possible frontend directories: [list]. Which one should Nob use?" Wait for answer.
-6. None found → `stack.frontend.enabled: false`
+Run a broad repository scan to discover all framework manifest files:
 
-**Backend detection** (first match wins):
-1. Scan for `package.json` in `apps/backend/`, `backend/`, `server/`, `api/` (in that order). Check `dependencies` for `express`, `fastify`, `koa`, `hapi` → type `node`. Path = that directory.
-2. `requirements.txt` or `pyproject.toml` in `apps/backend/` or `backend/` → type `python`, path = that directory.
-3. `go.mod` in `apps/backend/` or `backend/` → type `go`, path = that directory.
-4. `pom.xml` in `apps/backend/` or `backend/` → type `java`, path = that directory.
-5. Scan `src/` for backend markers (first match wins): `package.json` with `express`, `fastify`, `koa`, or `hapi` in `dependencies` → type `node`, path = `src/`; `requirements.txt` or `pyproject.toml` → type `python`, path = `src/`; `go.mod` → type `go`, path = `src/`; `pom.xml` → type `java`, path = `src/`.
-6. Multiple matches across steps 1–5 → ask: "I found possible backend directories: [list]. Which one should Nob use?" Wait for answer. (If only one match, use it. Skip steps 7–10.)
-7. No match in steps 1–5: check root `requirements.txt` or `pyproject.toml` → type `python`, path = `.`
-8. No match in steps 1–5: root `go.mod` → type `go`, path = `.`
-9. No match in steps 1–5: root `pom.xml` → type `java`, path = `.`
-10. No match in steps 1–5: root `package.json` contains `express`, `fastify`, `koa`, or `hapi` in `dependencies` → type `node`, path = `.`
-11. None found → `stack.backend.enabled: false`
+```bash
+find . \( -name "package.json" -o -name "requirements.txt" -o -name "pyproject.toml" -o -name "go.mod" -o -name "pom.xml" -o -name "pubspec.yaml" -o -name "build.gradle" -o -name "build.gradle.kts" \) -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/.venv/*" -not -path "*/vendor/*" -maxdepth 5 2>/dev/null | sort
+```
 
-**If both frontend and backend are undetectable:**
-Ask: "Could not detect your stack. What is your frontend directory? (or 'none' to skip)"
-Then: "What is your backend directory? (or 'none' to skip)"
-Proceed once answered.
+Also check separately: does `android/` exist? Does `ios/Podfile` exist?
+
+**Classify each found file:**
+
+Frontend candidates (record path = that file's directory, detect type):
+- `package.json` with `next` in dependencies or devDependencies → type `next`
+- `package.json` with `vue` in dependencies or devDependencies → type `vue`
+- `package.json` with `react` or `react-dom` in dependencies → type `react`
+- `package.json` with `svelte` in dependencies → type `react` (treat as generic component framework)
+- `pubspec.yaml` → type `flutter`
+- `android/` directory present → type `android`, path = `android/`
+- `ios/Podfile` present → type `ios`, path = `ios/`
+
+Backend candidates (record path = that file's directory, detect type):
+- `package.json` with `express`, `fastify`, `koa`, `hapi`, or `@nestjs/core` in dependencies → type `node`
+- `requirements.txt` or `pyproject.toml` → type `python`
+- `go.mod` → type `go`
+- `pom.xml` or `build.gradle` or `build.gradle.kts` → type `java`
+
+Monolith (same `package.json` has both frontend and backend markers):
+- Set `stack.frontend.path` and `stack.backend.path` to that directory. Set type for each layer.
+
+Skip (not a project root):
+- `package.json` with no recognized frontend or backend markers (e.g. workspace root with only `workspaces` field, or a tooling-only config) → skip
+
+**Resolve configuration from classification results:**
+
+- **1 frontend + 1 backend at different paths** → use those paths and types directly.
+- **1 monolith** → both frontend and backend path = that directory.
+- **Multiple frontend candidates** → ask: "I found multiple frontend candidates: [list with paths and types]. Which should Nob use?" Wait for answer.
+- **Multiple backend candidates** → ask: "I found multiple backend candidates: [list with paths and types]. Which should Nob use?" Wait for answer.
+- **Framework not recognised in a `package.json`** → ask: "Found `package.json` in `[dir]` but couldn't identify the framework. Is this frontend or backend, and what type? (e.g. react / vue / next / express / other)" Wait for answer.
+- **No frontend found** → `stack.frontend.enabled: false`
+- **No backend found** → `stack.backend.enabled: false`
+- **Nothing detected at all** → ask: "Could not detect your stack. What is your frontend directory? (or 'none' to skip)" then "What is your backend directory? (or 'none' to skip)" Proceed once answered.
 
 **Build RESOLVED_CONFIG** as a YAML string using detected values plus these defaults:
 

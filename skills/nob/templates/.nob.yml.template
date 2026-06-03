@@ -2,7 +2,7 @@
 # Copy this file to your monorepo root as .nob.yml and fill in your stack details.
 
 structure:
-  check: true   # set false to permanently skip the structure mismatch prompt (for custom or non-monorepo layouts)
+  check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected (off by default)
 
 stack:
   frontend:

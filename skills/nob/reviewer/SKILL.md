@@ -88,6 +88,40 @@ Check context for `[SECURITY-AGENT OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY
     - Low findings are informational only — add them to the Security section of the output but do not affect overall status.
 - If neither block is present: store SECURITY_STATUS = "NOT RUN — security agent output missing from context".
 
+### Step 3.7: Code quality scan
+
+Collect QUALITY_FILES = all file paths from `Files changed:` and `Files created:` in [BACKEND-AGENT OUTPUT] and [FRONTEND-AGENT OUTPUT]. If fan-out mode, collect from all slice outputs.
+
+If QUALITY_FILES is empty: set QUALITY_FINDINGS = [] and skip the rest of this step.
+
+Read each file in QUALITY_FILES. For each file, apply only the applicable categories below. Do NOT scan files not in QUALITY_FILES.
+
+**Category 1 — Type safety (TypeScript files only: .ts, .tsx)**
+- Check for `any` type annotations: parameter types, return types, variable declarations, type casts (`as any`). Each occurrence is one finding.
+- Severity: IMPORTANT
+
+**Category 2 — Frontend state completeness (.tsx, .jsx, .vue, .dart files only)**
+- For each component/screen file in QUALITY_FILES that calls an API endpoint (contains `fetch(`, `axios.`, `apiClient.`, `dio.`, `http.get`, `http.post`, `URLSession`, `Retrofit`, or similar API call patterns):
+  - Check for a loading state (spinner, skeleton, `isLoading`, `loading`, `isFetching`)
+  - Check for an error state (error message render, catch block that sets display state, `isError`, `error &&`, `catch`)
+  - If either is absent: one finding per missing state per file.
+- Severity: IMPORTANT
+
+**Category 3 — Untested endpoints (backend files only)**
+- For each new API endpoint listed in `New API contracts:` in [BACKEND-AGENT OUTPUT]:
+  - Check whether a test file in QUALITY_FILES (path contains `test`, `spec`, or `__tests__`) contains the endpoint path string.
+  - If no test file contains the path: one finding.
+- Severity: IMPORTANT
+
+**Category 4 — Magic values (all source files)**
+- Check for string or number literals used directly in logic (not in test files, not in config files, not in a named constant):
+  - Status codes as raw numbers in conditions: `=== 404`, `=== 500` (except in test files)
+  - Hardcoded timeout values: `setTimeout(..., 3000)`, `sleep(5000)`
+  - Repeated string literals appearing more than once in the same file
+- Severity: MINOR
+
+Store all findings as QUALITY_FINDINGS. Set QUALITY_IMPORTANT_COUNT = count of IMPORTANT findings. Set QUALITY_MINOR_COUNT = count of MINOR findings.
+
 ### Step 4: Check each criterion individually
 For every acceptance criterion from [PM-AGENT OUTPUT]:
 - **✓ implemented**: read the specific file named in the output block and confirm it contains evidence of the implementation (the route exists, the component renders, etc.) AND the relevant test layer reports PASS
@@ -101,8 +135,14 @@ Apply the status definitions above exactly. Do not soften FAIL to NEEDS REVIEW.
 
 Additional rule: if SECURITY_STATUS is "FINDINGS" and SECURITY_MEDIUM is non-empty, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓. Security medium findings require human attention before the feature ships.
 
+Additional rule: if QUALITY_IMPORTANT_COUNT > 0, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass. Quality IMPORTANT findings require human attention before the feature ships.
+
 ### Step 6: List human review items
 For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete: name the missing feature and why it wasn't implemented (from the "items not implemented" field if available).
+
+For each IMPORTANT quality finding, add one specific actionable item to "Items for human review". Format: `Quality: {description} in {file}:{line}`
+
+MINOR findings are listed in the Code quality section of the output block but are NOT added to "Items for human review".
 
 ## Output Format
 
@@ -124,6 +164,11 @@ Security:
   Status: [PASS | FINDINGS: N medium, M low | SKIPPED (user) — security check was skipped by user | SKIPPED (disabled) — security-agent not in agents.enabled | NOT RUN — security agent output missing]
   [if FINDINGS: list each medium finding as "- [MEDIUM] {category} | {file}:{line} | {description}"]
   [if FINDINGS and low items: list each low finding as "- [LOW] {category} | {file}:{line} | {description}"]
+
+Code quality:
+  Status: [PASS | FINDINGS: N important, M minor | SKIPPED — no changed files]
+  [if FINDINGS: list each important finding as "- [IMPORTANT] {category} | {file}:{line} | {description}"]
+  [if FINDINGS and minor items: list each minor finding as "- [MINOR] {category} | {file}:{line} | {description}"]
 
 Criteria check:
 - [criterion 1]: ✓ implemented in [exact file path]

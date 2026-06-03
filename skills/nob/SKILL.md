@@ -553,7 +553,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 | Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:` |
 | Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:` |
 | Security Agent | `Status:`, `Findings:` |
-| Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:` |
+| Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
 
 **Validation steps:**
 1. Check that every required field for this agent appears as `FieldName:` on its own line within the extracted block.
@@ -1180,6 +1180,61 @@ Else:
 Set PREV_RETRY_ITEMS = RETRY_ITEMS.
 Set RETRY_RAN = true.
 
+**Retry diagnostic** (haiku, runs before retry agents):
+
+Dispatch a sub-agent with `model: haiku` and this prompt:
+
+```
+[INSTRUCTIONS]
+You are a focused retry diagnostic agent. Your only job is to read a small set of files
+and determine which specific files need to change to fix the listed failures. Do NOT
+implement anything. Do NOT read any file not listed in the inputs.
+
+Read each file in the provided file lists. For each failing item, identify which 1–2 files
+are most directly responsible for the failure. If a failing item is a test failure, include
+both the source file and the test file.
+
+Emit exactly this block:
+
+[RETRY-DIAGNOSTIC OUTPUT]
+Backend fix scope:
+  - {path}: {one sentence — what specifically needs to change}
+  (or: none — backend fix not needed)
+
+Frontend fix scope:
+  - {path}: {one sentence — what specifically needs to change}
+  (or: none — frontend fix not needed)
+
+Root cause summary: {1–2 sentences — why these files are the source of the failures}
+[/RETRY-DIAGNOSTIC OUTPUT]
+[/INSTRUCTIONS]
+
+[INPUTS]
+Failing items:
+{RETRY_ITEMS listed one per line}
+
+Backend files from previous pass:
+{all paths from BACKEND_OUTPUT "Files changed:" and "Files created:", or: none}
+
+Frontend files from previous pass:
+{all paths from FRONTEND_OUTPUT "Files changed:" and "Files created:", or: none}
+[/INPUTS]
+```
+
+Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_OUTPUT.
+
+If extraction fails: set DIAG_OUTPUT = null. (Graceful fallback — diagnostic failure does not block retry.)
+
+**Parse fix scope from DIAG_OUTPUT:**
+
+If DIAG_OUTPUT is non-null:
+- Extract all paths under `Backend fix scope:` as BACKEND_FIX_SCOPE (empty list if "none")
+- Extract all paths under `Frontend fix scope:` as FRONTEND_FIX_SCOPE (empty list if "none")
+- If BACKEND_FIX_SCOPE is empty and RETRY_BACKEND = true: set BACKEND_FIX_SCOPE = null (fallback: retry agent uses 5-file limit)
+- If FRONTEND_FIX_SCOPE is empty and RETRY_FRONTEND = true: set FRONTEND_FIX_SCOPE = null
+
+If DIAG_OUTPUT is null: set BACKEND_FIX_SCOPE = null and FRONTEND_FIX_SCOPE = null.
+
 **Backend retry** (only if RETRY_BACKEND = true):
 
 Read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`. Dispatch with `model: agents.models["backend-agent"] ?? "haiku"`:
@@ -1203,6 +1258,17 @@ Requirements from PM Agent:
 
 Reviewer found these failures — fix only these items:
 {RETRY_ITEMS filtered to items found in Backend changes needed, plus backend test failures}
+
+{if BACKEND_FIX_SCOPE is non-null:
+SCOPE: Fix only these files — do not read or modify any other files:
+{BACKEND_FIX_SCOPE listed one path per line}
+}
+{if BACKEND_FIX_SCOPE is null:
+SCOPE LIMIT: If completing this fix requires touching more than 5 files, implement the highest-priority items first. Stop before reaching the limit. List any remaining unimplemented work under Deferred items.
+}
+
+Root cause (from diagnostic):
+{DIAG_OUTPUT "Root cause summary:" line, or: "Diagnostic not available — use your judgment"}
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
 [/INPUTS]
@@ -1238,6 +1304,17 @@ Backend Agent output (use these API contracts as the authoritative source of tru
 
 Reviewer found these failures — fix only these items:
 {RETRY_ITEMS filtered to items found in Frontend changes needed, frontend test failures, and contract violations}
+
+{if FRONTEND_FIX_SCOPE is non-null:
+SCOPE: Fix only these files — do not read or modify any other files:
+{FRONTEND_FIX_SCOPE listed one path per line}
+}
+{if FRONTEND_FIX_SCOPE is null:
+SCOPE LIMIT: If completing this fix requires touching more than 5 files, implement the highest-priority items first. Stop before reaching the limit. List any remaining unimplemented work under Deferred items.
+}
+
+Root cause (from diagnostic):
+{DIAG_OUTPUT "Root cause summary:" line, or: "Diagnostic not available — use your judgment"}
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
 [/INPUTS]

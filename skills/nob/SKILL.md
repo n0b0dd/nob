@@ -187,6 +187,7 @@ Also extract:
 - `agents.checkpoint.enabled` (default: true if not present)
 - `agents.checkpoint.path` (default: `.nob/` if not present)
 - `agents.max_tokens_per_run` (absent/null if not present — budget guard disabled when absent)
+- `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
 
 **Project memory**: check whether `.nob/project-memory.md` exists using the Read tool. If found and non-empty: store contents as PROJECT_MEMORY. Otherwise set PROJECT_MEMORY = "none".
 

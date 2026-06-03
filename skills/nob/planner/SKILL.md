@@ -102,6 +102,16 @@ For each enabled layer (backend, frontend), assign a complexity score based on A
 
 Store as COMPLEXITY = `{ backend: "simple" | "complex", frontend: "simple" | "complex" }`. If only one layer is enabled, set the disabled layer's score to `"n/a"`.
 
+## Output Format Requirement
+
+Your output block must:
+- Begin with `[PLAN OUTPUT]` on its own line (no leading spaces or characters)
+- End with `[/PLAN OUTPUT]` on its own line
+- Include every required field: `Workflow:`, `Mode:`, `Affected layers:`, `Risks:`, `Ambiguities:`
+- Use the exact field names listed — no synonyms, no omissions
+
+Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.
+
 ## Output Format
 
 Return this exact block. For `Mode: single`, omit the `Slices:` section entirely — the `Tasks` section is used instead (backward compatible with Phase 2).

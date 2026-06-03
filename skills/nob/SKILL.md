@@ -186,8 +186,11 @@ Also extract:
 - `agents.max_parallel_slices` (default: 3 if not present)
 - `agents.checkpoint.enabled` (default: true if not present)
 - `agents.checkpoint.path` (default: `.nob/` if not present)
+- `agents.max_tokens_per_run` (absent/null if not present — budget guard disabled when absent)
 
 **Project memory**: check whether `.nob/project-memory.md` exists using the Read tool. If found and non-empty: store contents as PROJECT_MEMORY. Otherwise set PROJECT_MEMORY = "none".
+
+**`--plan-only` detection**: check whether the user's message contains `--plan-only`. If found: store PLAN_ONLY = true. Otherwise: PLAN_ONLY = false.
 
 ## Step 1.5: Spec pre-flight validation
 

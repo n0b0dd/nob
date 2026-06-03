@@ -191,9 +191,7 @@ Also extract:
 
 ## Step 1.5: Spec pre-flight validation
 
-Skip this step for Init, Venture, Refactor, Ideate workflows, and `--plan-only` runs.
-
-For `Spec→Code` and `Bug→Fix` workflows only — validate the spec before dispatching any agents:
+For `Spec→Code` and `Bug→Fix` workflows only (skip for Init, Venture, Refactor, Ideate, API→Sync, and `--plan-only` runs) — validate the spec before dispatching any agents:
 
 1. **Path present**: confirm the user's message contains a file path (not empty string). If not: print `"Error: no spec file path provided. Usage: /nob implement <path-to-spec.md>"` and exit.
 2. **File exists**: use the Read tool to open the spec file. If the Read tool returns an error: print `"Error: spec file not found: <path>. Check the path and try again."` and exit.

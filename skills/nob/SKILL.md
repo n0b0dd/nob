@@ -328,6 +328,7 @@ If the identified workflow is `Ideate`:
 Working directory: {current working directory path}
 Direction: {parsed direction}
 Constraints: {parsed constraints, or: none}
+Current date: {today's date in YYYY-MM-DD format}
 [/INPUTS]
 ```
 

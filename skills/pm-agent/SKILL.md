@@ -136,7 +136,9 @@ If `[PLAN OUTPUT]` is present, check its Ambiguities section. Any ambiguities th
 
 Read `CLAUDE.md` at the repo root if available (skip silently if not found).
 
-Extract 3–5 key entity, route, or component names from the spec (from its Feature name, Summary, or Requirements). For each key term, run targeted searches using the Bash tool:
+**Skip condition**: If `[PLAN OUTPUT]` is present in context and its `Affected files:` fields (Backend, Schema, Frontend) are all non-empty (i.e. not "none detected"), set RELATED_FILES directly from those values and skip the grep searches below. Still note any requirement that maps to a file not present in `Affected files:` as "not yet in codebase — agent should create." Proceed to Step 1c.
+
+If [PLAN OUTPUT] is absent or its Affected files fields read "none detected": extract 3–5 key entity, route, or component names from the spec (from its Feature name, Summary, or Requirements). For each key term, run targeted searches using the Bash tool:
 
 ```bash
 # Backend — routes, services, models

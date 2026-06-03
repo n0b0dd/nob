@@ -135,7 +135,7 @@ Expand CHOSEN_IDEA into a mini-spec. Write it in this exact structure:
 
 **Generate the filename:**
 - Feature slug: lowercase feature name, spaces to hyphens, remove special characters. Example: "User Export" → `user-export`.
-- Use the date from [INPUTS] `Working directory` context, or default to today (derive from any date signal available; if none, use `YYYY-MM-DD` literally).
+- Use the `Current date:` field from [INPUTS] for the date.
 - Filename: `[YYYY-MM-DD]-[feature-slug].md`
 
 **Save the file:**

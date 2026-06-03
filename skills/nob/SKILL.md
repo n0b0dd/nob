@@ -189,6 +189,10 @@ Also extract:
 - `agents.max_tokens_per_run` (absent/null if not present — budget guard disabled when absent)
 - `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
 
+**Stack guidance paths**: compute from SKILL_BASE_DIR and resolved stack types:
+- BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/backend-agent/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)
+- FRONTEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/frontend-agent/stacks/{stack.frontend.type}.md` (or `none` if `stack.frontend.enabled: false`)
+
 **Project memory**: check whether `.nob/project-memory.md` exists using the Read tool. If found and non-empty: store contents as PROJECT_MEMORY. Otherwise set PROJECT_MEMORY = "none".
 
 **`--plan-only` detection**: check whether the user's message contains `--plan-only`. If found: store PLAN_ONLY = true. Otherwise: PLAN_ONLY = false.
@@ -254,242 +258,33 @@ User intent: {user's original message}
 If the identified workflow is `Venture`:
 - Read `agents.venture.enabled` from RESOLVED_CONFIG. Default to `true` if absent.
 - If `false`: print "Venture mode is disabled in `.nob.yml`. Set `agents.venture.enabled: true` to enable." and exit.
-- Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
-- Jump directly to the **Venture Workflow** section below.
-
----
-
-## Venture Workflow
-
-Run this section only when the identified workflow is `Venture` (routed here from the Venture early exit above).
-
-Store the user's original message as VENTURE_IDEA.
-
-### Checkpoint setup
-
-Create `docs/venture/` if it does not exist: `mkdir -p docs/venture`
-
-If `agents.checkpoint.enabled` is true:
-- Run `mkdir -p {checkpoint.path}`
-- Ensure `.nob/` appears in `.gitignore` at the repo root. If absent, append it using the Edit tool.
-- Read `{checkpoint.path}venture-checkpoint.json` if it exists. Store as VENTURE_CHECKPOINT (null if not found or not parseable).
-
-If `agents.checkpoint.enabled` is false: set VENTURE_CHECKPOINT to null and skip all checkpoint writes in this workflow.
-
-Stage order: `[idea-framer, market-researcher, business-modeler, gtm-strategist, financial-modeler, venture-reviewer]`
-
-For each stage in order: if VENTURE_CHECKPOINT has `stages.[stage-name].status: "completed"`, restore its output from `stages.[stage-name].output` and skip re-running it.
-
-Helper — write venture checkpoint after each stage completes (only if `agents.checkpoint.enabled` is true): Read the current `{checkpoint.path}venture-checkpoint.json` (or start with `{}`), update only `stages.[stage-name]` to `{status: "completed", output: "[extracted output block]"}`, write back using the Write tool.
-
----
-
-### Stage 1: Idea-Framer
-
-Skip if VENTURE_CHECKPOINT shows `stages.idea-framer.status: "completed"`. Restore IDEA_FRAMER_OUTPUT from checkpoint.
-
-Read `{SKILL_BASE_DIR}/idea-framer/SKILL.md`. Dispatch with `model: agents.models["idea-framer"] ?? "haiku"`:
+- Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
+- Read `{SKILL_BASE_DIR}/venture-workflow/SKILL.md`.
+- Dispatch an Agent with `model: "sonnet"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/idea-framer/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/venture-workflow/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
 Working directory: {current working directory path}
-Idea: {VENTURE_IDEA}
+Skill base dir: {SKILL_BASE_DIR}
+Venture idea: {user's original message}
+Checkpoint path: {agents.checkpoint.path, or: .nob/}
+Checkpoint enabled: {agents.checkpoint.enabled, or: true}
+Agent models:
+  idea-framer: {agents.models["idea-framer"] ?? haiku}
+  market-researcher: {agents.models["market-researcher"] ?? sonnet}
+  business-modeler: {agents.models["business-modeler"] ?? haiku}
+  gtm-strategist: {agents.models["gtm-strategist"] ?? haiku}
+  financial-modeler: {agents.models["financial-modeler"] ?? haiku}
+  venture-reviewer: {agents.models["venture-reviewer"] ?? haiku}
 [/INPUTS]
 ```
 
-Extract `[IDEA-FRAMER OUTPUT]...[/IDEA-FRAMER OUTPUT]`. Store as IDEA_FRAMER_OUTPUT.
-
-Write venture checkpoint for stage `idea-framer`.
-
----
-
-### Stage 2: Market-Researcher
-
-Skip if VENTURE_CHECKPOINT shows `stages.market-researcher.status: "completed"`. Restore MARKET_RESEARCHER_OUTPUT from checkpoint.
-
-Read `{SKILL_BASE_DIR}/market-researcher/SKILL.md`. Dispatch with `model: agents.models["market-researcher"] ?? "sonnet"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/market-researcher/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-Idea frame: {IDEA_FRAMER_OUTPUT}
-Problem: {Problem field from IDEA_FRAMER_OUTPUT}
-[/INPUTS]
-```
-
-Extract `[MARKET-RESEARCHER OUTPUT]...[/MARKET-RESEARCHER OUTPUT]`. Store as MARKET_RESEARCHER_OUTPUT.
-
-**Soft review**: if `Flag:` in MARKET_RESEARCHER_OUTPUT is not `none`, print the flag message to the user. Then print: "Research complete. Continuing to business modeling..."
-
-Write venture checkpoint for stage `market-researcher`.
-
----
-
-### Stage 3: Business-Modeler
-
-Skip if VENTURE_CHECKPOINT shows `stages.business-modeler.status: "completed"`. Restore BUSINESS_MODELER_OUTPUT from checkpoint.
-
-Read `{SKILL_BASE_DIR}/business-modeler/SKILL.md`. Dispatch with `model: agents.models["business-modeler"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/business-modeler/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-Idea frame: {IDEA_FRAMER_OUTPUT}
-Market research summary: {MARKET_RESEARCHER_OUTPUT}
-Chosen revenue model:
-[/INPUTS]
-```
-
-Note: `Chosen revenue model:` is left blank — the Business-Modeler agent contains its own hard pause and will ask the founder.
-
-Extract `[BUSINESS-MODELER OUTPUT]...[/BUSINESS-MODELER OUTPUT]`. Store as BUSINESS_MODELER_OUTPUT.
-
-Write venture checkpoint for stage `business-modeler`.
-
----
-
-### Stage 4: GTM-Strategist
-
-Skip if VENTURE_CHECKPOINT shows `stages.gtm-strategist.status: "completed"`. Restore GTM_OUTPUT from checkpoint.
-
-Read `{SKILL_BASE_DIR}/gtm-strategist/SKILL.md`. Dispatch with `model: agents.models["gtm-strategist"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/gtm-strategist/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-Idea frame: {IDEA_FRAMER_OUTPUT}
-Revenue model: {Revenue model field from BUSINESS_MODELER_OUTPUT}
-Priority channels:
-[/INPUTS]
-```
-
-Note: `Priority channels:` is left blank — the GTM-Strategist agent contains its own hard pause and will ask the founder.
-
-Extract `[GTM-STRATEGIST OUTPUT]...[/GTM-STRATEGIST OUTPUT]`. Store as GTM_OUTPUT.
-
-Write venture checkpoint for stage `gtm-strategist`.
-
----
-
-### Stage 5: Financial-Modeler
-
-Skip if VENTURE_CHECKPOINT shows `stages.financial-modeler.status: "completed"`. Restore FINANCIAL_OUTPUT from checkpoint.
-
-Read `{SKILL_BASE_DIR}/financial-modeler/SKILL.md`. Dispatch with `model: agents.models["financial-modeler"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/financial-modeler/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-Revenue model: {Revenue model field from BUSINESS_MODELER_OUTPUT}
-Key assumptions: {Key assumptions field from BUSINESS_MODELER_OUTPUT}
-North star metric: {North star metric field from GTM_OUTPUT}
-Month 3 target: {Month 3 target field from GTM_OUTPUT}
-[/INPUTS]
-```
-
-Extract `[FINANCIAL-MODELER OUTPUT]...[/FINANCIAL-MODELER OUTPUT]`. Store as FINANCIAL_OUTPUT.
-
-**Soft review**: if `Flag:` in FINANCIAL_OUTPUT is not `none`, print the flag message to the user. Then print: "Financial modeling complete. Running venture review..."
-
-Write venture checkpoint for stage `financial-modeler`.
-
----
-
-### Stage 6: Venture-Reviewer
-
-Skip if VENTURE_CHECKPOINT shows `stages.venture-reviewer.status: "completed"`. Restore REVIEWER_OUTPUT from checkpoint.
-
-Read `{SKILL_BASE_DIR}/venture-reviewer/SKILL.md`. Dispatch with `model: agents.models["venture-reviewer"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/venture-reviewer/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-Idea framer output: {IDEA_FRAMER_OUTPUT}
-Market researcher output: {MARKET_RESEARCHER_OUTPUT}
-Business modeler output: {BUSINESS_MODELER_OUTPUT}
-GTM strategist output: {GTM_OUTPUT}
-Financial modeler output: {FINANCIAL_OUTPUT}
-[/INPUTS]
-```
-
-Extract `[VENTURE-REVIEWER OUTPUT]...[/VENTURE-REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT.
-
-Write venture checkpoint for stage `venture-reviewer`.
-
----
-
-### Dev pipeline handoff
-
-Read `needs_dev:` from REVIEWER_OUTPUT.
-
-If reviewer `Status: FAIL`:
-- Print: "Venture review found critical issues. Please address them before proceeding to technical implementation:"
-- Print each item from the `Issues:` list in REVIEWER_OUTPUT.
-- Jump to Venture terminal summary.
-
-If `needs_dev: false`:
-- Print: "No technical implementation needed for this venture type."
-- Jump to Venture terminal summary.
-
-If `needs_dev: true` and status is `PASS` or `NEEDS WORK`:
-- Print: "Venture pipeline complete. Artifacts saved to `docs/venture/`. Ready to move into technical implementation? (yes / not yet)"
-- Wait for response.
-- If **yes**: Print: "Run `/nob docs/venture/venture-spec.md` to start technical implementation." Then jump to Venture terminal summary and exit. The user's next `/nob` invocation will detect `Spec → Code` workflow and run the full dev pipeline.
-- If **not yet**: jump to Venture terminal summary and exit.
-
----
-
-### Venture terminal summary
-
-Print this block:
-
-```
-─────────────────────────────────────
-  Nob Venture Pipeline — Complete
-─────────────────────────────────────
-
-Idea: {Problem field from IDEA_FRAMER_OUTPUT}
-
-Stage results:
-  Idea Frame       ✓  docs/venture/idea-frame.md
-  Market Research  ✓  docs/venture/market-research.md
-  Business Model   ✓  docs/venture/business-model.md
-  GTM Strategy     ✓  docs/venture/gtm-strategy.md
-  Financial Model  ✓  docs/venture/financial-model.md
-  Venture Review   {Status from REVIEWER_OUTPUT}
-
-Venture Spec: docs/venture/venture-spec.md
-{if needs_dev: false: "No technical implementation needed."}
-{if status FAIL: "Critical issues found — see above before continuing."}
-
-Checkpoint: {checkpoint.path}venture-checkpoint.json
-When done: rm {checkpoint.path}venture-checkpoint.json
-─────────────────────────────────────
-```
+- Extract `[VENTURE OUTPUT]...[/VENTURE OUTPUT]` from the result. Print the block verbatim as the terminal summary.
+- Exit.
 
 ---
 
@@ -519,8 +314,8 @@ If the identified workflow is `Refactor`:
 
 If the identified workflow is `Ideate`:
 - Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
-- Parse the user's direction from the message: strip trigger phrases like "nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add". The remaining text is the direction. If nothing remains, direction = "general improvements".
-- Parse constraints from the message (explicit flags `--simple`, `--no-new-deps`, `--mobile-first`, `--backend-only`, `--frontend-only`; natural language "keep it simple", "no new dependencies", "mobile only", "backend only", "frontend only"). Store as a plain string, empty if none.
+- Parse direction: strip trigger phrases ("nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add"). Remaining text = direction; default = "general improvements".
+- Parse constraints: flags `--simple`, `--no-new-deps`, `--mobile-first`, `--backend-only`, `--frontend-only` or natural language equivalents. Store as a plain string, empty if none.
 - Read `{SKILL_BASE_DIR}/ideation-agent/SKILL.md`.
 - Dispatch an Agent with `model: agents.models["ideation-agent"] ?? "haiku"` and this prompt:
 
@@ -749,6 +544,8 @@ Otherwise read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`. Dispatch with `model: 
 [INPUTS]
 Working directory: {current working directory path}
 
+Stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
+
 .nob.yml contents:
 {.nob.yml content}
 
@@ -786,6 +583,8 @@ Otherwise read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`. Dispatch with `model:
 
 [INPUTS]
 Working directory: {current working directory path}
+
+Stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -826,100 +625,29 @@ Proceed to Phase 2.5.
 
 ### Fan-out path (Mode: fan-out)
 
-Read these sub-skill files once and store their full contents:
-- `{SKILL_BASE_DIR}/../pm-agent/SKILL.md` → PM_SKILL
-- `{SKILL_BASE_DIR}/backend-agent/SKILL.md` → BACKEND_SKILL
-- `{SKILL_BASE_DIR}/frontend-agent/SKILL.md` → FRONTEND_SKILL
-
 Filter SLICES to only those with `status: pending` or `status: in_progress` (skip `status: completed` — their outputs are already in the checkpoint).
 
 Group pending SLICES into batches of `max_parallel_slices`. For each batch:
 
-**Dispatch all slices in the batch by calling the Agent tool once per slice, all within the same assistant turn — do not await any Agent call result before making the next Agent call.** All N Agent calls for the batch must appear in the same response. This is what enables parallel execution. Each slice gets this prompt (use `model: agents.models["backend-agent"] ?? "sonnet"` — slice agents do implementation work):
+**Dispatch all slices in the batch in the same assistant turn — one Agent call per slice, all in one response.** Do not await any result before dispatching the next. Use `model: agents.models["backend-agent"] ?? "sonnet"`.
+
+Read `{SKILL_BASE_DIR}/slice-runner/SKILL.md`. Each slice gets this prompt:
 
 ```
 [INSTRUCTIONS]
-You are a Nob slice runner. Execute a complete PM → (Backend+Frontend concurrent) pipeline for one slice of a larger feature. The Agent tool is available to you — use it to dispatch Backend and Frontend as concurrent sub-agents.
-
-Run the pipeline in this order:
-
-**Step 1 — PM Agent (in-session)**
-Follow the PM Agent instructions below using this session. Emit `[PM-AGENT OUTPUT]` before continuing. Store the extracted block as PM_OUTPUT.
-
-**Step 2 — Backend Agent + Frontend Agent (concurrent Agent dispatch)**
-After PM completes, dispatch both as Agent tool calls in the same response — do not await one before dispatching the other.
-
-Backend Agent call prompt:
-```
-[INSTRUCTIONS]
-{full contents of the BACKEND AGENT INSTRUCTIONS section embedded below}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {working directory from your [INPUTS]}
-.nob.yml contents: {.nob.yml contents from your [INPUTS]}
-CLAUDE.md contents: {CLAUDE.md contents from your [INPUTS]}
-Requirements from PM Agent:
-{PM_OUTPUT}
-{if clarifications: Clarifications from user: {answers}}
-
-SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
-[/INPUTS]
-```
-
-Frontend Agent call prompt:
-```
-[INSTRUCTIONS]
-{full contents of the FRONTEND AGENT INSTRUCTIONS section embedded below}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {working directory from your [INPUTS]}
-.nob.yml contents: {.nob.yml contents from your [INPUTS]}
-CLAUDE.md contents: {CLAUDE.md contents from your [INPUTS]}
-Requirements from PM Agent:
-{PM_OUTPUT}
-Backend Agent is running in parallel — use API contracts from PM Agent output above.
-No [BACKEND-AGENT OUTPUT] will be provided.
-{if clarifications: Clarifications from user: {answers}}
-
-SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
-[/INPUTS]
-```
-
-After both Agent calls return:
-- Extract `[BACKEND-AGENT OUTPUT]...[/BACKEND-AGENT OUTPUT]` from Backend's response. Store as BACKEND_OUTPUT.
-- Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]` from Frontend's response. Store as FRONTEND_OUTPUT.
-
-After both steps complete, wrap all three output blocks in `[SLICE OUTPUT: {slice-name}]...[/SLICE OUTPUT: {slice-name}]`.
-
-Stack skip rules (from the `.nob.yml contents` field in your [INPUTS]) apply:
-- If `stack.backend.enabled: false`: skip Backend Agent dispatch; set BACKEND_OUTPUT = `"Backend agent was skipped (disabled in config)"`; emit `[BACKEND-AGENT OUTPUT]Backend agent was skipped (disabled in config)[/BACKEND-AGENT OUTPUT]`.
-- If workflow is `API→Sync`: skip Backend Agent dispatch; set BACKEND_OUTPUT = `"Backend agent was skipped (API→Sync workflow — backend already changed)"`; emit `[BACKEND-AGENT OUTPUT]Backend agent was skipped (API→Sync workflow — backend already changed)[/BACKEND-AGENT OUTPUT]`.
-- If `stack.frontend.enabled: false`: skip Frontend Agent dispatch; set FRONTEND_OUTPUT = `"Frontend agent was skipped (disabled in config)"`; emit `[FRONTEND-AGENT OUTPUT]Frontend agent was skipped (disabled in config)[/FRONTEND-AGENT OUTPUT]`.
-
---- PM AGENT INSTRUCTIONS ---
-{PM_SKILL}
---- END PM AGENT INSTRUCTIONS ---
-
---- BACKEND AGENT INSTRUCTIONS ---
-{BACKEND_SKILL}
---- END BACKEND AGENT INSTRUCTIONS ---
-
---- FRONTEND AGENT INSTRUCTIONS ---
-{FRONTEND_SKILL}
---- END FRONTEND AGENT INSTRUCTIONS ---
-
-After all agents complete, wrap all three output blocks inside:
-[SLICE OUTPUT: {slice-name}]
-...all three output blocks concatenated here...
-[/SLICE OUTPUT: {slice-name}]
+{full contents of {SKILL_BASE_DIR}/slice-runner/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
 Working directory: {working directory path}
 Slice name: {slice-name}
 Slice scope: {slice scope from PLAN_OUTPUT}
+
+PM Agent skill path: {SKILL_BASE_DIR}/../pm-agent/SKILL.md
+Backend Agent skill path: {SKILL_BASE_DIR}/backend-agent/SKILL.md
+Frontend Agent skill path: {SKILL_BASE_DIR}/frontend-agent/SKILL.md
+Backend Agent stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
+Frontend Agent stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
 
 Spec file path: {spec file path}
 Spec file contents: {full spec file contents}
@@ -1182,19 +910,13 @@ Set RETRY_RAN = true.
 
 **Retry diagnostic** (haiku, runs before retry agents):
 
-Dispatch a sub-agent with `model: haiku` and this prompt:
+Dispatch a sub-agent with `model: haiku`:
 
 ```
 [INSTRUCTIONS]
-You are a focused retry diagnostic agent. Your only job is to read a small set of files
-and determine which specific files need to change to fix the listed failures. Do NOT
-implement anything. Do NOT read any file not listed in the inputs.
+You are a focused retry diagnostic agent. Read the provided file lists. For each failing item, identify which 1–2 files are most directly responsible. Do NOT implement anything. Do NOT read any file not listed in the inputs.
 
-Read each file in the provided file lists. For each failing item, identify which 1–2 files
-are most directly responsible for the failure. If a failing item is a test failure, include
-both the source file and the test file.
-
-Emit exactly this block:
+Emit exactly:
 
 [RETRY-DIAGNOSTIC OUTPUT]
 Backend fix scope:
@@ -1205,7 +927,7 @@ Frontend fix scope:
   - {path}: {one sentence — what specifically needs to change}
   (or: none — frontend fix not needed)
 
-Root cause summary: {1–2 sentences — why these files are the source of the failures}
+Root cause summary: {1–2 sentences}
 [/RETRY-DIAGNOSTIC OUTPUT]
 [/INSTRUCTIONS]
 
@@ -1221,23 +943,13 @@ Frontend files from previous pass:
 [/INPUTS]
 ```
 
-Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_OUTPUT.
+Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_OUTPUT. If extraction fails: DIAG_OUTPUT = null (does not block retry).
 
-If extraction fails: set DIAG_OUTPUT = null. (Graceful fallback — diagnostic failure does not block retry.)
+**Parse fix scope:**
+- If DIAG_OUTPUT non-null: extract `Backend fix scope:` paths as BACKEND_FIX_SCOPE (empty→null if RETRY_BACKEND=true); extract `Frontend fix scope:` paths as FRONTEND_FIX_SCOPE (empty→null if RETRY_FRONTEND=true).
+- If DIAG_OUTPUT null: BACKEND_FIX_SCOPE = null, FRONTEND_FIX_SCOPE = null.
 
-**Parse fix scope from DIAG_OUTPUT:**
-
-If DIAG_OUTPUT is non-null:
-- Extract all paths under `Backend fix scope:` as BACKEND_FIX_SCOPE (empty list if "none")
-- Extract all paths under `Frontend fix scope:` as FRONTEND_FIX_SCOPE (empty list if "none")
-- If BACKEND_FIX_SCOPE is empty and RETRY_BACKEND = true: set BACKEND_FIX_SCOPE = null (fallback: retry agent uses 5-file limit)
-- If FRONTEND_FIX_SCOPE is empty and RETRY_FRONTEND = true: set FRONTEND_FIX_SCOPE = null
-
-If DIAG_OUTPUT is null: set BACKEND_FIX_SCOPE = null and FRONTEND_FIX_SCOPE = null.
-
-**Backend retry** (only if RETRY_BACKEND = true):
-
-Read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`. Dispatch with `model: agents.models["backend-agent"] ?? "haiku"`:
+**Backend retry** (if RETRY_BACKEND = true) — read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`, dispatch with `model: agents.models["backend-agent"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
@@ -1246,6 +958,8 @@ Read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`. Dispatch with `model: agents.mod
 
 [INPUTS]
 Working directory: {current working directory path}
+
+Stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -1276,9 +990,7 @@ Root cause (from diagnostic):
 
 Extract `[BACKEND-AGENT OUTPUT]...[/BACKEND-AGENT OUTPUT]`. Replace BACKEND_OUTPUT with this result.
 
-**Frontend retry** (only if RETRY_FRONTEND = true):
-
-Read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`. Dispatch with `model: agents.models["frontend-agent"] ?? "haiku"`:
+**Frontend retry** (if RETRY_FRONTEND = true) — read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`, dispatch with `model: agents.models["frontend-agent"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
@@ -1287,6 +999,8 @@ Read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`. Dispatch with `model: agents.mo
 
 [INPUTS]
 Working directory: {current working directory path}
+
+Stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -1322,25 +1036,17 @@ Root cause (from diagnostic):
 
 Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Replace FRONTEND_OUTPUT with this result.
 
-**After retry agents return:**
-
-Re-dispatch Reviewer with updated BACKEND_OUTPUT and FRONTEND_OUTPUT using the same prompt structure as Phase 3 (Mode: single path). Extract new REVIEWER_OUTPUT.
-
-Write updated checkpoint (if checkpoint.enabled): read checkpoint.json, update `reviewer_output` to the new REVIEWER_OUTPUT, write back.
-
-Increment RETRY_COUNT by 1.
-
-Go to Loop start.
+**After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3 (Mode: single). Extract new REVIEWER_OUTPUT. If checkpoint.enabled: update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
 
 --- Loop end ---
 
-**Fan-out mode:** REVIEWER_OUTPUT covers all slices in a single combined block. When retry is triggered, re-dispatch all slices as a new batch using the same structure as Phase 2 fan-out. After slices complete, merge outputs and re-run Reviewer once. Increment RETRY_COUNT. Continue loop.
+**Fan-out mode:** Re-dispatch all slices as a new batch (same structure as Phase 2 fan-out). Merge outputs and re-run Reviewer once. Increment RETRY_COUNT. Continue loop.
 
 ---
 
 ## Step 4: Print terminal summary
 
-**If workflow is `Venture`**: summary is printed inline in the `## Venture Workflow` section above. This section is not reached for Venture runs.
+**If workflow is `Venture`**: the venture-workflow sub-agent prints its own summary before exiting. This section is not reached for Venture runs.
 
 **If workflow is `Ideate`**, use this summary:
 
@@ -1536,9 +1242,7 @@ Append final summary line to RUN_LOG_PATH using the Edit tool:
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
 - **Reviewer status is FAIL**: print all failing items prominently; Phase 3.5 retry loop handles up to MAX_RETRIES passes (1 automatic + user-gated after that)
 - **Non-slice agent result missing expected output block**: re-dispatch once; if still missing after re-dispatch, mark status `timed_out` (store `timed_out_at: "<phase>/<agent-name>"`). Do NOT pass null output to downstream agents. For fan-out: skip this slice and continue remaining slices. For single mode: stop pipeline and skip Reviewer.
-- **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
-- **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
-- **Ideation agent returns no [IDEATION-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
+- **Any early-exit agent (Init, Refactor, Ideation, Venture) returns no expected output block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Pre-flight validation fails (Step 1.5)**: print specific error message, exit immediately — no agents dispatched
 - **`gh pr create` fails (M1)**: print the error output; print the `git push -u origin {WORKTREE_BRANCH}` command as fallback
 - **`.nob/project-memory.md` unreadable (L1)**: set PROJECT_MEMORY = "none", skip silently; do not block pipeline

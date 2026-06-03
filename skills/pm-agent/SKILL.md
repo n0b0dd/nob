@@ -113,6 +113,29 @@ If a section has no content, write the section header with 'none' rather than om
 
 Print: "Spec written to `{SPECS_DIR}/<filename>.md`."
 
+### Step 3.5: Revision loop
+
+After writing the spec, read back the spec file you just wrote and print its full contents to the user.
+
+Then prompt:
+> "Any changes? (describe a section to edit, or 'done' to proceed)"
+
+Loop:
+1. Wait for user input.
+2. If the input is "done", "looks good", "ok", "ship it", "proceed", "lgtm", "yes", or any other clear affirmative → exit loop and continue to Step 4.
+3. Otherwise, parse the user's request:
+   - Identify the target section: match the user's words against the spec's section headers (`## Summary`, `## Users`, `## User flow`, `## Requirements`, `## Acceptance criteria`, `## Builds on`, `## Constraints`, `## Error states`, `## Out of scope`, `## Open questions`)
+   - If the section reference is ambiguous or absent, use the full request as the change description and apply it to the most relevant section.
+4. Apply the targeted edit:
+   - Read the current spec file using the Read tool.
+   - Replace only the content of the matched section — do not touch other sections.
+   - Write the updated spec using the Write tool.
+5. Print only the changed section back to the user.
+6. Prompt: "Any other changes? (describe another section, or 'done' to proceed)"
+7. Return to step 1.
+
+If the user types "done" immediately (before requesting any revision), proceed to Step 4 without making any changes.
+
 ### Step 4: Offer implementation
 
 **Note:** This step only applies when PM Agent is invoked directly by the user. If you were dispatched by the Nob hub (i.e., you received a `[INPUTS]` block), skip this step entirely.

@@ -1,8 +1,5 @@
 # Nob configuration
-# Copy this file to your monorepo root as .nob.yml and fill in your stack details.
-
-structure:
-  check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected (off by default)
+# Copy this file to your project root as .nob.yml and fill in your stack details.
 
 stack:
   frontend:
@@ -24,6 +21,9 @@ stack:
     bugs: /docs/bugs          # change to wherever your bug reports live
     backlog: /docs/backlog    # change to wherever your backlog items live
 
+  structure:
+    check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected
+
 agents:
   enabled:
     - planner
@@ -32,6 +32,9 @@ agents:
     - frontend-agent
     - security-agent
     - reviewer
+    - ideation-agent
+    - ask-agent
+
   models:
     # Models set here are always respected. For simple specs, nob automatically
     # downgrades backend-agent and frontend-agent to haiku unless set explicitly here.
@@ -40,7 +43,7 @@ agents:
     planner: haiku          # planning/review/qa agents can use haiku
     pm-agent: haiku
     reviewer: haiku
-    security-agent: haiku       # security review agent
+    security-agent: haiku
     idea-framer: haiku           # venture pipeline agents
     market-researcher: sonnet    # web research needs sonnet
     business-modeler: haiku
@@ -49,14 +52,24 @@ agents:
     venture-reviewer: haiku
     refactor-agent: sonnet      # project migration agent
     ideation-agent: haiku       # feature ideation agent
+    ask-agent: haiku            # codebase Q&A agent
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
   max_tokens_per_run: 500000  # optional; omit or remove to disable budget guard
   max_retries: 3              # max retry passes: 1 automatic + user-gated after that (default: 3)
+
+  # CI/CD integration — polls GitHub Actions after PR creation.
+  ci:
+    enabled: true                   # set to false to skip CI polling entirely
+    timeout_minutes: 10             # how long to wait for CI checks before giving up
+
+  # Structured project memory — tracks patterns, routes, and corrections across runs.
+  memory:
+    structured: true                # set to false to disable .nob/project-memory.yml writes
 
   venture:
     enabled: true           # set false to disable /nob venture detection
 
   checkpoint:
     enabled: true           # write/read checkpoint files on disk (default: true)
-    path: .nob/       # directory for checkpoint.json
+    path: .nob/             # directory for checkpoint.json

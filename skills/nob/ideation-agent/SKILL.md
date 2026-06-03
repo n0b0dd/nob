@@ -1,13 +1,13 @@
 ---
 name: ideation-agent
-description: Reads an existing codebase and a user-provided direction + constraints, generates 3-5 ranked feature ideas, lets the user pick one, then expands it into a ready-to-run mini-spec saved to docs/specs/.
+description: Reads an existing codebase and a user-provided direction + constraints, generates 3-5 ranked feature ideas, lets the user pick one, then expands it into a ready-to-run mini-spec saved to the project's configured spec directory.
 ---
 
 # Ideation Agent
 
 ## Purpose
 
-You are the Nob Ideation Agent. Given a project direction and optional constraints, you explore the existing codebase and generate 3-5 ranked feature ideas. The user picks one and you expand it into a mini-spec saved to `docs/specs/`.
+You are the Nob Ideation Agent. Given a project direction and optional constraints, you explore the existing codebase and generate 3-5 ranked feature ideas. The user picks one and you expand it into a mini-spec saved to the project's configured spec directory.
 
 ---
 
@@ -34,7 +34,9 @@ Read the following files (skip gracefully if any are absent):
    - `android` frontend: list `app/src/main/java/` or `app/src/main/kotlin/` (first 2 levels only)
    - `ios` frontend: list `[AppName]/Views/` or `[AppName]/ViewControllers/` if discoverable
    - unknown frontend: list `src/`, `app/`, or `lib/` (first that exists, 2 levels deep)
-6. Directory listing of `docs/specs/` (if present) — to understand what has already been specced or built recently
+6. Directory listing of the spec directory (if present) — to understand what has already been specced or built recently
+
+After reading `.nob.yml`, extract `stack.docs.specs` if present. Strip any leading `/`. Store as SPECS_DIR. Default to `docs/specs` if the field is absent or `.nob.yml` was not found. Use SPECS_DIR in place of `docs/specs` for all spec-related operations in this session.
 
 Read only what is needed to understand the project's shape — not every file.
 
@@ -139,12 +141,12 @@ Expand CHOSEN_IDEA into a mini-spec. Write it in this exact structure:
 - Filename: `[YYYY-MM-DD]-[feature-slug].md`
 
 **Save the file:**
-1. Create `docs/specs/` if it does not exist: run `mkdir -p docs/specs` using the Bash tool.
-2. Write the mini-spec to `docs/specs/[filename]` using the Write tool.
+1. Create `{SPECS_DIR}/` if it does not exist: run `mkdir -p {SPECS_DIR}` using the Bash tool.
+2. Write the mini-spec to `{SPECS_DIR}/[filename]` using the Write tool.
 
 After saving, print:
 ```
-Spec saved to docs/specs/[filename]. Run: /nob implement docs/specs/[filename]
+Spec saved to {SPECS_DIR}/[filename]. Run: /nob implement {SPECS_DIR}/[filename]
 ```
 
 ---
@@ -159,6 +161,6 @@ Direction: [direction from [INPUTS]]
 Constraints: [parsed constraints, or: none]
 Ideas generated: [N]
 Chosen: [chosen idea name, or: none]
-Spec saved: [docs/specs/filename, or: n/a]
+Spec saved: [{SPECS_DIR}/filename, or: n/a]
 [/IDEATION-AGENT OUTPUT]
 ```

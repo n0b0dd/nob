@@ -16,7 +16,7 @@ skills/
     pm-agent/     — Extracts structured requirements from specs (also standalone via /pm-agent)
     backend-agent/ — Implements backend/API changes
     frontend-agent/ — Implements frontend/UI changes
-    qa-agent/     — Validates output against acceptance criteria
+    security-agent/ — Reviews implementation for security findings
     reviewer/     — Final pass/fail review against the spec
     templates/    — CLAUDE.md.template and .nob.yml.template for user projects
   pm-agent/
@@ -38,7 +38,7 @@ Version is tracked in **both** `.claude-plugin/plugin.json` and `.claude-plugin/
 
 Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) orchestrates all sub-skills:
 
-**Planner → PM Agent → Backend Agent + Frontend Agent (concurrent) → QA Agent → Reviewer**
+**Planner → PM Agent → Backend Agent + Frontend Agent (concurrent) → Security Review → Reviewer**
 
 - The hub resolves `SKILL_BASE_DIR` at runtime from its `Base directory for this skill:` context line — all sub-skill paths use `{SKILL_BASE_DIR}/X/SKILL.md`.
 - The hub reads `.nob.yml` from the user's project root to configure agent models, enabled agents, and parallelism. If absent, it auto-detects the stack.

@@ -39,7 +39,6 @@ agents:
     frontend-agent: sonnet
     planner: haiku          # planning/review/qa agents can use haiku
     pm-agent: haiku
-    qa-agent: haiku
     reviewer: haiku
     security-agent: haiku       # security review agent
     idea-framer: haiku           # venture pipeline agents

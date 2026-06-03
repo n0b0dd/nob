@@ -4,9 +4,9 @@ A Claude Code plugin that orchestrates cross-layer fullstack monorepo developmen
 
 ## What it does
 
-Nob automates feature implementation, bug fixes, and API syncs across your full stack — backend, frontend, and QA — using a pipeline of specialized agents:
+Nob automates feature implementation, bug fixes, and API syncs across your full stack — backend, frontend, and security — using a pipeline of specialized agents:
 
-**Planner → PM Agent → Backend + Frontend (concurrent) → QA Agent → Reviewer**
+**Planner → PM Agent → Backend + Frontend (concurrent) → Security Review → Reviewer**
 
 ## Install
 

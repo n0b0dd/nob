@@ -69,9 +69,26 @@ Read from `.nob.yml contents` in your [INPUTS]:
 - If `stack.backend.enabled: false` or workflow is `API→Sync`: skip Backend; emit `[BACKEND-AGENT OUTPUT]Backend agent was skipped (disabled in config)[/BACKEND-AGENT OUTPUT]`.
 - If `stack.frontend.enabled: false`: skip Frontend; emit `[FRONTEND-AGENT OUTPUT]Frontend agent was skipped (disabled in config)[/FRONTEND-AGENT OUTPUT]`.
 
+## Step 2.5 — Validate output blocks
+
+After both sub-agents return, validate required fields before wrapping. This mirrors the hub's Output Block Validation Procedure so fan-out runs have the same guarantees as single-slice runs.
+
+**Backend Agent required fields:** `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`
+
+**Frontend Agent required fields:** `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`
+
+For each non-skipped agent output block:
+1. Check that every required field appears as `FieldName:` on its own line within the extracted block.
+2. If all required fields are present: proceed to Output section.
+3. If any required field is missing: re-dispatch that agent once with the same prompt prepended by:
+   > "Your previous response was missing these required fields: [list the missing fields].
+   > Re-emit the complete [X-AGENT OUTPUT] block with ALL required fields present.
+   > Do not omit any field even if its value is 'none' or 'n/a'."
+4. If still missing after re-dispatch: use the output as-is. Prepend a comment line `# WARNING: missing fields: [list]` immediately inside the output block (before the first field line).
+
 ## Output
 
-After both agents return, extract their output blocks and wrap everything inside:
+After both agents return and output blocks are validated, extract their output blocks and wrap everything inside:
 
 ```
 [SLICE OUTPUT: {Slice name from your [INPUTS]}]

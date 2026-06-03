@@ -29,7 +29,7 @@ Inspect the input:
 
 Read these files if they exist (skip silently if not found):
 - `CLAUDE.md` at the repo root
-- `.nob.yml` at the repo root
+- `.nob.yml` at the repo root — after reading, extract `stack.docs.specs` if present. Strip any leading `/`. Store as SPECS_DIR. Default to `docs/specs` if the field is absent or `.nob.yml` was not found.
 
 Run stack auto-detection:
 
@@ -65,9 +65,9 @@ Store answers as CLARIFICATIONS.
 
 Derive a slug from the idea: lowercase words, hyphens, max 5 words (e.g. "user notification system" → `user-notification-system`).
 
-Ensure `docs/specs/` exists: run `mkdir -p docs/specs` using the Bash tool.
+Ensure `{SPECS_DIR}/` exists: run `mkdir -p {SPECS_DIR}` using the Bash tool.
 
-Write `docs/specs/YYYY-MM-DD-<slug>.md` using the Write tool with this structure:
+Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structure:
 
 ```markdown
 # Feature: [name]
@@ -111,7 +111,30 @@ Write `docs/specs/YYYY-MM-DD-<slug>.md` using the Write tool with this structure
 
 If a section has no content, write the section header with 'none' rather than omitting it.
 
-Print: "Spec written to `docs/specs/<filename>.md`."
+Print: "Spec written to `{SPECS_DIR}/<filename>.md`."
+
+### Step 3.5: Revision loop
+
+After writing the spec, read back the spec file you just wrote and print its full contents to the user.
+
+Then prompt:
+> "Any changes? (describe a section to edit, or 'done' to proceed)"
+
+Loop:
+1. Wait for user input.
+2. If the input is "done", "looks good", "ok", "ship it", "proceed", "lgtm", "yes", or any other clear affirmative → exit loop and continue to Step 4.
+3. Otherwise, parse the user's request:
+   - Identify the target section: match the user's words against the spec's section headers (`## Summary`, `## Users`, `## User flow`, `## Requirements`, `## Acceptance criteria`, `## Builds on`, `## Constraints`, `## Error states`, `## Out of scope`, `## Open questions`)
+   - If the section reference is ambiguous or absent, use the full request as the change description and apply it to the most relevant section.
+4. Apply the targeted edit:
+   - Read the current spec file using the Read tool.
+   - Replace only the content of the matched section — do not touch other sections.
+   - Write the updated spec using the Write tool.
+5. Print only the changed section back to the user.
+6. Prompt: "Any other changes? (describe another section, or 'done' to proceed)"
+7. Return to step 1.
+
+If the user types "done" immediately (before requesting any revision), proceed to Step 4 without making any changes.
 
 ### Step 4: Offer implementation
 
@@ -120,8 +143,8 @@ Print: "Spec written to `docs/specs/<filename>.md`."
 Ask:
 > "Ready to implement? I can hand this to the engineering pipeline now. (yes / no)"
 
-- **yes** → invoke the `nob` skill with argument `implement docs/specs/<filename>.md`
-- **no** → stop. Print: "Spec saved at `docs/specs/<filename>.md`. Run `/nob implement docs/specs/<filename>.md` when ready."
+- **yes** → invoke the `nob` skill with argument `implement {SPECS_DIR}/<filename>.md`
+- **no** → stop. Print: "Spec saved at `{SPECS_DIR}/<filename>.md`. Run `/nob implement {SPECS_DIR}/<filename>.md` when ready."
 
 ---
 

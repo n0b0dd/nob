@@ -243,14 +243,14 @@ stack:
     core: shared/core/
 
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, qa-agent, reviewer]
+  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer]
   models:
     backend-agent: sonnet
     frontend-agent: sonnet
     planner: haiku
     pm-agent: haiku
-    qa-agent: haiku
     reviewer: haiku
+    security-agent: haiku
     refactor-agent: sonnet
   max_parallel_slices: 3
   checkpoint:

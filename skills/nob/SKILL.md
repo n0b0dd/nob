@@ -162,7 +162,7 @@ Skip (not a project root):
 
 ```yaml
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer, ideation-agent]
+  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer, ideation-agent, ask-agent]
   models:
     backend-agent: sonnet
     frontend-agent: sonnet
@@ -179,6 +179,7 @@ agents:
     venture-reviewer: haiku
     refactor-agent: sonnet
     ideation-agent: haiku
+    ask-agent: haiku
   max_parallel_slices: 3
   venture:
     enabled: true
@@ -204,9 +205,24 @@ Also extract:
 - BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/backend-agent/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)
 - FRONTEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/frontend-agent/stacks/{stack.frontend.type}.md` (or `none` if `stack.frontend.enabled: false`)
 
-**Project memory**: check whether `.nob/project-memory.md` exists using the Read tool. If found and non-empty: store contents as PROJECT_MEMORY. Otherwise set PROJECT_MEMORY = "none".
+**Project memory**: load structured memory in this order:
+
+1. Check whether `.nob/project-memory.yml` exists using the Read tool.
+   - If found and non-empty: parse its YAML. Extract a ≤10-line summary across the four top-level keys (`patterns`, `routes`, `file_clusters`, `corrections`). Format the summary as:
+     ```
+     Project memory: {N} patterns, {M} routes, {K} file clusters, {J} corrections
+     Recent patterns: [up to 3 most recent pattern.summary values]
+     Recent routes: [up to 3 most recent route.summary values]
+     Recent corrections: [up to 3 most recent correction.summary values — these are highest priority]
+     ```
+     Store this summary string as PROJECT_MEMORY.
+   - If not found: check whether `.nob/project-memory.md` exists.
+     - If `.nob/project-memory.md` exists and is non-empty: **migrate** — parse the Markdown entries, convert to the YAML structure below, write `.nob/project-memory.yml` using the Write tool, then delete `.nob/project-memory.md` using Bash (`rm .nob/project-memory.md`). Store the summary as PROJECT_MEMORY.
+     - If neither file exists: set PROJECT_MEMORY = "none".
 
 **`--plan-only` detection**: check whether the user's message contains `--plan-only`. If found: store PLAN_ONLY = true. Otherwise: PLAN_ONLY = false.
+
+**`--diff-only` detection**: check whether the user's message contains `--diff-only`. If found: store DIFF_PREVIEW = true. Otherwise: DIFF_PREVIEW = false.
 
 ## Step 1.5: Spec pre-flight validation
 
@@ -230,6 +246,7 @@ If all four checks pass: proceed to Step 2.
 | "I want to build a startup", "I want to build a product", "I want to build a company", "I have an idea", "bring to market", "startup idea", "business idea", "validate my idea", "launch a startup", "launch a product", "launch a company", "nob venture" | Venture |
 | "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure" | Refactor |
 | "nob ideate", "ideate [direction]", "what should I build next", "suggest features for", "I want to add [vague goal]", "what feature should I add" | Ideate |
+| "nob ask [question]", "ask [question]" | Ask |
 
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
 > "Is this a new feature to implement, a bug to fix, an API contract sync, a business idea you'd like to validate, a project to restructure, or feature ideation?"
@@ -241,6 +258,8 @@ If the identified workflow is `Init`, skip to the **Init workflow early exit** s
 If the identified workflow is `Refactor`, skip to the **Refactor workflow early exit** section immediately below before proceeding to Phase 0.
 
 If the identified workflow is `Ideate`, skip to the **Ideation workflow early exit** section immediately below before proceeding to Phase 0.
+
+If the identified workflow is `Ask`, skip to the **Ask workflow early exit** section immediately below before proceeding to Phase 0.
 
 ## Init workflow early exit
 
@@ -349,6 +368,32 @@ Current date: {today's date in YYYY-MM-DD format}
 
 ---
 
+## Ask workflow early exit
+
+If the identified workflow is `Ask`:
+- Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
+- Parse question: strip trigger phrases ("nob ask", "ask"). Remaining text = question. If nothing remains, ask: "What would you like to know about the codebase?"
+- Read `{SKILL_BASE_DIR}/ask-agent/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["ask-agent"] ?? "haiku"` and this prompt:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/ask-agent/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Question: {parsed question}
+[/INPUTS]
+```
+
+- Print the agent's response verbatim as the terminal output. No pipeline summary header.
+- No checkpoint is written. No retry loop. No Reviewer.
+- If the PushNotification tool is available, skip it for Ask runs.
+- Exit.
+
+---
+
 ## Output Block Validation Procedure
 
 After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, apply this procedure before passing the output to the next agent. The required fields per agent are:
@@ -357,8 +402,8 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 |---|---|
 | Planner | `Workflow:`, `Mode:`, `Affected layers:`, `Risks:`, `Ambiguities:` |
 | PM Agent | `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
-| Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:` |
-| Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:` |
+| Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
+| Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
 | Security Agent | `Status:`, `Findings:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
 
@@ -1150,6 +1195,7 @@ Slices:
 
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
 Security:  [derive from SECURITY_OUTPUT: if "[SECURITY-DISABLED]" → "SKIPPED (disabled)", if "[SECURITY-SKIPPED]" → "SKIPPED (user)", if "Status: PASS" → "PASS", if "Status: FINDINGS" → count [MEDIUM] and [LOW] lines and print "FINDINGS: N medium, M low"]
+CI:        [CI_STATUS — PASS | FAIL | SKIPPED (gh unavailable) | SKIPPED (disabled) | SKIPPED (timeout)]
 Review status: [PASS | NEEDS REVIEW | FAIL]
 [Retry line — derive from RETRY_COUNT, RETRY_RAN, and exit reason:
   if RETRY_RAN = true and not stuck and not max-hit: "Retry:     {RETRY_COUNT} pass(es) → Final review: [Overall status from final REVIEWER_OUTPUT]"
@@ -1179,6 +1225,16 @@ Next steps:
 - Then: git push -u origin <branch-name>
 ```
 
+**Diff preview** (DIFF_PREVIEW = true only — runs before commit):
+
+If DIFF_PREVIEW = true AND `Overall status: PASS`:
+1. Run: `git -C {WORKTREE_PATH} diff HEAD`
+2. Count the output lines. If > 200 lines: print the first 200 lines and append `"... and N more lines. Run \`git -C {WORKTREE_PATH} diff HEAD\` to see the full diff."` Otherwise: print the full diff.
+3. Prompt: `"Apply these changes? (yes / no)"`
+4. Wait for user response.
+   - `yes` or any clear affirmative: continue to the commit step below.
+   - `no` or any non-yes response: run `git -C {WORKTREE_PATH} checkout .` to discard all worktree changes, run `git worktree remove {WORKTREE_PATH}`, print `"Changes discarded."` and exit. Do not proceed to Auto-PR or push notification.
+
 **Worktree teardown** (run after printing the terminal summary above):
 
 If `Overall status: PASS`:
@@ -1193,6 +1249,29 @@ Run `gh --version` via the Bash tool to check availability.
 - If `gh pr create` fails: print the error and fall through to the git push command below.
 - If `gh` is not available: do nothing here — the push command below suffices.
 - Print: `Next: git push -u origin {WORKTREE_BRANCH}`
+
+**CI polling** (PASS only — after `gh pr create` succeeds):
+
+Set CI_STATUS = "SKIPPED (gh unavailable)" by default.
+
+Run `gh --version` to check availability. If `gh` is not available: skip CI polling. Use the default CI_STATUS.
+
+Read `agents.ci.enabled` from RESOLVED_CONFIG. If `false`: set CI_STATUS = "SKIPPED (disabled)" and skip CI polling.
+
+If `gh` is available and `agents.ci.enabled` is not false:
+1. Read `agents.ci.timeout_minutes` from RESOLVED_CONFIG (default: 10). Store as CI_TIMEOUT_SECONDS = timeout_minutes × 60.
+2. Poll loop (every 30 seconds, up to CI_TIMEOUT_SECONDS total):
+   - Run: `gh run list --branch {WORKTREE_BRANCH} --limit 1 --json status,conclusion,databaseId --jq '.[0]'`
+   - If no run found yet: wait 30 seconds and retry.
+   - If `status == "completed"`:
+     - If `conclusion == "success"`: set CI_STATUS = "PASS". Exit loop.
+     - Otherwise: set CI_STATUS = "FAIL". Run `gh run view {databaseId} --log-failed`. Print the failing step name and last 50 lines of log output. Exit loop.
+   - Otherwise (in_progress / queued): wait 30 seconds and retry.
+3. If loop exits due to timeout: set CI_STATUS = "SKIPPED (timeout)". Print: `"CI polling timed out after {timeout_minutes} minutes."`
+4. If CI_STATUS = "FAIL":
+   - Prompt: `"CI failed on [{check name}]. Re-trigger retry loop with CI context? (yes / skip)"`
+   - If `yes`: re-dispatch the relevant impl agent(s) (Backend and/or Frontend as determined by the CI log) using the Phase 3.5 retry prompt structure, prepending `CI log:\n{failing log output}` to the `[INPUTS]` block. Re-commit: `git -C {WORKTREE_PATH} add -A && git -C {WORKTREE_PATH} commit -m "nob-ci-fix: {run-id}"`. Re-push: `git push origin {WORKTREE_BRANCH}`. Re-poll once (single pass, same timeout). Update CI_STATUS from the re-poll result.
+   - If `skip` or any non-yes response: CI_STATUS remains "FAIL". Note in terminal summary.
 
 If `Overall status: FAIL` or `NEEDS REVIEW`:
 - Preserve the worktree for inspection.
@@ -1217,24 +1296,33 @@ If the PushNotification tool is not available, skip silently.
 
 Run only when `Overall status: PASS` and `agents.checkpoint.enabled` is true.
 
-Extract from agent outputs:
-1. **Test runner**: scan BACKEND_OUTPUT `Test output:` for the strings `jest`, `vitest`, `pytest`, `go test`, `rspec`, `mocha`. First match wins. Default: `unknown`.
-2. **Key routes**: extract up to 5 lines from `New API contracts:` in BACKEND_OUTPUT. If absent or `none`: use `none`.
-3. **Backend files**: first 3 paths from `Files changed:` in BACKEND_OUTPUT. If absent or `none`: use `none`.
-4. **Frontend files**: first 3 paths from `Files changed:` in FRONTEND_OUTPUT. If absent or `none`: use `none`.
-
 Run `date +%F` via the Bash tool to get TODAY (YYYY-MM-DD format).
 
-Read existing `.nob/project-memory.md` using the Read tool (or start with empty string if not found). Append this entry and write back using the Write tool:
+Extract from agent outputs:
+1. **Test runner**: scan BACKEND_OUTPUT `Test output:` for the strings `jest`, `vitest`, `pytest`, `go test`, `rspec`, `mocha`. First match wins. Default: `unknown`.
+2. **New routes**: extract up to 5 lines from `New API contracts:` in BACKEND_OUTPUT. If absent or `none`: use empty list.
+3. **Backend files**: first 3 paths from `Files changed:` in BACKEND_OUTPUT. If absent or `none`: use empty list.
+4. **Frontend files**: first 3 paths from `Files changed:` in FRONTEND_OUTPUT. If absent or `none`: use empty list.
+5. **Patterns observed**: scan BACKEND_OUTPUT and FRONTEND_OUTPUT for any explicit pattern notes (e.g. naming conventions, middleware patterns). Extract up to 3 as short summary strings. If none: use empty list.
+6. **Corrections**: check BACKEND_OUTPUT and FRONTEND_OUTPUT `Memory conflicts:` fields for any noted conflicts. If any: record them as corrections. If none: use empty list.
 
-```markdown
-## Run: {run-id} ({TODAY})
-Spec: {spec file path}
-Test runner: {detected}
-Key routes: {list, or none}
-Backend files: {top 3, or none}
-Frontend files: {top 3, or none}
+Read existing `.nob/project-memory.yml` using the Read tool. If not found, start with this base YAML structure:
+```yaml
+patterns: []
+routes: []
+file_clusters: []
+corrections: []
 ```
+
+Parse the YAML. Compute a content hash for each new entry (use a short deterministic string: `"{run-id}-{summary}"`). Before appending any entry, check whether an entry with the same summary already exists under that key — skip duplicates.
+
+Append new entries (skip if duplicate):
+- Under `patterns`: one entry per observed pattern: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{pattern description}" }`
+- Under `routes`: one entry per new route: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{METHOD} {/path}" }`
+- Under `file_clusters`: one entry: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{backend-file-1}, {frontend-file-1} changed together" }` (only if both backend and frontend files are non-empty)
+- Under `corrections`: one entry per conflict noted in `Memory conflicts:` fields: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{conflict description}" }`
+
+Write the updated YAML back to `.nob/project-memory.yml` using the Write tool.
 
 Append final summary line to RUN_LOG_PATH using the Edit tool:
 ```

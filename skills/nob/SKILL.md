@@ -1308,7 +1308,8 @@ Nob complete.
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Mode:      [single | fan-out (N slices)]
-Agents:    [comma-separated list of agents that ran]
+Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: planner(haiku) · pm-agent(haiku) · backend-agent(sonnet) · frontend-agent(sonnet) · security-agent(haiku) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
+Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: planner 4s · pm-agent 3s · backend-agent 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 
 [if Mode: fan-out:]
 Slices:

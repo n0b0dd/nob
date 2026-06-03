@@ -1110,15 +1110,39 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 
 ---
 
-## Phase 3.5: Targeted retry
+## Phase 3.5: Retry loop
 
-Note: the Security Agent is not re-dispatched during retry. SECURITY_OUTPUT from Phase 2.5 carries through to the second Reviewer run unchanged — the retry fixes spec compliance failures, not security findings.
+Note: the Security Agent is not re-dispatched during retry. SECURITY_OUTPUT from Phase 2.5 carries through unchanged — retry fixes spec compliance failures, not security findings.
 
-Read `Overall status:` from REVIEWER_OUTPUT. Set RETRY_RAN = false.
+Initialize: RETRY_COUNT = 0. PREV_RETRY_ITEMS = []. RETRY_RAN = false.
 
-If `Overall status: PASS`: skip this phase entirely and proceed to Step 4.
+--- Loop start ---
 
-If `Overall status: NEEDS REVIEW` or `Overall status: FAIL`:
+Read `Overall status:` from REVIEWER_OUTPUT.
+
+If `Overall status: PASS`: exit loop. Proceed to Step 4.
+
+Collect RETRY_ITEMS = all `✗` criterion lines, all `⚠` criterion lines, and all CONTRACT VIOLATION lines from REVIEWER_OUTPUT.
+
+**Stuck check** (skip when RETRY_COUNT == 0):
+If RETRY_COUNT > 0 AND RETRY_ITEMS is identical to PREV_RETRY_ITEMS:
+  Set RETRY_RAN = true.
+  Print:
+  ```
+  Retry stuck — same N failure(s) appeared in two consecutive passes:
+    [RETRY_ITEMS listed one per line]
+  Human review required before continuing.
+  ```
+  Exit loop. Proceed to Step 4.
+
+**Max retries check:**
+If RETRY_COUNT >= MAX_RETRIES:
+  Set RETRY_RAN = true.
+  Print:
+  ```
+  Max retries (MAX_RETRIES) reached. Human review required.
+  ```
+  Exit loop. Proceed to Step 4.
 
 **Determine which agents to re-dispatch:**
 
@@ -1131,24 +1155,30 @@ Extract from REVIEWER_OUTPUT:
   - Found in both → set both to true
 - Any CONTRACT VIOLATION in contract check → RETRY_FRONTEND = true; also set CONTRACT_RETRY = true
 
-If RETRY_BACKEND and RETRY_FRONTEND are both false: no agent can auto-fix the remaining items. Skip retry (RETRY_RAN stays false). Proceed to Step 4.
+If RETRY_BACKEND and RETRY_FRONTEND are both false: no agent can auto-fix the remaining items. Exit loop. Proceed to Step 4.
 
-Collect RETRY_ITEMS = all `✗` criterion lines, all `⚠` criterion lines, and all CONTRACT VIOLATION lines from REVIEWER_OUTPUT.
+**User gate:**
 
-**Present and ask:**
+If RETRY_COUNT == 0:
+  Print:
+  ```
+  Reviewer found N item(s) — auto-fixing (pass 1/MAX_RETRIES):
+    [RETRY_ITEMS listed one per line]
+  ```
+  (No user prompt — proceed automatically.)
+Else:
+  Print:
+  ```
+  Still failing after pass RETRY_COUNT/MAX_RETRIES:
+    [RETRY_ITEMS listed one per line]
 
-```
-Reviewer found N items:
-  [RETRY_ITEMS listed one per line]
+  Retry again? (yes / no)
+  ```
+  Wait for user response.
+  If `no` or any non-yes response: exit loop. Proceed to Step 4.
 
-Attempt to auto-fix? (yes / no)
-```
-
-Wait for response.
-
-**If no:** RETRY_RAN stays false. Proceed to Step 4.
-
-**If yes:** Set RETRY_RAN = true. Dispatch flagged agents concurrently in the same assistant turn (do not await one before dispatching the other).
+Set PREV_RETRY_ITEMS = RETRY_ITEMS.
+Set RETRY_RAN = true.
 
 **Backend retry** (only if RETRY_BACKEND = true):
 
@@ -1217,11 +1247,17 @@ Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Replace FRONTEND_O
 
 **After retry agents return:**
 
-Re-dispatch Reviewer with updated BACKEND_OUTPUT and FRONTEND_OUTPUT using the same prompt structure as Phase 3 (Mode: single path). Extract new REVIEWER_OUTPUT. This is the FINAL review — do not offer retry again regardless of status.
+Re-dispatch Reviewer with updated BACKEND_OUTPUT and FRONTEND_OUTPUT using the same prompt structure as Phase 3 (Mode: single path). Extract new REVIEWER_OUTPUT.
 
-Write updated final checkpoint (if checkpoint.enabled): read checkpoint.json, update `reviewer_output` to the new REVIEWER_OUTPUT, write back.
+Write updated checkpoint (if checkpoint.enabled): read checkpoint.json, update `reviewer_output` to the new REVIEWER_OUTPUT, write back.
 
-**Fan-out mode:** When Mode is fan-out, REVIEWER_OUTPUT covers all slices in a single combined block. If retry is triggered, re-dispatch all slices as a new batch using the same batch structure and prompt as Phase 2 fan-out. After slices complete, merge their outputs and re-run Reviewer once. This is the FINAL review — do not offer retry again.
+Increment RETRY_COUNT by 1.
+
+Go to Loop start.
+
+--- Loop end ---
+
+**Fan-out mode:** REVIEWER_OUTPUT covers all slices in a single combined block. When retry is triggered, re-dispatch all slices as a new batch using the same structure as Phase 2 fan-out. After slices complete, merge outputs and re-run Reviewer once. Increment RETRY_COUNT. Continue loop.
 
 ---
 
@@ -1320,8 +1356,11 @@ Slices:
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
 Security:  [derive from SECURITY_OUTPUT: if "[SECURITY-DISABLED]" → "SKIPPED (disabled)", if "[SECURITY-SKIPPED]" → "SKIPPED (user)", if "Status: PASS" → "PASS", if "Status: FINDINGS" → count [MEDIUM] and [LOW] lines and print "FINDINGS: N medium, M low"]
 Review status: [PASS | NEEDS REVIEW | FAIL]
-[if RETRY_RAN = true: "Retry:     ran  →  Final review: [Overall status from final REVIEWER_OUTPUT]"]
-[if RETRY_RAN = false and first review was not PASS: "Retry:     skipped"]
+[Retry line — derive from RETRY_COUNT, RETRY_RAN, and exit reason:
+  if RETRY_RAN = true and not stuck and not max-hit: "Retry:     {RETRY_COUNT} pass(es) → Final review: [Overall status from final REVIEWER_OUTPUT]"
+  if stuck: "Retry:     stuck after {RETRY_COUNT} pass(es) — same failures in 2 consecutive rounds"
+  if max retries hit: "Retry:     max retries ({MAX_RETRIES}) reached after {RETRY_COUNT} pass(es)"
+  if RETRY_RAN = false and first review was not PASS: "Retry:     skipped — [no fixable agents | user declined]"]
 [if NEEDS REVIEW or FAIL: list items from REVIEWER OUTPUT "Items for human review" section]
 
 [if any slice status is timed_out:]
@@ -1418,7 +1457,7 @@ Append final summary line to RUN_LOG_PATH using the Edit tool:
 - **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: timed_out` (store `timed_out_at: "phase2/slice-runner"`), continue other slices, report in terminal summary (Phase 2)
 - **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
-- **Reviewer status is FAIL**: print all failing items prominently; offer one targeted retry via Phase 3.5; do NOT offer a second retry
+- **Reviewer status is FAIL**: print all failing items prominently; Phase 3.5 retry loop handles up to MAX_RETRIES passes (1 automatic + user-gated after that)
 - **Non-slice agent result missing expected output block**: re-dispatch once; if still missing after re-dispatch, mark status `timed_out` (store `timed_out_at: "<phase>/<agent-name>"`). Do NOT pass null output to downstream agents. For fan-out: skip this slice and continue remaining slices. For single mode: stop pipeline and skip Reviewer.
 - **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

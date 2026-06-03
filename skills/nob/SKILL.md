@@ -1351,6 +1351,12 @@ If `Overall status: PASS`:
 - Run: `git -C {WORKTREE_PATH} commit -m "nob: {run-id}"` (skip commit if nothing to commit)
 - Run: `git worktree remove {WORKTREE_PATH}`
 - Print: `Worktree committed and removed. Branch: {WORKTREE_BRANCH}`
+
+**Auto-PR** (PASS only):
+Run `gh --version` via the Bash tool to check availability.
+- If available: run `gh pr create --title "{spec filename without path or extension}" --body "{first 3000 characters of REVIEWER_OUTPUT}" --head {WORKTREE_BRANCH}`. Print: `PR created: {returned URL}`.
+- If `gh pr create` fails: print the error and fall through to the git push command below.
+- If `gh` is not available: do nothing here — the push command below suffices.
 - Print: `Next: git push -u origin {WORKTREE_BRANCH}`
 
 If `Overall status: FAIL` or `NEEDS REVIEW`:

@@ -187,6 +187,21 @@ Also extract:
 - `agents.checkpoint.enabled` (default: true if not present)
 - `agents.checkpoint.path` (default: `.nob/` if not present)
 
+**Project memory**: check whether `.nob/project-memory.md` exists using the Read tool. If found and non-empty: store contents as PROJECT_MEMORY. Otherwise set PROJECT_MEMORY = "none".
+
+## Step 1.5: Spec pre-flight validation
+
+Skip this step for Init, Venture, Refactor, Ideate workflows, and `--plan-only` runs.
+
+For `Spec→Code` and `Bug→Fix` workflows only — validate the spec before dispatching any agents:
+
+1. **Path present**: confirm the user's message contains a file path (not empty string). If not: print `"Error: no spec file path provided. Usage: /nob implement <path-to-spec.md>"` and exit.
+2. **File exists**: use the Read tool to open the spec file. If the Read tool returns an error: print `"Error: spec file not found: <path>. Check the path and try again."` and exit.
+3. **File non-empty**: check that the file content length > 0 characters. If empty: print `"Error: spec file is empty: <path>."` and exit.
+4. **Acceptance criteria present**: check that the file content contains `## acceptance criteria` (case-insensitive substring match). If absent: print `"Error: spec file has no ## Acceptance criteria section: <path>. Add one before running nob."` and exit.
+
+If all four checks pass: proceed to Step 2.
+
 ## Step 2: Identify workflow type
 
 | Intent pattern | Workflow |

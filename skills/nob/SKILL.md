@@ -1370,6 +1370,42 @@ If the run was cancelled or hit an unrecoverable error:
 
 If WORKTREE_PATH equals the current working directory (git not available): skip teardown entirely.
 
+**Push notification** (always — after teardown regardless of status):
+
+Use the PushNotification tool with:
+- `title`: `"Nob complete"`
+- `body`: `"{workflow} · {spec filename without path} · {Overall status from REVIEWER_OUTPUT}"`
+
+If the PushNotification tool is not available, skip silently.
+
+## Step 4.5: Post-run memory write
+
+Run only when `Overall status: PASS` and `agents.checkpoint.enabled` is true.
+
+Extract from agent outputs:
+1. **Test runner**: scan BACKEND_OUTPUT `Test output:` for the strings `jest`, `vitest`, `pytest`, `go test`, `rspec`, `mocha`. First match wins. Default: `unknown`.
+2. **Key routes**: extract up to 5 lines from `New API contracts:` in BACKEND_OUTPUT. If absent or `none`: use `none`.
+3. **Backend files**: first 3 paths from `Files changed:` in BACKEND_OUTPUT. If absent or `none`: use `none`.
+4. **Frontend files**: first 3 paths from `Files changed:` in FRONTEND_OUTPUT. If absent or `none`: use `none`.
+
+Run `date +%F` via the Bash tool to get TODAY (YYYY-MM-DD format).
+
+Read existing `.nob/project-memory.md` using the Read tool (or start with empty string if not found). Append this entry and write back using the Write tool:
+
+```markdown
+## Run: {run-id} ({TODAY})
+Spec: {spec file path}
+Test runner: {detected}
+Key routes: {list, or none}
+Backend files: {top 3, or none}
+Frontend files: {top 3, or none}
+```
+
+Append final summary line to RUN_LOG_PATH using the Edit tool:
+```
+{date -u +%FT%TZ}  run            -       PASS   -  total
+```
+
 ---
 
 ## Error Handling
@@ -1386,3 +1422,9 @@ If WORKTREE_PATH equals the current working directory (git not available): skip 
 - **Init agent returns no [INIT-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Refactor agent returns no [REFACTOR-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Ideation agent returns no [IDEATION-AGENT OUTPUT] block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
+- **Pre-flight validation fails (Step 1.5)**: print specific error message, exit immediately — no agents dispatched
+- **`gh pr create` fails (M1)**: print the error output; print the `git push -u origin {WORKTREE_BRANCH}` command as fallback
+- **`.nob/project-memory.md` unreadable (L1)**: set PROJECT_MEMORY = "none", skip silently; do not block pipeline
+- **PushNotification tool unavailable (L2)**: skip silently
+- **Run log write fails (H2)**: skip silently; do not block pipeline
+- **PLAN_OUTPUT missing Complexity fields (L3)**: apply no model override; treat both layers as complex

@@ -714,6 +714,9 @@ Spec file contents:
 
 Plan context:
 {PLAN_OUTPUT}
+
+Project memory:
+{PROJECT_MEMORY}
 [/INPUTS]
 ```
 
@@ -756,6 +759,9 @@ Requirements from PM Agent:
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
 
+Project memory:
+{PROJECT_MEMORY}
+
 SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
 [/INPUTS]
 ```
@@ -793,6 +799,9 @@ Backend Agent is running in parallel — use API contracts from PM Agent output 
 No [BACKEND-AGENT OUTPUT] will be provided.
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+
+Project memory:
+{PROJECT_MEMORY}
 
 SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
 [/INPUTS]
@@ -924,6 +933,9 @@ Plan context:
 {PLAN_OUTPUT}
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+
+Project memory:
+{PROJECT_MEMORY}
 [/INPUTS]
 ```
 

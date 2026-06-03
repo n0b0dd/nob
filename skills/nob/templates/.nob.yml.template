@@ -30,6 +30,8 @@ agents:
     - security-agent
     - reviewer
   models:
+    # Models set here are always respected. For simple specs, nob automatically
+    # downgrades backend-agent and frontend-agent to haiku unless set explicitly here.
     backend-agent: sonnet   # code-writing agents need sonnet
     frontend-agent: sonnet
     planner: haiku          # planning/review/qa agents can use haiku
@@ -47,6 +49,7 @@ agents:
     ideation-agent: haiku       # feature ideation agent
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
+  max_tokens_per_run: 500000  # optional; omit or remove to disable budget guard
 
   venture:
     enabled: true           # set false to disable /nob venture detection

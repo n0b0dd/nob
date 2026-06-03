@@ -697,6 +697,8 @@ Run PM Agent first (sequential), then Backend Agent and Frontend Agent concurren
 
 **Agent 1 — PM Agent**
 
+Run `date +%s` via the Bash tool and store as PM_START_EPOCH.
+
 Read `{SKILL_BASE_DIR}/../pm-agent/SKILL.md`. Dispatch with `model: agents.models["pm-agent"] ?? "haiku"`:
 
 ```
@@ -717,9 +719,13 @@ Plan context:
 
 Extract `[PM-AGENT OUTPUT]...[/PM-AGENT OUTPUT]`. Store as PM_OUTPUT. Apply the **Output Block Validation Procedure** for PM Agent before proceeding.
 
+Run `date +%s` and store as PM_END_EPOCH. Compute PM_DURATION_MS = (PM_END_EPOCH - PM_START_EPOCH) × 1000. Read checkpoint, set `agents["pm-agent"] = { "model": "{resolved pm-agent model}", "started_at": "{PM_START_EPOCH}", "duration_ms": PM_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  pm-agent        {model}  OK    {PM_DURATION_MS}ms`.
+
 ---
 
 **Agents 2 & 3 — Backend Agent and Frontend Agent (concurrent)**
+
+Run `date +%s` and store as IMPL_START_EPOCH.
 
 Dispatch both in the same assistant turn — one Agent call for Backend, one for Frontend. Do not await Backend's result before dispatching Frontend.
 
@@ -795,6 +801,12 @@ SCOPE LIMIT: If completing this task requires touching more than 15 files, imple
 Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Store as FRONTEND_OUTPUT.
 
 ---
+
+Run `date +%s` and store as IMPL_END_EPOCH. Compute IMPL_DURATION_MS = (IMPL_END_EPOCH - IMPL_START_EPOCH) × 1000. Read checkpoint, set `agents["backend-agent"] = { "model": "{BACKEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }` and `agents["frontend-agent"] = { "model": "{FRONTEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }`, write back. Append two lines to RUN_LOG_PATH:
+```
+{date -u +%FT%TZ}  backend-agent   {BACKEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
+{date -u +%FT%TZ}  frontend-agent  {FRONTEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
+```
 
 Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
 
@@ -945,6 +957,8 @@ If Mode: fan-out — construct MERGED_OUTPUTS by concatenating all SLICE OUTPUT 
 
 **Dispatch Security Agent:**
 
+Run `date +%s` and store as SEC_START_EPOCH.
+
 Read `{SKILL_BASE_DIR}/security-agent/SKILL.md`. Dispatch with `model: agents.models["security-agent"] ?? "haiku"`:
 
 For Mode: single:
@@ -981,6 +995,8 @@ Working directory: {current working directory path}
 
 Extract `[SECURITY-AGENT OUTPUT]...[/SECURITY-AGENT OUTPUT]`. Store as SECURITY_OUTPUT. Apply the **Output Block Validation Procedure** for Security Agent before proceeding.
 
+Run `date +%s` and store as SEC_END_EPOCH. Compute SEC_DURATION_MS = (SEC_END_EPOCH - SEC_START_EPOCH) × 1000. Read checkpoint, set `agents["security-agent"] = { "model": "{resolved security-agent model}", "started_at": "{SEC_START_EPOCH}", "duration_ms": SEC_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  security-agent  {model}  OK    {SEC_DURATION_MS}ms`.
+
 **Apply severity gate:**
 
 Check SECURITY_OUTPUT for any `[CRITICAL]` lines.
@@ -1015,6 +1031,8 @@ If Mode: fan-out — construct a merged context:
 ```
 
 **Dispatch Reviewer agent:**
+
+Run `date +%s` and store as REVIEWER_START_EPOCH.
 
 Read `{SKILL_BASE_DIR}/reviewer/SKILL.md`. Dispatch with `model: agents.models["reviewer"] ?? "haiku"`:
 
@@ -1071,6 +1089,8 @@ Security Agent output:
 ```
 
 Extract `[REVIEWER OUTPUT]...[/REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT. Apply the **Output Block Validation Procedure** for Reviewer before proceeding.
+
+Run `date +%s` and store as REVIEWER_END_EPOCH. Compute REVIEWER_DURATION_MS = (REVIEWER_END_EPOCH - REVIEWER_START_EPOCH) × 1000. Read checkpoint, set `agents["reviewer"] = { "model": "{resolved reviewer model}", "started_at": "{REVIEWER_START_EPOCH}", "duration_ms": REVIEWER_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  reviewer        {model}  OK    {REVIEWER_DURATION_MS}ms`.
 
 **Write final checkpoint** (if checkpoint.enabled):
 Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full REVIEWER_OUTPUT string. Write using the Write tool.

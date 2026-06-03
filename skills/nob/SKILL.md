@@ -66,10 +66,11 @@ If the intent matches any of these patterns, skip this step entirely.
 
 Check for structure mismatch in this order:
 
-1. If `.nob.yml` exists and `stack.frontend.path` is `apps/frontend/` and `stack.backend.path` is `apps/backend/` → **no mismatch**. Skip this step.
-2. If the working directory is empty (no files other than `.git`/`.gitignore`) → **no mismatch**. Skip this step.
-3. If `apps/frontend/` or `apps/backend/` is missing AND a recognisable source directory exists elsewhere (`frontend/`, `web/`, `client/`, `src/`, `backend/`, `server/`, `api/`) → **mismatch**.
-4. If `apps/` layout is correct but `shared/core/` is absent → **partial mismatch**.
+1. If `.nob.yml` exists AND `structure.check: false` → skip this step entirely.
+2. If `.nob.yml` exists AND both `stack.frontend.path` and `stack.backend.path` are present (any value) → user has declared their layout. Skip this step.
+3. If the working directory is empty (no files other than `.git`/`.gitignore`) → **no mismatch**. Skip this step.
+4. If `apps/frontend/` or `apps/backend/` is missing AND a recognisable source directory exists elsewhere (`frontend/`, `web/`, `client/`, `src/`, `backend/`, `server/`, `api/`) → **mismatch**.
+5. If `apps/` layout is correct but `shared/core/` is absent → **partial mismatch**.
 
 When mismatch detected, store detected dir names as DETECTED_DIRS. Print:
 
@@ -118,7 +119,7 @@ If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG.
 ### Auto-detection
 
 **Frontend detection** (first match wins):
-1. Scan for `package.json` in `apps/frontend/`, `frontend/`, `web/`, `client/`, `app/` (in that order). If found, read it and check `dependencies`:
+1. Scan for `package.json` in `apps/frontend/`, `frontend/`, `web/`, `client/`, `app/`, `src/` (in that order). If found, read it and check `dependencies`:
    - Contains `next` → type `next`
    - Contains `vue` → type `vue`
    - Contains `react` or `react-dom` → type `react`
@@ -135,12 +136,13 @@ If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG.
 2. `requirements.txt` or `pyproject.toml` in `apps/backend/` or `backend/` → type `python`, path = that directory.
 3. `go.mod` in `apps/backend/` or `backend/` → type `go`, path = that directory.
 4. `pom.xml` in `apps/backend/` or `backend/` → type `java`, path = that directory.
-5. Multiple matches across steps 1–4 → ask: "I found possible backend directories: [list]. Which one should Nob use?" Wait for answer. (If only one match, use it. Skip steps 6–9.)
-6. No match in steps 1–4: check root `requirements.txt` or `pyproject.toml` → type `python`, path = `.`
-7. No match in steps 1–4: root `go.mod` → type `go`, path = `.`
-8. No match in steps 1–4: root `pom.xml` → type `java`, path = `.`
-9. No match in steps 1–4: root `package.json` contains `express`, `fastify`, `koa`, or `hapi` in `dependencies` → type `node`, path = `.`
-10. None found → `stack.backend.enabled: false`
+5. Scan `src/` for backend markers (first match wins): `package.json` with `express`, `fastify`, `koa`, or `hapi` in `dependencies` → type `node`, path = `src/`; `requirements.txt` or `pyproject.toml` → type `python`, path = `src/`; `go.mod` → type `go`, path = `src/`; `pom.xml` → type `java`, path = `src/`.
+6. Multiple matches across steps 1–5 → ask: "I found possible backend directories: [list]. Which one should Nob use?" Wait for answer. (If only one match, use it. Skip steps 7–10.)
+7. No match in steps 1–5: check root `requirements.txt` or `pyproject.toml` → type `python`, path = `.`
+8. No match in steps 1–5: root `go.mod` → type `go`, path = `.`
+9. No match in steps 1–5: root `pom.xml` → type `java`, path = `.`
+10. No match in steps 1–5: root `package.json` contains `express`, `fastify`, `koa`, or `hapi` in `dependencies` → type `node`, path = `.`
+11. None found → `stack.backend.enabled: false`
 
 **If both frontend and backend are undetectable:**
 Ask: "Could not detect your stack. What is your frontend directory? (or 'none' to skip)"

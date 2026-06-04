@@ -67,11 +67,6 @@ Derive a slug from the idea: lowercase words, hyphens, max 5 words (e.g. "user n
 
 Ensure `{SPECS_DIR}/` exists: run `mkdir -p {SPECS_DIR}` using the Bash tool.
 
-Before writing, evaluate two conditions from CLARIFICATIONS:
-
-- **NEEDS_API_CONTRACTS** = true if answers mention HTTP endpoints, client-server data exchange, a new route, a REST or GraphQL call, or any named API operation.
-- **NEEDS_DATA_MODELS** = true if answers mention persisting data, a database record, a file format, a structured object with named fields, or any schema the system stores or returns.
-
 Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structure:
 
 ```markdown
@@ -94,22 +89,10 @@ Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structur
 - [add as many as the idea and answers imply]
 
 ## API contracts
-<!-- Include this section only when NEEDS_API_CONTRACTS = true. Otherwise write: not applicable -->
-- [METHOD] /exact/path
-  - Request: `{ fieldName: type, fieldName: type }`
-  - Response: `{ fieldName: type, fieldName: type }`
-  - Notes: [auth required? idempotent? paginated?]
-<!-- One block per endpoint. Use exact field names from CLARIFICATIONS where given.
-     Write `type: unknown — to be decided` for any field whose type was not specified. -->
+not applicable — API contracts are defined by the Tech Lead Agent during implementation
 
 ## Data models
-<!-- Include this section only when NEEDS_DATA_MODELS = true. Otherwise write: not applicable -->
-[Entity name]:
-  - fieldName: type        # [brief note on what this field holds]
-  - fieldName: type
-<!-- One block per entity. If the entity maps to a database table or file format, say so.
-     Write `type: unknown — to be decided` for any field whose type was not specified.
-     Do not invent fields not implied by CLARIFICATIONS — write `not specified` instead. -->
+not applicable — data schemas are defined by the Tech Lead Agent during implementation
 
 ## Acceptance criteria
 - [ ] [specific, testable criterion — each requirement maps to at least one checkbox]
@@ -213,9 +196,9 @@ If not triggered: skip this step and proceed to Step 2.
 2. For each service: run `WebSearch "{service} {feature} API reference"`. From the results, identify the official documentation URL (prefer the service's own docs domain over third-party tutorials).
 3. Run `WebFetch` on the official URL. Extract only the relevant portion: endpoint path, HTTP method, required request parameters, response schema for the specific feature mentioned in the spec.
 4. Store extracted shapes as `THIRD_PARTY_CONTEXT` (keyed by service name).
-5. Use `THIRD_PARTY_CONTEXT` when writing `API contracts:` in Step 2 — replace inferred shapes with authoritative ones.
+5. Store `THIRD_PARTY_CONTEXT` in your output under `Third-party API notes:` — the Tech Lead Agent will use these when writing API contracts.
 
-If no official docs URL is clearly identifiable from search results: skip that service. Note in the output block's `API contracts:` field: `"API shapes for {service} could not be resolved — contracts are inferred, verify before shipping."`
+If no official docs URL is clearly identifiable from search results: skip that service. Note in the output block's `Third-party API notes:` field: `"API shapes for {service} could not be resolved — Tech Lead Agent should verify before defining contracts."`
 
 **Fetch limit:** Maximum 2 fetches. Do not fetch the same URL twice.
 
@@ -232,7 +215,6 @@ From the spec, extract:
 5. **Edge cases** — explicitly mentioned only. If none: "none specified"
 6. **Out of scope** — explicitly excluded. If none: "none specified"
 7. **Ambiguities** — requirements that could be interpreted two ways, phrased as questions
-8. **API contracts** — re-express the contracts from item 3 in a canonical typed format for downstream consumers (backend, frontend, reviewer). For each entry in `Backend changes needed:`, extract: exact HTTP method, exact path, request body shape as `{ fieldName: type, ... }`, and response shape as `{ fieldName: type, ... }`. Use exact field names from the spec where given. For any field whose type is not specified, write `any` and add it as a `[non-blocking]` ambiguity. If there are no backend API changes in scope, write `none`.
 
 ### Step 3: Never invent requirements
 
@@ -243,7 +225,7 @@ Do NOT add anything not in the spec. Mark missing items as "not specified" and l
 Your output block must:
 - Begin with `[PM OUTPUT]` on its own line (no leading spaces or characters)
 - End with `[/PM OUTPUT]` on its own line
-- Include every required field: `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:`
+- Include every required field: `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:`
 - Use the exact field names listed — no synonyms, no omissions
 
 Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.
@@ -270,8 +252,7 @@ Frontend changes needed:
 - [or: not specified in spec — frontend agent should infer from acceptance criteria]
 
 API contracts:
-- [METHOD] [/exact/path]: request: { fieldName: type, ... } → response: { fieldName: type, ... }
-- none — no HTTP API changes in this feature
+not applicable — defined by Tech Lead Agent
 
 Edge cases to handle:
 - [case, or: none specified]
@@ -283,6 +264,8 @@ Ambiguities flagged:
 - [blocking] [question that must be answered before implementation can proceed]
 - [non-blocking] [question where implementation agent can make a safe assumption]
 (or: none)
+Third-party API notes:
+- [service name]: [relevant API shape or endpoint, or: none]
 [/PM OUTPUT]
 ```
 

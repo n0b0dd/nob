@@ -8,13 +8,15 @@ description: 'Use when asked to implement a feature spec, fix a bug, sync client
 ## Overview
 Nob automates cross-layer development workflows in a fullstack monorepo. This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the Planner and ends with the Reviewer.
 
+Sub-skills (`/nob:planner`, `/nob:backend`, `/nob:frontend`, `/nob:security`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`, `/nob:ask`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
+
 ## Agent Dispatch Model
 
 Each sub-skill runs as an **isolated Agent tool call** — a fresh context with only its required inputs. The hub reads each sub-skill's SKILL.md file, constructs a focused prompt, dispatches via the Agent tool, and extracts only the labeled output block from the result. The hub's own context stays under ~10k tokens regardless of codebase size.
 
 ## Setup: Resolve skill base directory
 
-Read the system context for a line starting with `Base directory for this skill:`. Extract the path and store it as SKILL_BASE_DIR. Every sub-skill path in this document is written as `{SKILL_BASE_DIR}/X/SKILL.md` — replace `{SKILL_BASE_DIR}` with the extracted path before using the Read tool.
+Read the system context for a line starting with `Base directory for this skill:`. Extract the path and store it as SKILL_BASE_DIR. Every sub-skill path in this document is written as `{SKILL_BASE_DIR}/../X/SKILL.md` — replace `{SKILL_BASE_DIR}` with the extracted path before using the Read tool.
 
 Example: if the system context shows `Base directory for this skill: /home/user/.claude/plugins/cache/n0b0dd/nob/1.0.0/skills/nob`, then SKILL_BASE_DIR is `/home/user/.claude/plugins/cache/n0b0dd/nob/1.0.0/skills/nob`.
 
@@ -81,11 +83,11 @@ Refactor now before proceeding? (yes / skip)
 ```
 
 Wait for user response:
-- `yes` → read `{SKILL_BASE_DIR}/refactor-agent/SKILL.md`. Dispatch an Agent with `model: "sonnet"` and this prompt:
+- `yes` → read `{SKILL_BASE_DIR}/../refactor/SKILL.md`. Dispatch an Agent with `model: "sonnet"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/refactor-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../refactor/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -97,7 +99,7 @@ Refactor mode: mid-run
 [/INPUTS]
 ```
 
-Extract `[REFACTOR-AGENT OUTPUT]...[/REFACTOR-AGENT OUTPUT]`. Store as REFACTOR_OUTPUT.
+Extract `[REFACTOR OUTPUT]...[/REFACTOR OUTPUT]`. Store as REFACTOR_OUTPUT.
 
 If `Status: complete` in REFACTOR_OUTPUT: print "Refactor complete. Continuing with your original request..." then proceed to Step 1.
 If `Status: cancelled` or `Status: failed`: proceed to Step 1 without changes. Note the skip in the terminal summary.
@@ -162,24 +164,24 @@ Skip (not a project root):
 
 ```yaml
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer, ideation-agent, ask-agent]
+  enabled: [planner, pm, backend, frontend, security, reviewer, ideation, ask]
   models:
-    backend-agent: sonnet
-    frontend-agent: sonnet
+    backend: sonnet
+    frontend: sonnet
     planner: haiku
-    pm-agent: haiku
+    pm: haiku
     reviewer: haiku
-    security-agent: haiku
-    init-agent: sonnet
+    security: haiku
+    init: sonnet
     idea-framer: haiku
     market-researcher: sonnet
     business-modeler: haiku
     gtm-strategist: haiku
     financial-modeler: haiku
     venture-reviewer: haiku
-    refactor-agent: sonnet
-    ideation-agent: haiku
-    ask-agent: haiku
+    refactor: sonnet
+    ideation: haiku
+    ask: haiku
   max_parallel_slices: 3
   venture:
     enabled: true
@@ -202,8 +204,8 @@ Also extract:
 - `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
 
 **Stack guidance paths**: compute from SKILL_BASE_DIR and resolved stack types:
-- BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/backend-agent/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)
-- FRONTEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/frontend-agent/stacks/{stack.frontend.type}.md` (or `none` if `stack.frontend.enabled: false`)
+- BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/../backend/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)
+- FRONTEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/../frontend/stacks/{stack.frontend.type}.md` (or `none` if `stack.frontend.enabled: false`)
 
 **Project memory**: load structured memory in this order:
 
@@ -266,12 +268,12 @@ If the identified workflow is `Ask`, skip to the **Ask workflow early exit** sec
 If the identified workflow is `Init`:
 - Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
 - Do not read or check for a checkpoint file.
-- Read `{SKILL_BASE_DIR}/init-agent/SKILL.md`.
-- Dispatch an Agent with `model: agents.models["init-agent"] ?? "sonnet"` and this prompt:
+- Read `{SKILL_BASE_DIR}/../init/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["init"] ?? "sonnet"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/init-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../init/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -280,7 +282,7 @@ User intent: {user's original message}
 [/INPUTS]
 ```
 
-- Extract `[INIT-AGENT OUTPUT]...[/INIT-AGENT OUTPUT]` from the result. Store as INIT_OUTPUT.
+- Extract `[INIT OUTPUT]...[/INIT OUTPUT]` from the result. Store as INIT_OUTPUT.
 - Jump directly to Step 4 (Print terminal summary) using the Init terminal summary format below.
 
 ## Venture workflow early exit
@@ -289,12 +291,12 @@ If the identified workflow is `Venture`:
 - Read `agents.venture.enabled` from RESOLVED_CONFIG. Default to `true` if absent.
 - If `false`: print "Venture mode is disabled in `.nob.yml`. Set `agents.venture.enabled: true` to enable." and exit.
 - Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
-- Read `{SKILL_BASE_DIR}/venture-workflow/SKILL.md`.
+- Read `{SKILL_BASE_DIR}/../venture-workflow/SKILL.md`.
 - Dispatch an Agent with `model: "sonnet"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/venture-workflow/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../venture-workflow/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -322,11 +324,11 @@ Agent models:
 
 If the identified workflow is `Refactor`:
 - Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
-- Read `{SKILL_BASE_DIR}/refactor-agent/SKILL.md`.
-- Dispatch an Agent with `model: agents.models["refactor-agent"] ?? "sonnet"` and this prompt:
+- Read `{SKILL_BASE_DIR}/../refactor/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["refactor"] ?? "sonnet"` and this prompt:
 
     [INSTRUCTIONS]
-    {full contents of {SKILL_BASE_DIR}/refactor-agent/SKILL.md}
+    {full contents of {SKILL_BASE_DIR}/../refactor/SKILL.md}
     [/INSTRUCTIONS]
 
     [INPUTS]
@@ -337,7 +339,7 @@ If the identified workflow is `Refactor`:
     Refactor mode: explicit
     [/INPUTS]
 
-- Extract `[REFACTOR-AGENT OUTPUT]...[/REFACTOR-AGENT OUTPUT]` from the result. Store as REFACTOR_OUTPUT.
+- Extract `[REFACTOR OUTPUT]...[/REFACTOR OUTPUT]` from the result. Store as REFACTOR_OUTPUT.
 - Jump directly to Step 4 (Print terminal summary) using the Refactor terminal summary format.
 
 ## Ideation workflow early exit
@@ -346,12 +348,12 @@ If the identified workflow is `Ideate`:
 - Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
 - Parse direction: strip trigger phrases ("nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add"). Remaining text = direction; default = "general improvements".
 - Parse constraints: flags `--simple`, `--no-new-deps`, `--mobile-first`, `--backend-only`, `--frontend-only` or natural language equivalents. Store as a plain string, empty if none.
-- Read `{SKILL_BASE_DIR}/ideation-agent/SKILL.md`.
-- Dispatch an Agent with `model: agents.models["ideation-agent"] ?? "haiku"` and this prompt:
+- Read `{SKILL_BASE_DIR}/../ideation/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["ideation"] ?? "haiku"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/ideation-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../ideation/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -362,7 +364,7 @@ Current date: {today's date in YYYY-MM-DD format}
 [/INPUTS]
 ```
 
-- Extract `[IDEATION-AGENT OUTPUT]...[/IDEATION-AGENT OUTPUT]` from the result. Store as IDEATION_OUTPUT.
+- Extract `[IDEATION OUTPUT]...[/IDEATION OUTPUT]` from the result. Store as IDEATION_OUTPUT.
 - If extraction fails: re-dispatch once with the same prompt. If still missing: print raw agent output and stop.
 - Jump directly to Step 4 (Print terminal summary) using the Ideation terminal summary format.
 
@@ -373,12 +375,12 @@ Current date: {today's date in YYYY-MM-DD format}
 If the identified workflow is `Ask`:
 - Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
 - Parse question: strip trigger phrases ("nob ask", "ask"). Remaining text = question. If nothing remains, ask: "What would you like to know about the codebase?"
-- Read `{SKILL_BASE_DIR}/ask-agent/SKILL.md`.
-- Dispatch an Agent with `model: agents.models["ask-agent"] ?? "haiku"` and this prompt:
+- Read `{SKILL_BASE_DIR}/../ask/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["ask"] ?? "haiku"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/ask-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../ask/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -448,11 +450,11 @@ Skip this phase if Phase 0 restored a completed `phase1` checkpoint (go directly
 
 **Dispatch Planner agent:**
 
-Read `{SKILL_BASE_DIR}/planner/SKILL.md`. Dispatch an Agent with `model: agents.models["planner"] ?? "haiku"` and this prompt:
+Read `{SKILL_BASE_DIR}/../planner/SKILL.md`. Dispatch an Agent with `model: agents.models["planner"] ?? "haiku"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/planner/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../planner/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -478,8 +480,8 @@ If PLAN_OUTPUT ambiguities section contains anything other than "none": present 
 **L3: Complexity-based model override**
 
 Read `Complexity:` from PLAN_OUTPUT. Apply independently per layer:
-- If `Complexity.backend = "simple"` AND `backend-agent` key is absent from the user's `.nob.yml` `agents.models` block (or `.nob.yml` was not found): override backend-agent's resolved model to `haiku`. Store as BACKEND_MODEL_RESOLVED.
-- If `Complexity.frontend = "simple"` AND `frontend-agent` key is absent from the user's `.nob.yml` `agents.models` block: override frontend-agent's resolved model to `haiku`. Store as FRONTEND_MODEL_RESOLVED.
+- If `Complexity.backend = "simple"` AND `backend` key is absent from the user's `.nob.yml` `agents.models` block (or `.nob.yml` was not found): override backend's resolved model to `haiku`. Store as BACKEND_MODEL_RESOLVED.
+- If `Complexity.frontend = "simple"` AND `frontend` key is absent from the user's `.nob.yml` `agents.models` block: override frontend's resolved model to `haiku`. Store as FRONTEND_MODEL_RESOLVED.
 - Otherwise: use the model values extracted from RESOLVED_CONFIG as-is.
 
 If PLAN_OUTPUT does not contain Complexity fields: apply no override (treat both as complex).
@@ -552,11 +554,11 @@ Run PM Agent first (sequential), then Backend Agent and Frontend Agent concurren
 
 Run `date +%s` via the Bash tool and store as PM_START_EPOCH.
 
-Read `{SKILL_BASE_DIR}/../pm-agent/SKILL.md`. Dispatch with `model: agents.models["pm-agent"] ?? "haiku"`:
+Read `{SKILL_BASE_DIR}/../pm/SKILL.md`. Dispatch with `model: agents.models["pm"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../pm-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../pm/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -573,9 +575,9 @@ Project memory:
 [/INPUTS]
 ```
 
-Extract `[PM-AGENT OUTPUT]...[/PM-AGENT OUTPUT]`. Store as PM_OUTPUT. Apply the **Output Block Validation Procedure** for PM Agent before proceeding.
+Extract `[PM OUTPUT]...[/PM OUTPUT]`. Store as PM_OUTPUT. Apply the **Output Block Validation Procedure** for PM Agent before proceeding.
 
-Run `date +%s` and store as PM_END_EPOCH. Compute PM_DURATION_MS = (PM_END_EPOCH - PM_START_EPOCH) × 1000. Read checkpoint, set `agents["pm-agent"] = { "model": "{resolved pm-agent model}", "started_at": "{PM_START_EPOCH}", "duration_ms": PM_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  pm-agent        {model}  OK    {PM_DURATION_MS}ms`.
+Run `date +%s` and store as PM_END_EPOCH. Compute PM_DURATION_MS = (PM_END_EPOCH - PM_START_EPOCH) × 1000. Read checkpoint, set `agents["pm"] = { "model": "{resolved pm model}", "started_at": "{PM_START_EPOCH}", "duration_ms": PM_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  pm              {model}  OK    {PM_DURATION_MS}ms`.
 
 ---
 
@@ -591,11 +593,11 @@ Skip if `stack.backend.enabled: false`. Store BACKEND_OUTPUT as "Backend agent w
 
 For `API→Sync` workflow: skip. Store BACKEND_OUTPUT as "Backend agent was skipped (API→Sync workflow — backend already changed)."
 
-Otherwise read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`. Dispatch with `model: agents.models["backend-agent"] ?? "haiku"`:
+Otherwise read `{SKILL_BASE_DIR}/../backend/SKILL.md`. Dispatch with `model: agents.models["backend"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/backend-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../backend/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -621,7 +623,7 @@ SCOPE LIMIT: If completing this task requires touching more than 15 files, imple
 [/INPUTS]
 ```
 
-Extract `[BACKEND-AGENT OUTPUT]...[/BACKEND-AGENT OUTPUT]`. Store as BACKEND_OUTPUT.
+Extract `[BACKEND OUTPUT]...[/BACKEND OUTPUT]`. Store as BACKEND_OUTPUT.
 
 ---
 
@@ -631,11 +633,11 @@ Skip if `stack.frontend.enabled: false`. Store FRONTEND_OUTPUT as "Frontend agen
 
 For `API→Sync` workflow: do NOT skip — frontend still runs to consume the changed API contracts.
 
-Otherwise read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`. Dispatch with `model: agents.models["frontend-agent"] ?? "haiku"`:
+Otherwise read `{SKILL_BASE_DIR}/../frontend/SKILL.md`. Dispatch with `model: agents.models["frontend"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/frontend-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../frontend/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -653,7 +655,7 @@ Requirements from PM Agent:
 {PM_OUTPUT}
 
 Backend Agent is running in parallel — use API contracts from PM Agent output above.
-No [BACKEND-AGENT OUTPUT] will be provided.
+No [BACKEND OUTPUT] will be provided.
 
 {if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
 
@@ -664,14 +666,14 @@ SCOPE LIMIT: If completing this task requires touching more than 15 files, imple
 [/INPUTS]
 ```
 
-Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Store as FRONTEND_OUTPUT.
+Extract `[FRONTEND OUTPUT]...[/FRONTEND OUTPUT]`. Store as FRONTEND_OUTPUT.
 
 ---
 
-Run `date +%s` and store as IMPL_END_EPOCH. Compute IMPL_DURATION_MS = (IMPL_END_EPOCH - IMPL_START_EPOCH) × 1000. Read checkpoint, set `agents["backend-agent"] = { "model": "{BACKEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }` and `agents["frontend-agent"] = { "model": "{FRONTEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }`, write back. Append two lines to RUN_LOG_PATH:
+Run `date +%s` and store as IMPL_END_EPOCH. Compute IMPL_DURATION_MS = (IMPL_END_EPOCH - IMPL_START_EPOCH) × 1000. Read checkpoint, set `agents["backend"] = { "model": "{BACKEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }` and `agents["frontend"] = { "model": "{FRONTEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }`, write back. Append two lines to RUN_LOG_PATH:
 ```
-{date -u +%FT%TZ}  backend-agent   {BACKEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
-{date -u +%FT%TZ}  frontend-agent  {FRONTEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
+{date -u +%FT%TZ}  backend         {BACKEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
+{date -u +%FT%TZ}  frontend        {FRONTEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
 ```
 
 Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
@@ -686,13 +688,13 @@ Filter SLICES to only those with `status: pending` or `status: in_progress` (ski
 
 Group pending SLICES into batches of `max_parallel_slices`. For each batch:
 
-**Dispatch all slices in the batch in the same assistant turn — one Agent call per slice, all in one response.** Do not await any result before dispatching the next. Use `model: agents.models["backend-agent"] ?? "sonnet"`.
+**Dispatch all slices in the batch in the same assistant turn — one Agent call per slice, all in one response.** Do not await any result before dispatching the next. Use `model: agents.models["backend"] ?? "sonnet"`.
 
-Read `{SKILL_BASE_DIR}/slice-runner/SKILL.md`. Each slice gets this prompt:
+Read `{SKILL_BASE_DIR}/../slice-runner/SKILL.md`. Each slice gets this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/slice-runner/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../slice-runner/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -700,9 +702,9 @@ Working directory: {working directory path}
 Slice name: {slice-name}
 Slice scope: {slice scope from PLAN_OUTPUT}
 
-PM Agent skill path: {SKILL_BASE_DIR}/../pm-agent/SKILL.md
-Backend Agent skill path: {SKILL_BASE_DIR}/backend-agent/SKILL.md
-Frontend Agent skill path: {SKILL_BASE_DIR}/frontend-agent/SKILL.md
+PM Agent skill path: {SKILL_BASE_DIR}/../pm/SKILL.md
+Backend Agent skill path: {SKILL_BASE_DIR}/../backend/SKILL.md
+Frontend Agent skill path: {SKILL_BASE_DIR}/../frontend/SKILL.md
 Backend Agent stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
 Frontend Agent stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
 
@@ -740,7 +742,7 @@ After all batches complete:
 
 ## Phase 2.5: Security review
 
-If `security-agent` is not in `agents.enabled`: set SECURITY_OUTPUT = "[SECURITY-DISABLED]" and skip the rest of this phase. Proceed to Phase 3.
+If `security` is not in `agents.enabled`: set SECURITY_OUTPUT = "[SECURITY-DISABLED]" and skip the rest of this phase. Proceed to Phase 3.
 
 **Prepare Security Agent input:**
 
@@ -757,31 +759,31 @@ If Mode: fan-out — construct MERGED_OUTPUTS by concatenating all SLICE OUTPUT 
 
 Run `date +%s` and store as SEC_START_EPOCH.
 
-Read `{SKILL_BASE_DIR}/security-agent/SKILL.md`. Dispatch with `model: agents.models["security-agent"] ?? "haiku"`:
+Read `{SKILL_BASE_DIR}/../security/SKILL.md`. Dispatch with `model: agents.models["security"] ?? "haiku"`:
 
 For Mode: single:
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/security-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../security/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
 Working directory: {current working directory path}
 
-[BACKEND-AGENT OUTPUT]
+[BACKEND OUTPUT]
 {BACKEND_OUTPUT}
-[/BACKEND-AGENT OUTPUT]
+[/BACKEND OUTPUT]
 
-[FRONTEND-AGENT OUTPUT]
+[FRONTEND OUTPUT]
 {FRONTEND_OUTPUT}
-[/FRONTEND-AGENT OUTPUT]
+[/FRONTEND OUTPUT]
 [/INPUTS]
 ```
 
 For Mode: fan-out:
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/security-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../security/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -791,9 +793,9 @@ Working directory: {current working directory path}
 [/INPUTS]
 ```
 
-Extract `[SECURITY-AGENT OUTPUT]...[/SECURITY-AGENT OUTPUT]`. Store as SECURITY_OUTPUT. Apply the **Output Block Validation Procedure** for Security Agent before proceeding.
+Extract `[SECURITY OUTPUT]...[/SECURITY OUTPUT]`. Store as SECURITY_OUTPUT. Apply the **Output Block Validation Procedure** for Security Agent before proceeding.
 
-Run `date +%s` and store as SEC_END_EPOCH. Compute SEC_DURATION_MS = (SEC_END_EPOCH - SEC_START_EPOCH) × 1000. Read checkpoint, set `agents["security-agent"] = { "model": "{resolved security-agent model}", "started_at": "{SEC_START_EPOCH}", "duration_ms": SEC_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  security-agent  {model}  OK    {SEC_DURATION_MS}ms`.
+Run `date +%s` and store as SEC_END_EPOCH. Compute SEC_DURATION_MS = (SEC_END_EPOCH - SEC_START_EPOCH) × 1000. Read checkpoint, set `agents["security"] = { "model": "{resolved security model}", "started_at": "{SEC_START_EPOCH}", "duration_ms": SEC_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  security        {model}  OK    {SEC_DURATION_MS}ms`.
 
 **Apply severity gate:**
 
@@ -832,13 +834,13 @@ If Mode: fan-out — construct a merged context:
 
 Run `date +%s` and store as REVIEWER_START_EPOCH.
 
-Read `{SKILL_BASE_DIR}/reviewer/SKILL.md`. Dispatch with `model: agents.models["reviewer"] ?? "haiku"`:
+Read `{SKILL_BASE_DIR}/../reviewer/SKILL.md`. Dispatch with `model: agents.models["reviewer"] ?? "haiku"`:
 
 **For Mode: single**, use this [INPUTS] block ending:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/reviewer/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../reviewer/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -866,7 +868,7 @@ Security Agent output:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/reviewer/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../reviewer/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -1006,11 +1008,11 @@ Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_
 - If DIAG_OUTPUT non-null: extract `Backend fix scope:` paths as BACKEND_FIX_SCOPE (empty→null if RETRY_BACKEND=true); extract `Frontend fix scope:` paths as FRONTEND_FIX_SCOPE (empty→null if RETRY_FRONTEND=true).
 - If DIAG_OUTPUT null: BACKEND_FIX_SCOPE = null, FRONTEND_FIX_SCOPE = null.
 
-**Backend retry** (if RETRY_BACKEND = true) — read `{SKILL_BASE_DIR}/backend-agent/SKILL.md`, dispatch with `model: agents.models["backend-agent"] ?? "haiku"`:
+**Backend retry** (if RETRY_BACKEND = true) — read `{SKILL_BASE_DIR}/../backend/SKILL.md`, dispatch with `model: agents.models["backend"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/backend-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../backend/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -1045,13 +1047,13 @@ Root cause (from diagnostic):
 [/INPUTS]
 ```
 
-Extract `[BACKEND-AGENT OUTPUT]...[/BACKEND-AGENT OUTPUT]`. Replace BACKEND_OUTPUT with this result.
+Extract `[BACKEND OUTPUT]...[/BACKEND OUTPUT]`. Replace BACKEND_OUTPUT with this result.
 
-**Frontend retry** (if RETRY_FRONTEND = true) — read `{SKILL_BASE_DIR}/frontend-agent/SKILL.md`, dispatch with `model: agents.models["frontend-agent"] ?? "haiku"`:
+**Frontend retry** (if RETRY_FRONTEND = true) — read `{SKILL_BASE_DIR}/../frontend/SKILL.md`, dispatch with `model: agents.models["frontend"] ?? "haiku"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/frontend-agent/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../frontend/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
@@ -1091,7 +1093,7 @@ Root cause (from diagnostic):
 [/INPUTS]
 ```
 
-Extract `[FRONTEND-AGENT OUTPUT]...[/FRONTEND-AGENT OUTPUT]`. Replace FRONTEND_OUTPUT with this result.
+Extract `[FRONTEND OUTPUT]...[/FRONTEND OUTPUT]`. Replace FRONTEND_OUTPUT with this result.
 
 **After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3 (Mode: single). Extract new REVIEWER_OUTPUT. If checkpoint.enabled: update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
 
@@ -1175,7 +1177,7 @@ Next steps:
   6. When ready:     git push -u origin nob/init
 ```
 
-If any field is unavailable (e.g. init-agent returned partial output), substitute "unknown" for that field.
+If any field is unavailable (e.g. init returned partial output), substitute "unknown" for that field.
 
 **For all other workflows:**
 
@@ -1185,8 +1187,8 @@ Nob complete.
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Mode:      [single | fan-out (N slices)]
-Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: planner(haiku) · pm-agent(haiku) · backend-agent(sonnet) · frontend-agent(sonnet) · security-agent(haiku) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
-Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: planner 4s · pm-agent 3s · backend-agent 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
+Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: planner(haiku) · pm(haiku) · backend(sonnet) · frontend(sonnet) · security(haiku) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
+Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: planner 4s · pm 3s · backend 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 
 [if Mode: fan-out:]
 Slices:
@@ -1335,7 +1337,7 @@ Append final summary line to RUN_LOG_PATH using the Edit tool:
 
 - **.nob.yml not found**: run auto-detection (Step 1)
 - **Checkpoint file corrupted/unparseable**: warn user, start fresh run (Phase 0)
-- **Sub-skill file not found**: warn "sub-skill file {SKILL_BASE_DIR}/[name]/SKILL.md not found — ensure the nob plugin is installed correctly"
+- **Sub-skill file not found**: warn "sub-skill file {SKILL_BASE_DIR}/../[name]/SKILL.md not found — ensure the nob plugin is installed correctly"
 - **Planner output has ambiguities**: pause and ask user before proceeding (Phase 1)
 - **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: timed_out` (store `timed_out_at: "phase2/slice-runner"`), continue other slices, report in terminal summary (Phase 2)
 - **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer

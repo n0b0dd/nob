@@ -1,6 +1,6 @@
 ---
-name: nob-pm-agent
-description: "Use directly to turn a rough idea into a spec file, or as part of the Nob pipeline to extract structured requirements from a spec. Triggers on: 'pm-agent [idea or spec path]'. Spec-writing mode: plain text input → research codebase → clarifying questions → write spec → optionally run /nob. Requirements mode: file path input → extract structured requirements block."
+name: pm
+description: "Use directly to turn a rough idea into a spec file, or as part of the Nob pipeline to extract structured requirements from a spec. Triggers on: 'pm [idea or spec path]'. Spec-writing mode: plain text input → research codebase → clarifying questions → write spec → optionally run /nob. Requirements mode: file path input → extract structured requirements block."
 ---
 
 # Nob — PM Agent
@@ -67,6 +67,11 @@ Derive a slug from the idea: lowercase words, hyphens, max 5 words (e.g. "user n
 
 Ensure `{SPECS_DIR}/` exists: run `mkdir -p {SPECS_DIR}` using the Bash tool.
 
+Before writing, evaluate two conditions from CLARIFICATIONS:
+
+- **NEEDS_API_CONTRACTS** = true if answers mention HTTP endpoints, client-server data exchange, a new route, a REST or GraphQL call, or any named API operation.
+- **NEEDS_DATA_MODELS** = true if answers mention persisting data, a database record, a file format, a structured object with named fields, or any schema the system stores or returns.
+
 Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structure:
 
 ```markdown
@@ -87,6 +92,24 @@ Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structur
 ## Requirements
 - [requirement derived from the idea and clarifying answers — specific and testable]
 - [add as many as the idea and answers imply]
+
+## API contracts
+<!-- Include this section only when NEEDS_API_CONTRACTS = true. Otherwise write: not applicable -->
+- [METHOD] /exact/path
+  - Request: `{ fieldName: type, fieldName: type }`
+  - Response: `{ fieldName: type, fieldName: type }`
+  - Notes: [auth required? idempotent? paginated?]
+<!-- One block per endpoint. Use exact field names from CLARIFICATIONS where given.
+     Write `type: unknown — to be decided` for any field whose type was not specified. -->
+
+## Data models
+<!-- Include this section only when NEEDS_DATA_MODELS = true. Otherwise write: not applicable -->
+[Entity name]:
+  - fieldName: type        # [brief note on what this field holds]
+  - fieldName: type
+<!-- One block per entity. If the entity maps to a database table or file format, say so.
+     Write `type: unknown — to be decided` for any field whose type was not specified.
+     Do not invent fields not implied by CLARIFICATIONS — write `not specified` instead. -->
 
 ## Acceptance criteria
 - [ ] [specific, testable criterion — each requirement maps to at least one checkbox]
@@ -124,7 +147,7 @@ Loop:
 1. Wait for user input.
 2. If the input is "done", "looks good", "ok", "ship it", "proceed", "lgtm", "yes", or any other clear affirmative → exit loop and continue to Step 4.
 3. Otherwise, parse the user's request:
-   - Identify the target section: match the user's words against the spec's section headers (`## Summary`, `## Users`, `## User flow`, `## Requirements`, `## Acceptance criteria`, `## Builds on`, `## Constraints`, `## Error states`, `## Out of scope`, `## Open questions`)
+   - Identify the target section: match the user's words against the spec's section headers (`## Summary`, `## Users`, `## User flow`, `## Requirements`, `## API contracts`, `## Data models`, `## Acceptance criteria`, `## Builds on`, `## Constraints`, `## Error states`, `## Out of scope`, `## Open questions`)
    - If the section reference is ambiguous or absent, use the full request as the change description and apply it to the most relevant section.
 4. Apply the targeted edit:
    - Read the current spec file using the Read tool.
@@ -209,7 +232,7 @@ From the spec, extract:
 5. **Edge cases** — explicitly mentioned only. If none: "none specified"
 6. **Out of scope** — explicitly excluded. If none: "none specified"
 7. **Ambiguities** — requirements that could be interpreted two ways, phrased as questions
-8. **API contracts** — re-express the contracts from item 3 in a canonical typed format for downstream consumers (backend-agent, frontend-agent, reviewer). For each entry in `Backend changes needed:`, extract: exact HTTP method, exact path, request body shape as `{ fieldName: type, ... }`, and response shape as `{ fieldName: type, ... }`. Use exact field names from the spec where given. For any field whose type is not specified, write `any` and add it as a `[non-blocking]` ambiguity. If there are no backend API changes in scope, write `none`.
+8. **API contracts** — re-express the contracts from item 3 in a canonical typed format for downstream consumers (backend, frontend, reviewer). For each entry in `Backend changes needed:`, extract: exact HTTP method, exact path, request body shape as `{ fieldName: type, ... }`, and response shape as `{ fieldName: type, ... }`. Use exact field names from the spec where given. For any field whose type is not specified, write `any` and add it as a `[non-blocking]` ambiguity. If there are no backend API changes in scope, write `none`.
 
 ### Step 3: Never invent requirements
 
@@ -218,8 +241,8 @@ Do NOT add anything not in the spec. Mark missing items as "not specified" and l
 ## Output Format Requirement
 
 Your output block must:
-- Begin with `[PM-AGENT OUTPUT]` on its own line (no leading spaces or characters)
-- End with `[/PM-AGENT OUTPUT]` on its own line
+- Begin with `[PM OUTPUT]` on its own line (no leading spaces or characters)
+- End with `[/PM OUTPUT]` on its own line
 - Include every required field: `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:`
 - Use the exact field names listed — no synonyms, no omissions
 
@@ -230,7 +253,7 @@ Missing or misformatted fields will cause your output to be rejected and re-requ
 *This output block is only emitted in Requirements Extraction Mode — not in Spec-Writing Mode.*
 
 ```
-[PM-AGENT OUTPUT]
+[PM OUTPUT]
 Feature: [name]
 Summary: [one sentence]
 
@@ -260,7 +283,7 @@ Ambiguities flagged:
 - [blocking] [question that must be answered before implementation can proceed]
 - [non-blocking] [question where implementation agent can make a safe assumption]
 (or: none)
-[/PM-AGENT OUTPUT]
+[/PM OUTPUT]
 ```
 
 ## Error Handling

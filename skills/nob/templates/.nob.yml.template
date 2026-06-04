@@ -27,32 +27,32 @@ stack:
 agents:
   enabled:
     - planner
-    - pm-agent
-    - backend-agent
-    - frontend-agent
-    - security-agent
+    - pm
+    - backend
+    - frontend
+    - security
     - reviewer
-    - ideation-agent
-    - ask-agent
+    - ideation
+    - ask
 
   models:
     # Models set here are always respected. For simple specs, nob automatically
-    # downgrades backend-agent and frontend-agent to haiku unless set explicitly here.
-    backend-agent: sonnet   # code-writing agents need sonnet
-    frontend-agent: sonnet
+    # downgrades backend and frontend to haiku unless set explicitly here.
+    backend: sonnet   # code-writing agents need sonnet
+    frontend: sonnet
     planner: haiku          # planning/review/qa agents can use haiku
-    pm-agent: haiku
+    pm: haiku
     reviewer: haiku
-    security-agent: haiku
+    security: haiku
     idea-framer: haiku           # venture pipeline agents
     market-researcher: sonnet    # web research needs sonnet
     business-modeler: haiku
     gtm-strategist: haiku
     financial-modeler: haiku
     venture-reviewer: haiku
-    refactor-agent: sonnet      # project migration agent
-    ideation-agent: haiku       # feature ideation agent
-    ask-agent: haiku            # codebase Q&A agent
+    refactor: sonnet      # project migration agent
+    ideation: haiku       # feature ideation agent
+    ask: haiku            # codebase Q&A agent
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
   max_tokens_per_run: 500000  # optional; omit or remove to disable budget guard

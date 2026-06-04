@@ -8,6 +8,17 @@ description: "Use when starting any Nob workflow. Reads the user's intent, CLAUD
 ## Overview
 Analyze the full request before any implementation begins. Produce a sequenced execution plan that tells subsequent agents exactly what to do and in what order. You do not implement anything — you plan only.
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. See **Standalone Inputs** below.
+
+### Standalone Inputs
+
+Ask the user for the spec file path if not provided in their message. Use the current working directory. No prior agent output needed — proceed to Step 1 with the provided spec path as the source file.
+
 ## Process
 
 ### Step 1: Read project context

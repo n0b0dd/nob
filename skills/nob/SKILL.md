@@ -1301,7 +1301,9 @@ Run `gh --version` via the Bash tool to check availability.
 - Print: `Next: git push -u origin {WORKTREE_BRANCH}`
 - Run: `git worktree remove {WORKTREE_PATH}`
 
-**CI polling** (PASS only — after `gh pr create` succeeds):
+**CI polling** (PASS only — after `gh pr create` succeeds, and only when `agents.auto_pr: true`):
+
+If `agents.auto_pr` is false or absent: skip CI polling entirely.
 
 Set CI_STATUS = "SKIPPED (gh unavailable)" by default.
 

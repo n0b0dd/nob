@@ -1246,7 +1246,55 @@ If `Overall status: PASS`:
 - Run: `git worktree remove {WORKTREE_PATH}`
 - Print: `Worktree committed and removed. Branch: {WORKTREE_BRANCH}`
 
-**Auto-PR** (PASS only):
+**Verify / Push prompt** (PASS only — when `agents.auto_pr` is false or absent):
+
+Print:
+```
+Implementation complete. What next?
+  verify  — run build + test suite in worktree
+  push    — print push command (create PR manually)
+```
+Wait for user response.
+
+If `verify`:
+
+Detect build and test commands from the resolved stack type:
+
+| Stack type | Build command | Test command |
+|---|---|---|
+| `next` / `react` / `vue` / `node` | `npm run build` | `npm test -- --watchAll=false` |
+| `python` | skip build | `pytest` |
+| `go` | `go build ./...` | `go test ./...` |
+| `flutter` | `flutter build apk --debug` | `flutter test` |
+| `android` | `./gradlew assembleDebug` | `./gradlew test` |
+| `ios` | skip build | skip tests |
+| unknown | skip — print "Build step skipped — stack type not recognised." | skip — print "Test step skipped — stack type not recognised." |
+
+Run build command in WORKTREE_PATH: `cd {WORKTREE_PATH} && {build command}`. Print full output.
+Run test command in WORKTREE_PATH: `cd {WORKTREE_PATH} && {test command}`. Print full output.
+
+After both commands complete, print:
+```
+Verify complete.
+  push  — print push command
+  fix   — leave worktree open for manual edits
+```
+Wait for user response.
+- `fix` or any non-push response: print `Worktree preserved at {WORKTREE_PATH} for manual edits.` and exit.
+- `push`: fall through to push output below.
+
+If `push` (from verify result or directly from initial prompt):
+Print:
+```
+Run this to push your branch:
+
+  git push -u origin {WORKTREE_BRANCH}
+
+Then create your PR on GitHub.
+```
+Exit.
+
+**Auto-PR** (PASS only — when `agents.auto_pr: true`):
 Run `gh --version` via the Bash tool to check availability.
 - If available: run `gh pr create --title "{spec filename without path or extension}" --body "{first 3000 characters of REVIEWER_OUTPUT}" --head {WORKTREE_BRANCH}`. Print: `PR created: {returned URL}`.
 - If `gh pr create` fails: print the error and fall through to the git push command below.

@@ -1243,8 +1243,6 @@ If DIFF_PREVIEW = true AND `Overall status: PASS`:
 If `Overall status: PASS`:
 - Run: `git -C {WORKTREE_PATH} add -A`
 - Run: `git -C {WORKTREE_PATH} commit -m "nob: {run-id}"` (skip commit if nothing to commit)
-- Run: `git worktree remove {WORKTREE_PATH}`
-- Print: `Worktree committed and removed. Branch: {WORKTREE_BRANCH}`
 
 **Verify / Push prompt** (PASS only — when `agents.auto_pr` is false or absent):
 
@@ -1270,10 +1268,10 @@ Detect build and test commands from the resolved stack type:
 | `ios` | skip build | skip tests |
 | unknown | skip — print "Build step skipped — stack type not recognised." | skip — print "Test step skipped — stack type not recognised." |
 
-Run build command in WORKTREE_PATH: `cd {WORKTREE_PATH} && {build command}`. Print full output.
-Run test command in WORKTREE_PATH: `cd {WORKTREE_PATH} && {test command}`. Print full output.
+Run build command in WORKTREE_PATH: `cd {WORKTREE_PATH} && {build command}`. Print full output. If the build command exits non-zero, print `Build failed — review output above.`
+Run test command in WORKTREE_PATH: `cd {WORKTREE_PATH} && {test command}`. Print full output. If the test command exits non-zero, print `Tests failed — review output above.`
 
-After both commands complete, print:
+After both commands complete (regardless of exit codes), print:
 ```
 Verify complete.
   push  — print push command
@@ -1284,6 +1282,7 @@ Wait for user response.
 - `push`: fall through to push output below.
 
 If `push` (from verify result or directly from initial prompt):
+- Run: `git worktree remove {WORKTREE_PATH}`
 Print:
 ```
 Run this to push your branch:

@@ -1,14 +1,14 @@
 ---
 name: nob
-description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, or migrate an existing project to nob''s monorepo structure. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [intent]". Orchestrates Planner → PM Agent → Backend Agent → Frontend Agent → Reviewer in sequence. Also auto-detects structure mismatch on any run and offers refactor before proceeding.'
+description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, or migrate an existing project to nob''s monorepo structure. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [intent]". Orchestrates PM Agent → Tech Lead Agent → Security → Reviewer in sequence. Also auto-detects structure mismatch on any run and offers refactor before proceeding.'
 ---
 
 # Nob — Hub Orchestrator
 
 ## Overview
-Nob automates cross-layer development workflows in a fullstack monorepo. This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the Planner and ends with the Reviewer.
+Nob automates cross-layer development workflows in a fullstack monorepo. This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the PM Agent and ends with the Reviewer.
 
-Sub-skills (`/nob:planner`, `/nob:backend`, `/nob:frontend`, `/nob:security`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`, `/nob:ask`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
+Sub-skills (`/nob:tech-lead`, `/nob:backend`, `/nob:frontend`, `/nob:security`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`, `/nob:ask`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
 
 ## Agent Dispatch Model
 
@@ -164,11 +164,11 @@ Skip (not a project root):
 
 ```yaml
 agents:
-  enabled: [planner, pm, backend, frontend, security, reviewer, ideation, ask]
+  enabled: [pm, tech-lead, backend, frontend, security, reviewer, ideation, ask]
   models:
     backend: sonnet
     frontend: sonnet
-    planner: haiku
+    tech-lead: sonnet
     pm: haiku
     reviewer: haiku
     security: haiku
@@ -203,6 +203,8 @@ Also extract:
 - `agents.max_tokens_per_run` (absent/null if not present — budget guard disabled when absent)
 - `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
 - `agents.auto_pr` (default: false if not present — set true to opt-in to automatic PR creation after Reviewer PASS)
+- `BACKEND_MODEL_RESOLVED` = `agents.models["backend"] ?? "sonnet"` — Tech Lead handles complexity-based dispatch internally
+- `FRONTEND_MODEL_RESOLVED` = `agents.models["frontend"] ?? "sonnet"`
 
 **Stack guidance paths**: compute from SKILL_BASE_DIR and resolved stack types:
 - BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/../backend/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)
@@ -403,8 +405,8 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 
 | Agent | Required fields |
 |---|---|
-| Planner | `Workflow:`, `Mode:`, `Affected layers:`, `Risks:`, `Ambiguities:` |
-| PM Agent | `API contracts:`, `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
+| Tech Lead | `Run mode:`, `Affected layers:`, `API contracts written:`, `Risks:` |
+| PM Agent | `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
 | Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
 | Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
 | Security Agent | `Status:`, `Findings:` |
@@ -445,111 +447,19 @@ If the file exists but cannot be parsed as valid JSON: print "Warning: checkpoin
 
 ---
 
-## Phase 1: Slice plan
+## Phase 1: (retired — Planner merged into Tech Lead)
 
-Skip this phase if Phase 0 restored a completed `phase1` checkpoint (go directly to Phase 2 using the restored slice list).
+Planner is no longer dispatched as a separate phase. Tech Lead reads the spec directly and produces the plan as part of its technical specification step.
 
-**Dispatch Planner agent:**
-
-Read `{SKILL_BASE_DIR}/../planner/SKILL.md`. Dispatch an Agent with `model: agents.models["planner"] ?? "haiku"` and this prompt:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../planner/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-User intent: {user's original message}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: "CLAUDE.md not found"}
-
-.nob.yml contents:
-{.nob.yml content}
-
-Spec file path: {spec file path}
-Spec file contents:
-{spec file content}
-[/INPUTS]
-```
-
-Extract `[PLAN OUTPUT]...[/PLAN OUTPUT]` from the result. Store as PLAN_OUTPUT. Apply the **Output Block Validation Procedure** for Planner before proceeding.
-
-If PLAN_OUTPUT ambiguities section contains anything other than "none": present them to the user as a numbered list and wait for answers before proceeding. Store answers for inclusion in subsequent agent prompts.
-
-**L3: Complexity-based model override**
-
-Read `Complexity:` from PLAN_OUTPUT. Apply independently per layer:
-- If `Complexity.backend = "simple"` AND `backend` key is absent from the user's `.nob.yml` `agents.models` block (or `.nob.yml` was not found): override backend's resolved model to `haiku`. Store as BACKEND_MODEL_RESOLVED.
-- If `Complexity.frontend = "simple"` AND `frontend` key is absent from the user's `.nob.yml` `agents.models` block: override frontend's resolved model to `haiku`. Store as FRONTEND_MODEL_RESOLVED.
-- Otherwise: use the model values extracted from RESOLVED_CONFIG as-is.
-
-If PLAN_OUTPUT does not contain Complexity fields: apply no override (treat both as complex).
-
-**Determine mode from PLAN_OUTPUT:**
-- `Mode: single` → set SLICES = [{name: "main", scope: "full spec"}]
-- `Mode: fan-out` → parse each `Slice N — slug-name` / `Scope:` pair; set SLICES = array of {name, scope} objects
-
-**M3: --plan-only early exit**
-
-If PLAN_ONLY = true:
-- Print the full contents of PLAN_OUTPUT verbatim.
-- Print: `"Plan-only run complete. Re-run without --plan-only to execute."`
-- Exit. Do not write a checkpoint. Do not dispatch any further agents.
-
-**H1: Budget guard (fan-out only)**
-
-If `Mode: fan-out` AND `max_tokens_per_run` is set:
-- For each slice, assign a unit cost: sonnet = 2 units, haiku = 1 unit (based on BACKEND_MODEL_RESOLVED for that slice).
-- Estimated total = sum of unit costs across all slices.
-- If `estimated_total × 100000 > max_tokens_per_run`: print:
-  ```
-  Warning: fan-out with {N} slices (~{estimated_total × 100000} estimated tokens) may exceed max_tokens_per_run ({max_tokens_per_run}).
-  Continue? (yes / abort)
-  ```
-  Wait for response. If `abort`: exit. If `yes`: proceed.
-
-**Write Phase 1 checkpoint** (if checkpoint.enabled is true):
-
-Ensure `.nob/` appears in `.gitignore` at the repo root. If the line is absent, append it using the Edit tool.
-
-Create the checkpoint directory if it does not exist: run `mkdir -p {checkpoint.path}` using the Bash tool.
-
-Run `date -u +%FT%TZ` via the Bash tool and store as RUN_START_TIMESTAMP.
-
-Using the Write tool, write `{checkpoint.path}checkpoint.json`:
-```json
-{
-  "run_id": "{run-id derived in Step 0.1}",
-  "run_start_time": "{RUN_START_TIMESTAMP}",
-  "worktree_path": "{WORKTREE_PATH}",
-  "worktree_branch": "{WORKTREE_BRANCH}",
-  "workflow": "{workflow value from PLAN_OUTPUT}",
-  "source": "{source file path}",
-  "phases_completed": ["phase1"],
-  "slices": {
-    "{slice-name}": { "status": "pending", "timed_out_at": null, "pm_output": null, "backend_output": null, "frontend_output": null }
-  },
-  "agents": {},
-  "reviewer_output": null
-}
-```
-One entry per slice in the `slices` object.
-
-**Create run log** (if checkpoint.enabled is true): using the Write tool, create `.nob/run-{run-id}.log` with this initial content:
-```
-{RUN_START_TIMESTAMP}  run            -       START   -
-```
-Store as RUN_LOG_PATH = `.nob/run-{run-id}.log`.
+Proceed directly to Phase 2.
 
 ---
 
 ## Phase 2: Parallel pipelines
 
-### Single-slice path (Mode: single)
+### Single-slice path
 
-Run PM Agent first (sequential), then Backend Agent and Frontend Agent concurrently. Skip conditions for each agent are unchanged.
+Run PM Agent first (sequential), then Tech Lead (which manages Backend + Frontend internally).
 
 **Agent 1 — PM Agent**
 
@@ -568,9 +478,6 @@ Spec file path: {spec file path}
 Spec file contents:
 {spec file content}
 
-Plan context:
-{PLAN_OUTPUT}
-
 Project memory:
 {PROJECT_MEMORY}
 [/INPUTS]
@@ -578,33 +485,26 @@ Project memory:
 
 Extract `[PM OUTPUT]...[/PM OUTPUT]`. Store as PM_OUTPUT. Apply the **Output Block Validation Procedure** for PM Agent before proceeding.
 
-Run `date +%s` and store as PM_END_EPOCH. Compute PM_DURATION_MS = (PM_END_EPOCH - PM_START_EPOCH) × 1000. Read checkpoint, set `agents["pm"] = { "model": "{resolved pm model}", "started_at": "{PM_START_EPOCH}", "duration_ms": PM_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  pm              {model}  OK    {PM_DURATION_MS}ms`.
+Run `date +%s` and store as PM_END_EPOCH. Compute PM_DURATION_MS = (PM_END_EPOCH - PM_START_EPOCH) × 1000. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  pm              {model}  OK    {PM_DURATION_MS}ms`.
 
 ---
 
-**Agents 2 & 3 — Backend Agent and Frontend Agent (concurrent)**
+**Agent 2 — Tech Lead Agent**
 
-Run `date +%s` and store as IMPL_START_EPOCH.
+Run `date +%s` via the Bash tool and store as TL_START_EPOCH.
 
-Dispatch both in the same assistant turn — one Agent call for Backend, one for Frontend. Do not await Backend's result before dispatching Frontend.
-
-**Backend Agent**
-
-Skip if `stack.backend.enabled: false`. Store BACKEND_OUTPUT as "Backend agent was skipped (disabled in config)."
-
-For `API→Sync` workflow: skip. Store BACKEND_OUTPUT as "Backend agent was skipped (API→Sync workflow — backend already changed)."
-
-Otherwise read `{SKILL_BASE_DIR}/../backend/SKILL.md`. Dispatch with `model: agents.models["backend"] ?? "haiku"`:
+Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch with `model: agents.models["tech-lead"] ?? "sonnet"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../backend/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../tech-lead/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
 Working directory: {current working directory path}
 
-Stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
+Backend stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
+Frontend stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -612,69 +512,29 @@ Stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
 CLAUDE.md contents:
 {CLAUDE.md content, or: "CLAUDE.md not found"}
 
-Requirements from PM Agent:
+PM Agent output:
 {PM_OUTPUT}
-
-{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
 
 Project memory:
 {PROJECT_MEMORY}
 
-SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
+Agent models:
+  backend: {BACKEND_MODEL_RESOLVED}
+  frontend: {FRONTEND_MODEL_RESOLVED}
 [/INPUTS]
 ```
 
+Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. Apply Output Block Validation for Tech Lead.
 Extract `[BACKEND OUTPUT]...[/BACKEND OUTPUT]`. Store as BACKEND_OUTPUT.
-
----
-
-**Frontend Agent**
-
-Skip if `stack.frontend.enabled: false`. Store FRONTEND_OUTPUT as "Frontend agent was skipped (disabled in config)."
-
-For `API→Sync` workflow: do NOT skip — frontend still runs to consume the changed API contracts.
-
-Otherwise read `{SKILL_BASE_DIR}/../frontend/SKILL.md`. Dispatch with `model: agents.models["frontend"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../frontend/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-
-Stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
-
-.nob.yml contents:
-{.nob.yml content}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: "CLAUDE.md not found"}
-
-Requirements from PM Agent:
-{PM_OUTPUT}
-
-Backend Agent is running in parallel — use API contracts from PM Agent output above.
-No [BACKEND OUTPUT] will be provided.
-
-{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
-
-Project memory:
-{PROJECT_MEMORY}
-
-SCOPE LIMIT: If completing this task requires touching more than 15 files, implement the highest-priority items first (core logic, primary happy path, critical data model changes). Stop before reaching the limit. List any remaining unimplemented work under Deferred items: in your output block. A focused partial result is better than a timeout with no output.
-[/INPUTS]
-```
-
 Extract `[FRONTEND OUTPUT]...[/FRONTEND OUTPUT]`. Store as FRONTEND_OUTPUT.
 
----
+If BACKEND_OUTPUT or FRONTEND_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing after re-dispatch: mark the missing layer as `failed`; proceed with available outputs.
 
-Run `date +%s` and store as IMPL_END_EPOCH. Compute IMPL_DURATION_MS = (IMPL_END_EPOCH - IMPL_START_EPOCH) × 1000. Read checkpoint, set `agents["backend"] = { "model": "{BACKEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }` and `agents["frontend"] = { "model": "{FRONTEND_MODEL_RESOLVED}", "started_at": "{IMPL_START_EPOCH}", "duration_ms": IMPL_DURATION_MS, "error": null }`, write back. Append two lines to RUN_LOG_PATH:
+Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH - TL_START_EPOCH) × 1000. Append to RUN_LOG_PATH:
 ```
-{date -u +%FT%TZ}  backend         {BACKEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
-{date -u +%FT%TZ}  frontend        {FRONTEND_MODEL_RESOLVED}  OK    {IMPL_DURATION_MS}ms
+{date -u +%FT%TZ}  tech-lead       {model}  OK    {TL_DURATION_MS}ms
+{date -u +%FT%TZ}  backend         {BACKEND_MODEL_RESOLVED}  OK    {TL_DURATION_MS}ms
+{date -u +%FT%TZ}  frontend        {FRONTEND_MODEL_RESOLVED}  OK    {TL_DURATION_MS}ms
 ```
 
 Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
@@ -685,59 +545,24 @@ Proceed to Phase 2.5.
 
 ### Fan-out path (Mode: fan-out)
 
-Filter SLICES to only those with `status: pending` or `status: in_progress` (skip `status: completed` — their outputs are already in the checkpoint).
+PM Agent runs once for the full spec (same as single-slice path above — run it first if not already done). Then dispatch Tech Lead with fan-out context:
 
-Group pending SLICES into batches of `max_parallel_slices`. For each batch:
-
-**Dispatch all slices in the batch in the same assistant turn — one Agent call per slice, all in one response.** Do not await any result before dispatching the next. Use `model: agents.models["backend"] ?? "sonnet"`.
-
-Read `{SKILL_BASE_DIR}/../slice-runner/SKILL.md`. Each slice gets this prompt:
+Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch Tech Lead with `model: agents.models["tech-lead"] ?? "sonnet"` using the same prompt as the single-slice path, but append to the [INPUTS] block:
 
 ```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../slice-runner/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {working directory path}
-Slice name: {slice-name}
-Slice scope: {slice scope from PLAN_OUTPUT}
-
-PM Agent skill path: {SKILL_BASE_DIR}/../pm/SKILL.md
-Backend Agent skill path: {SKILL_BASE_DIR}/../backend/SKILL.md
-Frontend Agent skill path: {SKILL_BASE_DIR}/../frontend/SKILL.md
-Backend Agent stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
-Frontend Agent stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
-
+Fan-out mode: true
+Max parallel slices: {agents.max_parallel_slices}
 Spec file path: {spec file path}
-Spec file contents: {full spec file contents}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: "CLAUDE.md not found"}
-
-.nob.yml contents:
-{.nob.yml content}
-
-Plan context:
-{PLAN_OUTPUT}
-
-{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
-
-Project memory:
-{PROJECT_MEMORY}
-[/INPUTS]
+Spec file contents: {spec file content}
 ```
 
-Before dispatching each slice agent, update this slice's checkpoint status to `in_progress`: read checkpoint.json, set `slices[slice-name].status = 'in_progress'`, write back.
+Tech Lead determines slices internally and dispatches N Backend+Frontend pairs concurrently (up to max_parallel_slices).
 
-**After each slice agent returns:**
-1. Extract `[SLICE OUTPUT: {slice-name}]...[/SLICE OUTPUT: {slice-name}]`
-2. If block is missing: re-dispatch the slice agent once with the same prompt. If still missing: mark `status: failed` in checkpoint; add to failed list; continue remaining slices.
-3. If extraction succeeds: Read the current checkpoint.json into memory, update only the relevant slice object (set `status: completed`, add `slice_output` field), then write the complete checkpoint object back using the Write tool. Also add this slice to SLICE_RESULTS in memory: {name: slice-name, slice_output: [the extracted block]}.
+Extract `[TECH LEAD OUTPUT]`, `[BACKEND OUTPUT]`, and `[FRONTEND OUTPUT]` from the result. For fan-out runs, Backend and Frontend outputs will contain labeled slice sections.
 
-After all batches complete:
-- If SLICE_RESULTS is empty (all slices failed): stop. Print terminal summary listing all failures. Do not dispatch Reviewer.
-- Otherwise: SLICE_RESULTS is now fully populated from in-memory accumulation during dispatch. Proceed to Phase 2.5.
+Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
+
+Proceed to Phase 2.5.
 
 ---
 
@@ -1009,17 +834,20 @@ Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_
 - If DIAG_OUTPUT non-null: extract `Backend fix scope:` paths as BACKEND_FIX_SCOPE (empty→null if RETRY_BACKEND=true); extract `Frontend fix scope:` paths as FRONTEND_FIX_SCOPE (empty→null if RETRY_FRONTEND=true).
 - If DIAG_OUTPUT null: BACKEND_FIX_SCOPE = null, FRONTEND_FIX_SCOPE = null.
 
-**Backend retry** (if RETRY_BACKEND = true) — read `{SKILL_BASE_DIR}/../backend/SKILL.md`, dispatch with `model: agents.models["backend"] ?? "haiku"`:
+**Tech Lead retry** (re-dispatches only failing layer(s)):
+
+Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch Tech Lead with `model: agents.models["tech-lead"] ?? "sonnet"`:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../backend/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../tech-lead/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
 Working directory: {current working directory path}
 
-Stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
+Backend stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
+Frontend stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -1027,74 +855,38 @@ Stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
 CLAUDE.md contents:
 {CLAUDE.md content, or: "CLAUDE.md not found"}
 
-Requirements from PM Agent:
+PM Agent output:
 {PM_OUTPUT}
 
-Reviewer found these failures — fix only these items:
-{RETRY_ITEMS filtered to items found in Backend changes needed, plus backend test failures}
+Reviewer found these failures — re-implement only the failing layer(s):
+{RETRY_ITEMS listed one per line}
 
-{if BACKEND_FIX_SCOPE is non-null:
-SCOPE: Fix only these files — do not read or modify any other files:
+Layers to retry:
+  backend: {RETRY_BACKEND}
+  frontend: {RETRY_FRONTEND}
+
+{if BACKEND_FIX_SCOPE non-null:
+Backend fix scope (touch only these files):
 {BACKEND_FIX_SCOPE listed one path per line}
 }
-{if BACKEND_FIX_SCOPE is null:
-SCOPE LIMIT: If completing this fix requires touching more than 5 files, implement the highest-priority items first. Stop before reaching the limit. List any remaining unimplemented work under Deferred items.
-}
-
-Root cause (from diagnostic):
-{DIAG_OUTPUT "Root cause summary:" line, or: "Diagnostic not available — use your judgment"}
-
-{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
-[/INPUTS]
-```
-
-Extract `[BACKEND OUTPUT]...[/BACKEND OUTPUT]`. Replace BACKEND_OUTPUT with this result.
-
-**Frontend retry** (if RETRY_FRONTEND = true) — read `{SKILL_BASE_DIR}/../frontend/SKILL.md`, dispatch with `model: agents.models["frontend"] ?? "haiku"`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../frontend/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-
-Stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
-
-.nob.yml contents:
-{.nob.yml content}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: "CLAUDE.md not found"}
-
-Requirements from PM Agent:
-{PM_OUTPUT}
-
-{if CONTRACT_RETRY = true:
-Backend Agent output (use these API contracts as the authoritative source of truth):
-{BACKEND_OUTPUT}
-}
-
-Reviewer found these failures — fix only these items:
-{RETRY_ITEMS filtered to items found in Frontend changes needed, frontend test failures, and contract violations}
-
-{if FRONTEND_FIX_SCOPE is non-null:
-SCOPE: Fix only these files — do not read or modify any other files:
+{if FRONTEND_FIX_SCOPE non-null:
+Frontend fix scope (touch only these files):
 {FRONTEND_FIX_SCOPE listed one path per line}
 }
-{if FRONTEND_FIX_SCOPE is null:
-SCOPE LIMIT: If completing this fix requires touching more than 5 files, implement the highest-priority items first. Stop before reaching the limit. List any remaining unimplemented work under Deferred items.
-}
 
 Root cause (from diagnostic):
 {DIAG_OUTPUT "Root cause summary:" line, or: "Diagnostic not available — use your judgment"}
 
-{if planner had ambiguities and user answered: "Clarifications from user: {answers}"}
+Project memory:
+{PROJECT_MEMORY}
+
+Agent models:
+  backend: {BACKEND_MODEL_RESOLVED}
+  frontend: {FRONTEND_MODEL_RESOLVED}
 [/INPUTS]
 ```
 
-Extract `[FRONTEND OUTPUT]...[/FRONTEND OUTPUT]`. Replace FRONTEND_OUTPUT with this result.
+Extract `[TECH LEAD OUTPUT]`, `[BACKEND OUTPUT]`, and `[FRONTEND OUTPUT]`. Replace TECH_LEAD_OUTPUT, BACKEND_OUTPUT, and FRONTEND_OUTPUT with results.
 
 **After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3 (Mode: single). Extract new REVIEWER_OUTPUT. If checkpoint.enabled: update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
 
@@ -1188,8 +980,8 @@ Nob complete.
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Mode:      [single | fan-out (N slices)]
-Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: planner(haiku) · pm(haiku) · backend(sonnet) · frontend(sonnet) · security(haiku) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
-Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: planner 4s · pm 3s · backend 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
+Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · backend(sonnet) · frontend(sonnet) · security(haiku) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
+Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · backend 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 
 [if Mode: fan-out:]
 Slices:
@@ -1389,7 +1181,7 @@ Append final summary line to RUN_LOG_PATH using the Edit tool:
 - **.nob.yml not found**: run auto-detection (Step 1)
 - **Checkpoint file corrupted/unparseable**: warn user, start fresh run (Phase 0)
 - **Sub-skill file not found**: warn "sub-skill file {SKILL_BASE_DIR}/../[name]/SKILL.md not found — ensure the nob plugin is installed correctly"
-- **Planner output has ambiguities**: pause and ask user before proceeding (Phase 1)
+- **Tech Lead output has ambiguities**: pause and ask user before proceeding (Phase 2)
 - **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: timed_out` (store `timed_out_at: "phase2/slice-runner"`), continue other slices, report in terminal summary (Phase 2)
 - **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
@@ -1401,4 +1193,3 @@ Append final summary line to RUN_LOG_PATH using the Edit tool:
 - **`.nob/project-memory.md` unreadable (L1)**: set PROJECT_MEMORY = "none", skip silently; do not block pipeline
 - **PushNotification tool unavailable (L2)**: skip silently
 - **Run log write fails (H2)**: skip silently; do not block pipeline
-- **PLAN_OUTPUT missing Complexity fields (L3)**: apply no model override; treat both layers as complex

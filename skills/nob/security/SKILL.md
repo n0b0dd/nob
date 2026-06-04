@@ -8,6 +8,19 @@ description: "Reviews implementation outputs for security issues across four cat
 ## Overview
 Review the files changed in this implementation for security issues. Check only what was touched — do not scan the whole codebase. Produce an honest severity-tagged findings list.
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. See **Standalone Inputs** below.
+
+### Standalone Inputs
+
+1. Look for `.nob/backend-output.md` and `.nob/frontend-output.md` in the working directory — if found, use them as `[BACKEND OUTPUT]` and `[FRONTEND OUTPUT]`.
+2. If not found, ask: "Which implementation outputs should I review? You can paste a `[BACKEND OUTPUT]` block, a `[FRONTEND OUTPUT]` block, or both."
+3. Proceed with whatever context is provided.
+
 ## Process
 
 ### Step 1: Extract changed files

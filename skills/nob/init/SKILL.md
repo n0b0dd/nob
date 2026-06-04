@@ -1,6 +1,6 @@
 ---
-name: nob-init-agent
-description: Scaffolds a complete runnable fullstack project from an empty directory. Called by the Nob hub when workflow is Init. Asks user to describe their project, recommends a tech stack, generates working boilerplate for the confirmed stack, runs dependency installation, and writes CLAUDE.md and .nob.yml.
+name: nob-init
+description: "Scaffolds a complete runnable fullstack project from an empty directory. Invocable via `/nob:init` directly or through the Nob hub. Triggers on: 'nob init', 'initialize project', 'scaffold project'."
 ---
 
 # Nob — Init Agent
@@ -29,11 +29,11 @@ Run via Bash: `ls -A {WORKING_DIR}`
 If any files exist other than `.git` and `.gitignore`: stop immediately and emit:
 
 ```
-[INIT-AGENT OUTPUT]
+[INIT OUTPUT]
 Status: aborted
 Reason: Directory is not empty. /nob init is for fresh projects only.
 To work on an existing project, run: /nob implement <spec-file>
-[/INIT-AGENT OUTPUT]
+[/INIT OUTPUT]
 ```
 
 If the directory is empty (or contains only `.git` / `.gitignore`): proceed to Step 2.
@@ -1378,15 +1378,15 @@ stack:
     core: shared/core/
 
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer]
+  enabled: [planner, pm, backend, frontend, security, reviewer]
   models:
-    backend-agent: sonnet
-    frontend-agent: sonnet
+    backend: sonnet
+    frontend: sonnet
     planner: haiku
-    pm-agent: haiku
+    pm: haiku
     reviewer: haiku
-    security-agent: haiku
-    init-agent: sonnet
+    security: haiku
+    init: sonnet
   max_parallel_slices: 3
   checkpoint:
     enabled: true
@@ -1421,7 +1421,7 @@ For each command that fails (non-zero exit code): record `{layer}: FAILED — {e
 Emit:
 
 ```
-[INIT-AGENT OUTPUT]
+[INIT OUTPUT]
 Status: [complete | partial | aborted]
 Project: [PROJECT_NAME]
 Frontend: [FRONTEND_TYPE]
@@ -1445,7 +1445,7 @@ Frontend start command: [command]
 Frontend directory: apps/frontend/
 Backend start command: [command]
 Backend directory: apps/backend/
-[/INIT-AGENT OUTPUT]
+[/INIT OUTPUT]
 ```
 
 ---

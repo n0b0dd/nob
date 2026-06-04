@@ -1,6 +1,6 @@
 ---
-name: nob-ask-agent
-description: Read-only codebase Q&A agent. Answers developer questions about the codebase with cited file paths. Uses grep, find, and Read only — writes nothing to disk.
+name: nob-ask
+description: "Read-only codebase Q&A agent. Answers developer questions about the codebase with cited file paths. Uses grep, find, and Read only — writes nothing to disk. Invocable via `/nob:ask <question>` directly or through the Nob hub. Triggers on: 'nob ask', 'ask [question about codebase]'."
 ---
 
 # Nob — Ask Agent

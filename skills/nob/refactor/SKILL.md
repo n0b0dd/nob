@@ -1,6 +1,6 @@
 ---
-name: nob-refactor-agent
-description: Migrates an existing project to nob's monorepo structure (apps/frontend/, apps/backend/, shared/core/). Analyzes the current layout, presents a migration plan, and executes on user approval. Moves directories with git history preservation, rewrites cross-layer import paths, and writes CLAUDE.md and .nob.yml.
+name: nob-refactor
+description: "Migrates an existing project to nob's monorepo structure (apps/frontend/, apps/backend/, shared/core/). Analyzes the current layout, presents a migration plan, and executes on user approval. Invocable via `/nob:refactor` directly or through the Nob hub. Triggers on: 'nob refactor', 'restructure project', 'migrate to nob structure'."
 ---
 
 # Nob — Refactor Agent
@@ -106,14 +106,14 @@ Proceed with refactor? (yes / cancel)
 ```
 
 Wait for user response:
-- `cancel`, `no`, or any negative → emit `[REFACTOR-AGENT OUTPUT]` with `Status: cancelled` and exit.
+- `cancel`, `no`, or any negative → emit `[REFACTOR OUTPUT]` with `Status: cancelled` and exit.
 - `yes` → proceed to Step 4.
 
 ---
 
 ## Step 4: Execution
 
-Execute sub-steps in this exact order. If any sub-step fails, stop immediately — do NOT continue to the next sub-step. Emit `[REFACTOR-AGENT OUTPUT]` with `Status: failed`, list what succeeded and what failed, and exit.
+Execute sub-steps in this exact order. If any sub-step fails, stop immediately — do NOT continue to the next sub-step. Emit `[REFACTOR OUTPUT]` with `Status: failed`, list what succeeded and what failed, and exit.
 
 ### 4a. Git safety notice
 
@@ -243,15 +243,15 @@ stack:
     core: shared/core/
 
 agents:
-  enabled: [planner, pm-agent, backend-agent, frontend-agent, security-agent, reviewer]
+  enabled: [planner, pm, backend, frontend, security, reviewer]
   models:
-    backend-agent: sonnet
-    frontend-agent: sonnet
+    backend: sonnet
+    frontend: sonnet
     planner: haiku
-    pm-agent: haiku
+    pm: haiku
     reviewer: haiku
-    security-agent: haiku
-    refactor-agent: sonnet
+    security: haiku
+    refactor: sonnet
   max_parallel_slices: 3
   checkpoint:
     enabled: true
@@ -263,7 +263,7 @@ agents:
 ## Step 5: Emit output block
 
 ```
-[REFACTOR-AGENT OUTPUT]
+[REFACTOR OUTPUT]
 Status: complete
 Moves:
   [list each move as: "{from} → {to}: success | skipped | failed", one per line]
@@ -274,7 +274,7 @@ Move warnings:
   {MOVE_WARNINGS joined by newline, or "none"}
 Import warnings:
   {IMPORT_WARNINGS joined by newline, or "none"}
-[/REFACTOR-AGENT OUTPUT]
+[/REFACTOR OUTPUT]
 ```
 
 If Step 4 was halted by failure: emit `Status: failed` and list which sub-step failed.

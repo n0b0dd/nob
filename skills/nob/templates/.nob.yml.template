@@ -26,8 +26,8 @@ stack:
 
 agents:
   enabled:
-    - planner
     - pm
+    - tech-lead
     - backend
     - frontend
     - security
@@ -40,7 +40,7 @@ agents:
     # downgrades backend and frontend to haiku unless set explicitly here.
     backend: sonnet   # code-writing agents need sonnet
     frontend: sonnet
-    planner: haiku          # planning/review/qa agents can use haiku
+    tech-lead: sonnet       # tech lead writes contracts and coordinates dev team
     pm: haiku
     reviewer: haiku
     security: haiku

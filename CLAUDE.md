@@ -14,7 +14,8 @@ skills/
     SKILL.md      — Hub skill: entry point for /nob
     templates/    — CLAUDE.md.template and .nob.yml.template for user projects
   pm/             — PM skill: spec-writing and requirements extraction (/nob:pm)
-  planner/        — Breaks the spec into a sequenced plan (/nob:planner)
+  tech-lead/      — Technical lead: writes contracts, coordinates dev team (/nob:tech-lead)
+  planner/        — DEPRECATED: merged into tech-lead
   backend/        — Implements backend/API changes (/nob:backend)
   frontend/       — Implements frontend/UI changes (/nob:frontend)
   security/       — Reviews implementation for security findings (/nob:security)
@@ -48,13 +49,14 @@ Version is tracked in **both** `.claude-plugin/plugin.json` and `.claude-plugin/
 
 Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) orchestrates all sub-skills:
 
-**Planner → PM → Backend + Frontend (concurrent) → Security → Reviewer**
+**PM → Tech Lead → Security → Reviewer**
+
+(Tech Lead dispatches Backend + Frontend concurrently and manages the active blocker loop internally.)
 
 - The hub resolves `SKILL_BASE_DIR` at runtime from its `Base directory for this skill:` context line — all sub-skill paths use `{SKILL_BASE_DIR}/../X/SKILL.md` (sub-skills live one level up from the hub at `skills/X/`).
 - The hub reads `.nob.yml` from the user's project root to configure models, enabled skills, and parallelism. If absent, it auto-detects the stack.
 - Checkpoints are written to `.nob/checkpoint.json` in the user's project to support resume after interruption.
 - PM has two modes: **spec-writing** (plain text idea → writes `docs/specs/YYYY-MM-DD-slug.md`) and **requirements extraction** (file path → `[PM OUTPUT]` block).
-- Planner produces either `Mode: single` (one pipeline) or `Mode: fan-out` (N parallel slices, each running a full mini-pipeline).
 
 ## Specs and Plans for This Repo
 

@@ -73,3 +73,5 @@ agents:
   checkpoint:
     enabled: true           # write/read checkpoint files on disk (default: true)
     path: .nob/             # directory for checkpoint.json
+
+  auto_pr: false            # set true to auto-create a GitHub PR after Reviewer PASS (default: false — you create the PR manually)

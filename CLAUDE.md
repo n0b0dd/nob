@@ -24,7 +24,6 @@ skills/
   ideation/       — Generates ranked feature ideas from an existing codebase (/nob:ideation)
   refactor/       — Migrates a project to nob's monorepo structure (/nob:refactor)
   ask/            — Read-only codebase Q&A (/nob:ask)
-  slice-runner/   — Runs a single fan-out slice mini-pipeline
   venture-workflow/ — End-to-end venture validation pipeline
   idea-framer/    — First agent in the Venture pipeline
   market-researcher/ — Second agent in the Venture pipeline

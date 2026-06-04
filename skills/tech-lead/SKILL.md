@@ -93,6 +93,13 @@ Backend tasks example format:
 Frontend tasks example format:
 - "Add ProfileEditor component in `apps/frontend/src/components/ProfileEditor.tsx`, wire to `GET /api/profiles` endpoint"
 
+After writing each layer's task list, assess its complexity:
+
+- **simple**: ≤4 file changes, no new service or schema files, at most one risk flag — in-session implementation is sufficient.
+- **complex**: 5+ file changes, new service/schema files required, or two or more risk flags present — coordinator mode with sub-agents is required.
+
+Store `BACKEND_COMPLEXITY` and `FRONTEND_COMPLEXITY` (each: `simple` | `complex`).
+
 ## Step 3: Determine run mode
 
 Count independent work streams from PM output:
@@ -143,6 +150,8 @@ Backend tasks:
 
 Affected files:
 {AFFECTED_FILES.backend and AFFECTED_FILES.schema}
+
+Complexity: {BACKEND_COMPLEXITY}
 [/TECH LEAD SPEC]
 
 Acceptance criteria:
@@ -196,6 +205,8 @@ Frontend tasks:
 
 Affected files:
 {AFFECTED_FILES.frontend}
+
+Complexity: {FRONTEND_COMPLEXITY}
 [/TECH LEAD SPEC]
 
 Acceptance criteria:

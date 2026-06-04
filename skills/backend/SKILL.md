@@ -41,9 +41,9 @@ From the current session context:
 
 ### Step 3.5: Select execution path
 
-From `[PLAN OUTPUT]`, read `Complexity: Backend:`.
+From `[TECH LEAD SPEC]` in your `[INPUTS]` block, read `Complexity:`.
 
-- If `simple` or `n/a` (or if `[PLAN OUTPUT]` is not present): proceed with the **in-session path** — continue to Step 4 as normal.
+- If `simple` or absent: proceed with the **in-session path** — continue to Step 4 as normal.
 - If `complex`: enter **coordinator mode** — skip Steps 4, 5, and 5.5 entirely. Continue to the **Coordinator Mode** section below.
 
 ---

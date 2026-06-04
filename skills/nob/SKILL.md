@@ -443,6 +443,9 @@ Check whether `{checkpoint.path}checkpoint.json` exists using the Read tool.
 If the file does not exist or cannot be read: proceed to Phase 1 as a fresh run.
 
 If the file exists and is valid JSON:
+0. **Spec binding check** (Spec→Code and Bug→Fix workflows only — skip for Init, Venture, Refactor, Ideate, Ask):
+   - If checkpoint has a `spec_path` field AND it does not match the current spec file path: print `"Warning: checkpoint is for \`{checkpoint.spec_path}\`, not \`{current spec path}\` — starting fresh run."` Treat the checkpoint as absent. Proceed to Phase 2 as a fresh run.
+   - If checkpoint has no `spec_path` field (legacy format): proceed with resume as normal.
 1. If `reviewer_output` is non-null → run is already complete. Print the terminal summary using stored outputs and exit. Do not re-run any agents.
 2. If `"phase1"` is in `phases_completed` → skip Phase 1 dispatch. Restore the slice list from the checkpoint `slices` keys. For each slice:
    - `status: completed` → inject its outputs: add it to SLICE_RESULTS as {name: slice-name, slice_output: checkpoint.slices[name].slice_output}; skip its mini-pipeline in Phase 2
@@ -464,6 +467,13 @@ Proceed directly to Phase 2.
 ---
 
 ## Phase 2: Parallel pipelines
+
+**Initial checkpoint write** (if `checkpoint.enabled` is true and no checkpoint file exists yet — fresh run only):
+Write `{checkpoint.path}checkpoint.json` with:
+```json
+{ "spec_path": "{spec file path}", "worktree_path": "{WORKTREE_PATH}", "worktree_branch": "{WORKTREE_BRANCH}", "phases_completed": [], "slices": {} }
+```
+Skip this write if the checkpoint file already exists (resume run — Phase 0 already loaded it).
 
 ### Single-slice path
 
@@ -1147,7 +1157,7 @@ If the PushNotification tool is not available, skip silently.
 
 ## Step 4.5: Post-run memory write
 
-Run only when `Overall status: PASS` and `agents.checkpoint.enabled` is true.
+Run only when `Overall status: PASS` or `Overall status: NEEDS REVIEW`, and `agents.checkpoint.enabled` is true.
 
 Run `date +%F` via the Bash tool to get TODAY (YYYY-MM-DD format).
 
@@ -1179,7 +1189,7 @@ Write the updated YAML back to `.nob/project-memory.yml` using the Write tool.
 
 Append final summary line to RUN_LOG_PATH using the Edit tool:
 ```
-{date -u +%FT%TZ}  run            -       PASS   -  total
+{date -u +%FT%TZ}  run            -       {Overall status from REVIEWER_OUTPUT}   -  total
 ```
 
 ---

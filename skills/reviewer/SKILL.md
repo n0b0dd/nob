@@ -102,6 +102,26 @@ Check context for `[SECURITY OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY-DISAB
     - Low findings are informational only — add them to the Security section of the output but do not affect overall status.
 - If neither block is present: store SECURITY_STATUS = "NOT RUN — security agent output missing from context".
 
+### Step 3.65: Migration safety check
+
+**Trigger**: `[MIGRATION]` appears in `[TECH LEAD OUTPUT]` `Risks:` field, OR any path in `[BACKEND OUTPUT]` `Files changed:` or `Files created:` contains `migration`, `migrate`, `schema`, or ends in `.prisma` or `.sql`.
+
+If not triggered: skip this step.
+
+If triggered:
+1. Collect MIGRATION_FILES = all file paths from `[BACKEND OUTPUT]` `Files changed:` and `Files created:` that match the trigger patterns above.
+2. Read each file in MIGRATION_FILES using the Read tool.
+3. For each file, check:
+
+   **NOT NULL without DEFAULT** — a new column added as `NOT NULL` with no `DEFAULT` clause will fail on any table with existing rows. Look for: `ADD COLUMN ... NOT NULL` without a following `DEFAULT`, `String` / `Int` (non-optional) fields in Prisma without `@default(...)`, `NOT NULL` in raw SQL `ALTER TABLE` without `DEFAULT`. Severity: CRITICAL.
+
+   **No revert path** — check whether the migration tooling pattern in this project includes a down/rollback function (e.g. `exports.down`, `def downgrade`, `func Down`). Read one existing migration file to detect the pattern. If the pattern is present but this migration has no down function: severity IMPORTANT.
+
+   **Destructive change** — look for `DROP COLUMN`, `DROP TABLE`, `RENAME COLUMN`, `removeColumn`, `renameColumn`, `dropColumn`, `dropTable`. Each is a potentially breaking change for in-flight requests or running instances. Severity: IMPORTANT.
+
+4. For each finding, add to "Items for human review": `Migration: {description} in {file}:{line}`.
+5. If any CRITICAL migration finding is present: overall status cannot be PASS — downgrade to at minimum NEEDS REVIEW.
+
 ### Step 3.7: Code quality scan
 
 Collect QUALITY_FILES = all file paths from `Files changed:` and `Files created:` in [BACKEND OUTPUT] and [FRONTEND OUTPUT]. If fan-out mode, collect from all slice outputs.
@@ -178,6 +198,10 @@ Security:
   Status: [PASS | FINDINGS: N medium, M low | SKIPPED (user) — security check was skipped by user | SKIPPED (disabled) — security not in agents.enabled | NOT RUN — security agent output missing]
   [if FINDINGS: list each medium finding as "- [MEDIUM] {category} | {file}:{line} | {description}"]
   [if FINDINGS and low items: list each low finding as "- [LOW] {category} | {file}:{line} | {description}"]
+
+Migration safety:
+  Status: [PASS | FINDINGS: N critical, M important | SKIPPED — no migration files]
+  [if FINDINGS: list each finding as "- [CRITICAL|IMPORTANT] {file}:{line} | {description}"]
 
 Code quality:
   Status: [PASS | FINDINGS: N important, M minor | SKIPPED — no changed files]

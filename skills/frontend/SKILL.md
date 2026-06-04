@@ -54,7 +54,7 @@ From `[PLAN OUTPUT]`, read `Complexity: Frontend:`.
 - If `simple` or `n/a` (or if `[PLAN OUTPUT]` is not present): proceed with the **in-session path** — continue to Step 4 as normal.
 - If `complex`: enter **coordinator mode** — skip Steps 4, 5, and 5.5 entirely. Continue to the **Coordinator Mode** section below.
 
-If there is no [BACKEND OUTPUT]: proceed with API contracts from [PM OUTPUT], note "No [BACKEND OUTPUT] found — API contracts inferred from spec."
+If there is no [BACKEND OUTPUT]: proceed with API contracts from Tech Lead spec above as the authoritative source, note "No [BACKEND OUTPUT] found — API contracts from Tech Lead spec."
 
 ---
 
@@ -134,7 +134,7 @@ Target files (implement only these): {task.target_files}
 {EXPLORATION_CONTEXT}
 [/FRONTEND-EXPLORATION CONTEXT]
 
-Frontend changes needed (from PM Agent):
+Requirements from Tech Lead:
 {the "Frontend changes needed" section from [PM OUTPUT]}
 
 {if [BACKEND OUTPUT] is available and this is the component or api-service task:
@@ -143,7 +143,7 @@ API contracts from Backend Agent (use these — they take precedence over PM con
 }
 
 {if PM_API_CONTRACTS is non-null and no [BACKEND OUTPUT] is available:
-API contracts from PM Agent:
+API contracts from Tech Lead spec (use as authoritative source):
 {PM_API_CONTRACTS}
 }
 
@@ -259,6 +259,31 @@ Record:
 Include the verbatim captured output in `Test output:` in your output block. If no test command is detected, write `SKIPPED — no test command found`.
 
 If tests fail: attempt to fix. If the fix requires more than ~5 lines of non-obvious changes, stop and flag it in "Items not implemented (needs human)" — do not spiral.
+
+## Blocker Protocol
+
+If you encounter an issue you cannot resolve on your own, emit a `[BLOCKER]` block immediately before your `[FRONTEND OUTPUT]` block.
+
+When to emit a blocker:
+- Missing API contract from Backend not yet defined
+- UI state ambiguity that would change component architecture
+- Dependency on a shared type or contract not specified
+- Risk flag discovered during implementation ([AUTH], [MIGRATION], [BREAKING], [SHARED])
+
+Blocker block format:
+```
+[BLOCKER]
+type: technical | ambiguity | cross-layer | risk
+flag: AUTH | MIGRATION | BREAKING | SHARED | none
+description: <one sentence describing the blocker>
+proposed_resolution: <your best suggestion, or: none>
+blocking_layer: backend | frontend | both
+[/BLOCKER]
+```
+
+Emit the blocker, then continue implementing as much as possible. Emit `[FRONTEND OUTPUT]` with whatever you completed, noting the remaining work under `Deferred items:`.
+
+Do NOT halt and wait — always emit both a `[BLOCKER]` (if blocked) and a `[FRONTEND OUTPUT]`.
 
 ## Output Format Requirement
 

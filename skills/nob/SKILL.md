@@ -227,6 +227,14 @@ Also extract:
 
 **`--plan-only` detection**: check whether the user's message contains `--plan-only`. If found: store PLAN_ONLY = true. Otherwise: PLAN_ONLY = false.
 
+**M3: --plan-only early exit**
+
+If PLAN_ONLY = true:
+- Dispatch PM Agent only (same prompt as Phase 2 PM dispatch below).
+- Print PM_OUTPUT verbatim.
+- Print: `"Plan-only run complete — PM requirements extracted. Re-run without --plan-only to execute full pipeline."`
+- Exit. Do not write a checkpoint. Do not dispatch Tech Lead or any further agents.
+
 **`--diff-only` detection**: check whether the user's message contains `--diff-only`. If found: store DIFF_PREVIEW = true. Otherwise: DIFF_PREVIEW = false.
 
 ## Step 1.5: Spec pre-flight validation
@@ -677,7 +685,7 @@ Spec file contents:
 
 All agent outputs for review:
 
-{PLAN_OUTPUT}
+{TECH_LEAD_OUTPUT}
 
 {PM_OUTPUT}
 
@@ -705,7 +713,7 @@ Spec file contents:
 
 All agent outputs for review:
 
-{PLAN_OUTPUT}
+{TECH_LEAD_OUTPUT}
 
 {MERGED SLICE OUTPUTS block constructed above}
 

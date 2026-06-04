@@ -1,9 +1,9 @@
 ---
-name: ideation-agent
-description: Reads an existing codebase and a user-provided direction + constraints, generates 3-5 ranked feature ideas, lets the user pick one, then expands it into a ready-to-run mini-spec saved to the project's configured spec directory.
+name: nob-ideation
+description: "Generates ranked feature ideas from an existing codebase and expands the chosen idea into a ready-to-run spec. Invocable via `/nob:ideation` directly or through the Nob hub. Triggers on: 'nob ideate', 'ideate', 'what should I build next', 'suggest features for', 'what feature should I add'."
 ---
 
-# Ideation Agent
+# Nob — Ideation Agent
 
 ## Purpose
 
@@ -156,11 +156,11 @@ Spec saved to {SPECS_DIR}/[filename]. Run: /nob implement {SPECS_DIR}/[filename]
 Always emit this block at the end, regardless of whether the user chose an idea:
 
 ```
-[IDEATION-AGENT OUTPUT]
+[IDEATION OUTPUT]
 Direction: [direction from [INPUTS]]
 Constraints: [parsed constraints, or: none]
 Ideas generated: [N]
 Chosen: [chosen idea name, or: none]
 Spec saved: [{SPECS_DIR}/filename, or: n/a]
-[/IDEATION-AGENT OUTPUT]
+[/IDEATION OUTPUT]
 ```

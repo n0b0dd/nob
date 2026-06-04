@@ -8,6 +8,20 @@ description: "Use when implementing UI/frontend changes. Reads [PM OUTPUT] to un
 ## Overview
 Implement frontend changes by reading requirements from context blocks and the existing codebase. Adapt implementation approach based on `stack.frontend.type` in `.nob.yml`. Never invent patterns — read and follow what already exists.
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. See **Standalone Inputs** below.
+
+### Standalone Inputs
+
+1. Ask the user for the spec file path if not provided in their message.
+2. Look for `.nob/pm-output.md` in the working directory — if found, use it as `[PM OUTPUT]`.
+3. If not found, ask: "I need the PM output to proceed. Run `/nob:pm <spec-path>` first, or paste the PM output directly."
+4. Proceed with whatever context is available. Backend output is optional — if absent, use API contracts from the PM output.
+
 ## Process
 
 ### Step 1: Read configuration

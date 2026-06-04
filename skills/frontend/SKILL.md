@@ -46,6 +46,7 @@ From the current session context:
    Also extract `API contracts:` from `[PM OUTPUT]`. Store as PM_API_CONTRACTS. If the field reads `none`, set PM_API_CONTRACTS to null.
 2. Find and read `[BACKEND OUTPUT]` — extract "New API contracts" and "Updated API contracts". If available, these take precedence over PM_API_CONTRACTS as the authoritative endpoint source — use them for all API calls. Do NOT assume or invent API contracts beyond what either source provides.
 3. Find and read `[PLAN OUTPUT]` if present — extract "Affected files: Frontend" and "Risks:". Store as PLAN_RISKS. If not found, set PLAN_RISKS to empty.
+4. Read `Project memory:` from your `[INPUTS]` block. If non-empty, extract the `corrections` entries — these are the highest priority and describe past mistakes or pattern overrides from previous runs. Apply every applicable correction during implementation. If a correction directly conflicts with the spec or PM requirements (i.e. you cannot satisfy both), note it in `Memory conflicts:` in your output block. If no corrections apply or all applied cleanly, write `none`.
 
 ### Step 3.5: Select execution path
 

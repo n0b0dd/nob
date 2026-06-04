@@ -1,9 +1,13 @@
 ---
 name: planner
-description: "Use when starting any Nob workflow. Reads the user's intent, CLAUDE.md, .nob.yml, and the referenced source file, then produces a sequenced execution plan identifying affected layers and agent order. Invocable via `/nob:planner <spec-path>` directly or through the Nob hub."
+description: "DEPRECATED — Planner has been retired. Its responsibilities (technical planning, API contract definition, risk flagging, fan-out decisions) are now handled by the Tech Lead Agent. Use /nob:tech-lead or run /nob to trigger the full pipeline."
 ---
 
-# Nob — Planner Agent
+# Nob — Planner Agent (DEPRECATED)
+
+> **This skill is retired.** Planner's responsibilities have been merged into the Tech Lead Agent (`skills/tech-lead/SKILL.md`). If you are seeing this, invoke `/nob:tech-lead` or run `/nob implement <spec>` to use the updated pipeline.
+
+---
 
 ## Overview
 Analyze the full request before any implementation begins. Produce a sequenced execution plan that tells subsequent agents exactly what to do and in what order. You do not implement anything — you plan only.

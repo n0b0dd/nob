@@ -1,6 +1,6 @@
 ---
-name: nob-security-agent
-description: Use after Backend and Frontend agents complete in a Nob workflow. Reads changed files from implementation outputs and checks them for security issues across four categories: OWASP/Mobile Top 10, secrets, dependencies, and infra misconfigs. Covers web and mobile stacks (Android, iOS, Flutter, React Native). Outputs a structured [SECURITY-AGENT OUTPUT] block. Part of the Nob skill hub.
+name: nob-security
+description: "Reviews implementation outputs for security issues across four categories: OWASP/Mobile Top 10, secrets, dependencies, and infra misconfigs. Covers web and mobile stacks. Outputs a structured [SECURITY OUTPUT] block. Invocable via `/nob:security` directly or through the Nob hub."
 ---
 
 # Nob — Security Agent
@@ -13,10 +13,10 @@ Review the files changed in this implementation for security issues. Check only 
 ### Step 1: Extract changed files
 
 From context, find and read:
-- `[BACKEND-AGENT OUTPUT]` — extract all paths from `Files changed:` and `Files created:`
-- `[FRONTEND-AGENT OUTPUT]` — extract all paths from `Files changed:` and `Files created:`
+- `[BACKEND OUTPUT]` — extract all paths from `Files changed:` and `Files created:`
+- `[FRONTEND OUTPUT]` — extract all paths from `Files changed:` and `Files created:`
 
-If context contains `[MERGED SLICE OUTPUTS]` instead of individual agent outputs: scan all slice sections and extract all `Files changed:` and `Files created:` entries from every `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` block within the merged block.
+If context contains `[MERGED SLICE OUTPUTS]` instead of individual agent outputs: scan all slice sections and extract all `Files changed:` and `Files created:` entries from every `[BACKEND OUTPUT]` and `[FRONTEND OUTPUT]` block within the merged block.
 
 Combine all extracted paths into CHANGED_FILES (deduplicated). If CHANGED_FILES is empty after extraction, emit `Status: PASS` with note "No files changed — nothing to scan" and stop.
 
@@ -198,8 +198,8 @@ Proceed to Step 5 (Output).
 ## Output Format Requirement
 
 Your output block must:
-- Begin with `[SECURITY-AGENT OUTPUT]` on its own line (no leading spaces or characters)
-- End with `[/SECURITY-AGENT OUTPUT]` on its own line
+- Begin with `[SECURITY OUTPUT]` on its own line (no leading spaces or characters)
+- End with `[/SECURITY OUTPUT]` on its own line
 - Include every required field: `Status:`, `Findings:`
 - Use the exact field names listed — no synonyms, no omissions
 
@@ -208,7 +208,7 @@ Missing or misformatted fields will cause your output to be rejected and re-requ
 ## Step 5: Output
 
 ```
-[SECURITY-AGENT OUTPUT]
+[SECURITY OUTPUT]
 Status: PASS | FINDINGS
 
 Critical issues:
@@ -222,7 +222,7 @@ Medium issues:
 Low issues:
 - [LOW] {category} | {file}:{line} | {one-sentence description}
 (or: none)
-[/SECURITY-AGENT OUTPUT]
+[/SECURITY OUTPUT]
 ```
 
 If Status is PASS, all three issue lists read "none".
@@ -230,6 +230,6 @@ If Status is PASS, all three issue lists read "none".
 ---
 
 ## Error Handling
-- **No [BACKEND-AGENT OUTPUT] or [FRONTEND-AGENT OUTPUT] or [MERGED SLICE OUTPUTS] in context**: stop with "Security Agent cannot proceed — no implementation output blocks found in context. Ensure Backend and Frontend agents ran before Security Agent."
+- **No [BACKEND OUTPUT] or [FRONTEND OUTPUT] or [MERGED SLICE OUTPUTS] in context**: stop with "Security Agent cannot proceed — no implementation output blocks found in context. Ensure Backend and Frontend agents ran before Security Agent."
 - **CHANGED_FILES is empty after extraction**: emit `Status: PASS` with note "No files changed — nothing to scan"
 - **Coordinator specialist returns no output or an error**: treat that category as "none" for that specialist; note in findings: `[LOW] {category} | n/a | Specialist returned no output — manual check recommended`

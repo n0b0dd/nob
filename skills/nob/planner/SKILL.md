@@ -1,6 +1,6 @@
 ---
 name: nob-planner
-description: Use when starting any Nob workflow. Reads the user's intent, CLAUDE.md, .nob.yml, and the referenced source file, then produces a sequenced execution plan identifying affected layers and agent order. Always invoked first by the Nob hub.
+description: "Use when starting any Nob workflow. Reads the user's intent, CLAUDE.md, .nob.yml, and the referenced source file, then produces a sequenced execution plan identifying affected layers and agent order. Invocable via `/nob:planner <spec-path>` directly or through the Nob hub."
 ---
 
 # Nob — Planner Agent

@@ -1,6 +1,6 @@
 ---
 name: nob-reviewer
-description: Use at the end of every Nob workflow. Reads all agent output blocks and validates them against the original spec's acceptance criteria. Produces a pass/fail checklist and a clear human review list. Part of the Nob skill hub.
+description: "Validates implementation outputs against the original spec's acceptance criteria. Produces a pass/fail checklist and a clear human review list. Invocable via `/nob:reviewer` directly or through the Nob hub."
 ---
 
 # Nob — Reviewer Agent
@@ -18,7 +18,7 @@ Close the loop. Compare what was implemented against what was required. Produce 
 ### Step 0: Detect input mode
 Check the context provided by the hub:
 
-- **Single-slice mode**: context contains individual `[PM-AGENT OUTPUT]`, `[BACKEND-AGENT OUTPUT]`, `[FRONTEND-AGENT OUTPUT]` blocks → proceed to Step 1 as normal.
+- **Single-slice mode**: context contains individual `[PM OUTPUT]`, `[BACKEND OUTPUT]`, `[FRONTEND OUTPUT]` blocks → proceed to Step 1 as normal.
 - **Multi-slice mode**: context contains a `[MERGED SLICE OUTPUTS]` block with multiple named slice sections, each containing its own PM/Backend/Frontend output blocks → repeat Steps 1–5 once per slice, collecting all criteria and review items, then produce one combined `[REVIEWER OUTPUT]` covering the full feature. The overall status is the worst status across all slices (one FAIL → overall FAIL; any NEEDS REVIEW and no FAIL → overall NEEDS REVIEW).
 
 ### Step 1: Read the original source file
@@ -26,22 +26,22 @@ Read the spec or bug report file using the Read tool. The path is in the `[PLAN 
 
 If [PLAN OUTPUT] is not in context, look for the source file path in the user's original message.
 
-### Step 2: Read [PM-AGENT OUTPUT]
+### Step 2: Read [PM OUTPUT]
 Find the acceptance criteria checklist. This is your primary validation list.
 
 ### Step 2.5: Read Deferred items
 
-Check `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` for a `Deferred items:` field.
+Check `[BACKEND OUTPUT]` and `[FRONTEND OUTPUT]` for a `Deferred items:` field.
 
 For each deferred item listed (any line that is not `none`):
-- Find the acceptance criterion in `[PM-AGENT OUTPUT]` that most closely matches the deferred item description.
+- Find the acceptance criterion in `[PM OUTPUT]` that most closely matches the deferred item description.
 - Mark that criterion `⚠ partial` with reason: "deferred by agent due to scope limit — [deferred item text]".
 - Add to "Items for human review": "Deferred: [deferred item text]".
 
 If `Deferred items:` is absent or reads `none` for both agents, skip this step.
 
 ### Step 3: Read all implementation output blocks
-Read `[BACKEND-AGENT OUTPUT]` and `[FRONTEND-AGENT OUTPUT]` from context.
+Read `[BACKEND OUTPUT]` and `[FRONTEND OUTPUT]` from context.
 
 For each block, extract:
 - Files changed/created
@@ -59,26 +59,26 @@ If either test result is FAIL (after corroboration), overall tests are FAIL — 
 
 ### Step 3.5: Cross-layer contract check
 
-Extract `API contracts:` from `[PM-AGENT OUTPUT]`. Run three checks:
+Extract `API contracts:` from `[PM OUTPUT]`. Run three checks:
 
-**1. PM → Backend** (skip if `API contracts: none` in PM output, or if `[BACKEND-AGENT OUTPUT]` is absent):
-For each contract in PM `API contracts:`, find the matching entry in `[BACKEND-AGENT OUTPUT]` `New API contracts:`. Flag as CONTRACT VIOLATION if HTTP method, path, or response shape differs.
+**1. PM → Backend** (skip if `API contracts: none` in PM output, or if `[BACKEND OUTPUT]` is absent):
+For each contract in PM `API contracts:`, find the matching entry in `[BACKEND OUTPUT]` `New API contracts:`. Flag as CONTRACT VIOLATION if HTTP method, path, or response shape differs.
 
-**2. PM → Frontend** (skip if `API contracts: none` in PM output, or if `[FRONTEND-AGENT OUTPUT]` is absent):
-For each contract in PM `API contracts:`, find the matching entry in `[FRONTEND-AGENT OUTPUT]` `API endpoints consumed:`. Flag as CONTRACT VIOLATION if HTTP method or path differs.
+**2. PM → Frontend** (skip if `API contracts: none` in PM output, or if `[FRONTEND OUTPUT]` is absent):
+For each contract in PM `API contracts:`, find the matching entry in `[FRONTEND OUTPUT]` `API endpoints consumed:`. Flag as CONTRACT VIOLATION if HTTP method or path differs.
 
-**3. Backend → Frontend** (skip if `[BACKEND-AGENT OUTPUT]` or `[FRONTEND-AGENT OUTPUT]` is absent):
-For each endpoint the frontend consumes, find the matching contract in `[BACKEND-AGENT OUTPUT]`. Verify HTTP method and path match exactly. Verify the response shape the frontend expects matches what backend outputs.
+**3. Backend → Frontend** (skip if `[BACKEND OUTPUT]` or `[FRONTEND OUTPUT]` is absent):
+For each endpoint the frontend consumes, find the matching contract in `[BACKEND OUTPUT]`. Verify HTTP method and path match exactly. Verify the response shape the frontend expects matches what backend outputs.
 
 Add all CONTRACT VIOLATIONS to "Items for human review" regardless of criterion status.
 
 ### Step 3.6: Read security findings
 
-Check context for `[SECURITY-AGENT OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY-DISABLED]`.
+Check context for `[SECURITY OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY-DISABLED]`.
 
 - If `[SECURITY-DISABLED]` is present: store SECURITY_STATUS = "SKIPPED (disabled)".
 - If `[SECURITY-SKIPPED]` is present: store SECURITY_STATUS = "SKIPPED (user)".
-- If `[SECURITY-AGENT OUTPUT]` is present:
+- If `[SECURITY OUTPUT]` is present:
   - If `Status: PASS`: store SECURITY_STATUS = "PASS". No findings to record.
   - If `Status: FINDINGS`:
     - Extract all `[MEDIUM]` lines. Store as SECURITY_MEDIUM. Count them as SECURITY_MEDIUM_COUNT.
@@ -90,7 +90,7 @@ Check context for `[SECURITY-AGENT OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY
 
 ### Step 3.7: Code quality scan
 
-Collect QUALITY_FILES = all file paths from `Files changed:` and `Files created:` in [BACKEND-AGENT OUTPUT] and [FRONTEND-AGENT OUTPUT]. If fan-out mode, collect from all slice outputs.
+Collect QUALITY_FILES = all file paths from `Files changed:` and `Files created:` in [BACKEND OUTPUT] and [FRONTEND OUTPUT]. If fan-out mode, collect from all slice outputs.
 
 If QUALITY_FILES is empty: set QUALITY_FINDINGS = [] and skip the rest of this step.
 
@@ -108,7 +108,7 @@ Read each file in QUALITY_FILES. For each file, apply only the applicable catego
 - Severity: IMPORTANT
 
 **Category 3 — Untested endpoints (backend files only)**
-- For each new API endpoint listed in `New API contracts:` in [BACKEND-AGENT OUTPUT]:
+- For each new API endpoint listed in `New API contracts:` in [BACKEND OUTPUT]:
   - Check whether a test file in QUALITY_FILES (path contains `test`, `spec`, or `__tests__`) contains the endpoint path string.
   - If no test file contains the path: one finding.
 - Severity: IMPORTANT
@@ -123,7 +123,7 @@ Read each file in QUALITY_FILES. For each file, apply only the applicable catego
 Store all findings as QUALITY_FINDINGS. Set QUALITY_IMPORTANT_COUNT = count of IMPORTANT findings. Set QUALITY_MINOR_COUNT = count of MINOR findings.
 
 ### Step 4: Check each criterion individually
-For every acceptance criterion from [PM-AGENT OUTPUT]:
+For every acceptance criterion from [PM OUTPUT]:
 - **✓ implemented**: read the specific file named in the output block and confirm it contains evidence of the implementation (the route exists, the component renders, etc.) AND the relevant test layer reports PASS
 - **✗ NOT implemented**: no file in any output block covers it, or the file exists but reading it shows the implementation is missing
 - **⚠ partial**: covered in an output block but also listed in "items not implemented", only one layer implemented it when both were needed, or tests for that layer FAIL
@@ -161,7 +161,7 @@ Contract check:
   Backend → Frontend: [PASS | VIOLATIONS: list | SKIPPED — reason]
 
 Security:
-  Status: [PASS | FINDINGS: N medium, M low | SKIPPED (user) — security check was skipped by user | SKIPPED (disabled) — security-agent not in agents.enabled | NOT RUN — security agent output missing]
+  Status: [PASS | FINDINGS: N medium, M low | SKIPPED (user) — security check was skipped by user | SKIPPED (disabled) — security not in agents.enabled | NOT RUN — security agent output missing]
   [if FINDINGS: list each medium finding as "- [MEDIUM] {category} | {file}:{line} | {description}"]
   [if FINDINGS and low items: list each low finding as "- [LOW] {category} | {file}:{line} | {description}"]
 
@@ -183,7 +183,7 @@ Items for human review:
 ```
 
 ## Error Handling
-- **No [PM-AGENT OUTPUT] in context**: read the original spec's `## Acceptance criteria` section directly; note "Reviewer derived criteria from spec — no [PM-AGENT OUTPUT] found"
+- **No [PM OUTPUT] in context**: read the original spec's `## Acceptance criteria` section directly; note "Reviewer derived criteria from spec — no [PM OUTPUT] found"
 - **No implementation output blocks in context**: output status FAIL; note "No implementation output blocks found — agents may not have run"
 - **No Test results in an output block**: mark that layer's tests as SKIPPED — reason: "implementation agent did not report test results"
 - **Criterion is ambiguous**: mark it ⚠ and explain the ambiguity in the human review list

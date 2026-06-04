@@ -13,6 +13,20 @@ Close the loop. Compare what was implemented against what was required. Produce 
 - **NEEDS REVIEW**: at least one ⚠ partial, no ✗ unimplemented
 - **FAIL**: at least one ✗ NOT implemented
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. See **Standalone Inputs** below.
+
+### Standalone Inputs
+
+1. Ask the user for the spec file path so acceptance criteria can be verified.
+2. Look for `.nob/pm-output.md`, `.nob/backend-output.md`, and `.nob/frontend-output.md` in the working directory — use any that are found.
+3. For any missing outputs, ask the user to paste them directly, or note that those criteria will be marked ⚠ partial.
+4. Proceed to Step 0 with whatever context is available.
+
 ## Process
 
 ### Step 0: Detect input mode

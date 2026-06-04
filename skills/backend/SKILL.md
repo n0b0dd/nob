@@ -123,7 +123,7 @@ Target files (implement only these): {task.target_files}
 {EXPLORATION_CONTEXT}
 [/BACKEND-EXPLORATION CONTEXT]
 
-Backend changes needed (from PM Agent):
+Requirements from Tech Lead:
 {the "Backend changes needed" section from [PM OUTPUT]}
 
 {if this is not the first task:
@@ -248,6 +248,31 @@ If tests fail: attempt to fix. If the fix requires more than ~5 lines of non-obv
 
 ### Step 6: Output
 List every file changed or created with a one-sentence reason. List every new or changed API contract.
+
+## Blocker Protocol
+
+If you encounter an issue you cannot resolve on your own, emit a `[BLOCKER]` block immediately before your `[BACKEND OUTPUT]` block.
+
+When to emit a blocker:
+- Schema ambiguity that would change the API contract (e.g., unsure whether a field should be nullable)
+- Missing specification for a required endpoint
+- Dependency on a Frontend contract that is not yet defined
+- Risk flag discovered during implementation ([AUTH], [MIGRATION], [BREAKING], [SHARED])
+
+Blocker block format:
+```
+[BLOCKER]
+type: technical | ambiguity | cross-layer | risk
+flag: AUTH | MIGRATION | BREAKING | SHARED | none
+description: <one sentence describing the blocker>
+proposed_resolution: <your best suggestion, or: none>
+blocking_layer: backend | frontend | both
+[/BLOCKER]
+```
+
+Emit the blocker, then continue implementing as much as possible. Emit `[BACKEND OUTPUT]` with whatever you completed, noting the remaining work under `Deferred items:`.
+
+Do NOT halt and wait — always emit both a `[BLOCKER]` (if blocked) and a `[BACKEND OUTPUT]`.
 
 ## Output Format Requirement
 

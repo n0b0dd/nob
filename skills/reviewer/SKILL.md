@@ -86,21 +86,43 @@ For each endpoint the frontend consumes, find the matching contract in `[BACKEND
 
 Add all CONTRACT VIOLATIONS to "Items for human review" regardless of criterion status.
 
-### Step 3.6: Read security findings
+### Step 3.6: Security scan
 
-Check context for `[SECURITY OUTPUT]`, `[SECURITY-SKIPPED]`, or `[SECURITY-DISABLED]`.
+Collect SECURITY_FILES = all paths from `Files changed:` and `Files created:` in [BACKEND OUTPUT] and [FRONTEND OUTPUT]. If fan-out mode, collect from all slice outputs. Deduplicate.
 
-- If `[SECURITY-DISABLED]` is present: store SECURITY_STATUS = "SKIPPED (disabled)".
-- If `[SECURITY-SKIPPED]` is present: store SECURITY_STATUS = "SKIPPED (user)".
-- If `[SECURITY OUTPUT]` is present:
-  - If `Status: PASS`: store SECURITY_STATUS = "PASS". No findings to record.
-  - If `Status: FINDINGS`:
-    - Extract all `[MEDIUM]` lines. Store as SECURITY_MEDIUM. Count them as SECURITY_MEDIUM_COUNT.
-    - Extract all `[LOW]` lines. Store as SECURITY_LOW. Count them as SECURITY_LOW_COUNT.
-    - Store SECURITY_STATUS = "FINDINGS".
-    - If SECURITY_MEDIUM is non-empty: the overall review status cannot be PASS — at minimum NEEDS REVIEW. Add each medium finding to "Items for human review".
-    - Low findings are informational only — add them to the Security section of the output but do not affect overall status.
-- If neither block is present: store SECURITY_STATUS = "NOT RUN — security agent output missing from context".
+If SECURITY_FILES is empty: store SECURITY_STATUS = "SKIPPED — no files changed". Skip to Step 3.65.
+
+Read each file in SECURITY_FILES. For each file, check:
+
+**OWASP Top 10 (web + mobile)**
+- SQL injection: string concatenation building queries (`"SELECT " + userInput`, f-strings with user data in SQL, raw ORM calls with user input)
+- XSS: `innerHTML =`, `dangerouslySetInnerHTML`, `document.write(userInput)`, unescaped user input rendered as HTML
+- CSRF: POST/PUT/DELETE/PATCH handlers that modify state without a visible CSRF token check or same-site cookie attribute
+- Broken auth: routes accessing user-specific data without visible auth middleware or session check
+- Path traversal: `path.join(userInput)`, `fs.readFile(userInput)`, `open(userInput)` without path normalization
+- Mobile — insecure local storage: tokens/passwords in `SharedPreferences`, `NSUserDefaults`, `AsyncStorage` without encryption → CRITICAL
+- Mobile — cleartext traffic: hardcoded `http://` API URLs in production code → MEDIUM
+- Mobile — weak crypto: `MD5`, `SHA1`, `DES`, `ECB` for sensitive data → MEDIUM
+- Mobile — cert bypass: `TrustManager` accepting all certs, `setHostnameVerifier` always true → CRITICAL
+
+**Secrets**
+- API key patterns: strings starting with `sk-`, `pk_live_`, `AKIA`, `AIza`, `ghp_`, `glpat-`
+- Variables named `password`, `secret`, `token`, `api_key` assigned string literals (not `process.env.X` or `os.environ["X"]`)
+- `-----BEGIN PRIVATE KEY-----` or `-----BEGIN RSA PRIVATE KEY-----` in any file
+- Hardcoded Bearer tokens in request headers
+- JWT secrets as hardcoded string literals
+
+**Infra** (for Dockerfile, docker-compose.yml, `.github/workflows/*.yml`, `.env` files in SECURITY_FILES)
+- `.env` file committed to version control → CRITICAL
+- Dockerfile: no `USER` directive before `CMD`/`ENTRYPOINT` → MEDIUM
+- CI files (`.github/workflows/*.yml`, `.gitlab-ci.yml`): plaintext `password:`, `token:`, `secret:` with literal values (not `${{ secrets.X }}`) → CRITICAL
+- CORS: `Access-Control-Allow-Origin: *` with `Access-Control-Allow-Credentials: true` → CRITICAL
+
+Group all findings into Critical, Medium, Low:
+- If no findings: set SECURITY_STATUS = "PASS".
+- If any findings: set SECURITY_STATUS = "FINDINGS". Store SECURITY_MEDIUM (all [MEDIUM] lines) and SECURITY_LOW (all [LOW] lines).
+- If SECURITY_MEDIUM is non-empty: the overall review status cannot be PASS — at minimum NEEDS REVIEW. Add each medium finding to "Items for human review".
+- Low findings are informational only — add to the Security section of the output but do not affect overall status.
 
 ### Step 3.65: Migration safety check
 
@@ -195,7 +217,7 @@ Contract check:
   Backend → Frontend: [PASS | VIOLATIONS: list | SKIPPED — reason]
 
 Security:
-  Status: [PASS | FINDINGS: N medium, M low | SKIPPED (user) — security check was skipped by user | SKIPPED (disabled) — security not in agents.enabled | NOT RUN — security agent output missing]
+  Status: [PASS | FINDINGS: N medium, M low | SKIPPED — no files changed]
   [if FINDINGS: list each medium finding as "- [MEDIUM] {category} | {file}:{line} | {description}"]
   [if FINDINGS and low items: list each low finding as "- [LOW] {category} | {file}:{line} | {description}"]
 

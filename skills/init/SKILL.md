@@ -1385,11 +1385,10 @@ stack:
     core: shared/core/
 
 agents:
-  enabled: [planner, pm, backend, frontend, security, reviewer]
+  enabled: [pm, backend, frontend, security, reviewer]
   models:
     backend: sonnet
     frontend: sonnet
-    planner: haiku
     pm: haiku
     reviewer: haiku
     security: haiku

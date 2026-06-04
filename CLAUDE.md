@@ -15,22 +15,13 @@ skills/
     templates/    — CLAUDE.md.template and .nob.yml.template for user projects
   pm/             — PM skill: spec-writing and requirements extraction (/nob:pm)
   tech-lead/      — Technical lead: writes contracts, coordinates dev team (/nob:tech-lead)
-  planner/        — DEPRECATED: merged into tech-lead
   backend/        — Implements backend/API changes (/nob:backend)
   frontend/       — Implements frontend/UI changes (/nob:frontend)
-  security/       — Reviews implementation for security findings (/nob:security)
-  reviewer/       — Final pass/fail review against the spec (/nob:reviewer)
+  reviewer/       — Final pass/fail review + inline security scan (/nob:reviewer)
   init/           — Scaffolds a new fullstack project (/nob:init)
   ideation/       — Generates ranked feature ideas from an existing codebase (/nob:ideation)
   refactor/       — Migrates a project to nob's monorepo structure (/nob:refactor)
-  ask/            — Read-only codebase Q&A (/nob:ask)
-  venture-workflow/ — End-to-end venture validation pipeline
-  idea-framer/    — First agent in the Venture pipeline
-  market-researcher/ — Second agent in the Venture pipeline
-  business-modeler/ — Third agent in the Venture pipeline
-  gtm-strategist/ — Fourth agent in the Venture pipeline
-  financial-modeler/ — Fifth agent in the Venture pipeline
-  venture-reviewer/ — Final agent in the Venture pipeline
+  venture/        — End-to-end venture validation pipeline (/nob:venture)
 .claude-plugin/
   plugin.json     — Plugin manifest (name, version, author)
   marketplace.json — Marketplace listing
@@ -48,9 +39,9 @@ Version is tracked in **both** `.claude-plugin/plugin.json` and `.claude-plugin/
 
 Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) orchestrates all sub-skills:
 
-**PM → Tech Lead → Security → Reviewer**
+**PM → Tech Lead → Reviewer**
 
-(Tech Lead dispatches Backend + Frontend concurrently and manages the active blocker loop internally.)
+(Tech Lead dispatches Backend + Frontend concurrently. Reviewer includes inline security scanning.)
 
 - The hub resolves `SKILL_BASE_DIR` at runtime from its `Base directory for this skill:` context line — all sub-skill paths use `{SKILL_BASE_DIR}/../X/SKILL.md` (sub-skills live one level up from the hub at `skills/X/`).
 - The hub reads `.nob.yml` from the user's project root to configure models, enabled skills, and parallelism. If absent, it auto-detects the stack.

@@ -1,6 +1,6 @@
 ---
 name: nob
-description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, or migrate an existing project to nob''s monorepo structure. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [intent]". Orchestrates PM Agent → Tech Lead Agent → Security → Reviewer in sequence. Also auto-detects structure mismatch on any run and offers refactor before proceeding.'
+description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, or migrate an existing project to nob''s monorepo structure. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [intent]". Orchestrates PM Agent → Tech Lead Agent → Reviewer in sequence. Also auto-detects structure mismatch on any run and offers refactor before proceeding.'
 ---
 
 # Nob — Hub Orchestrator
@@ -8,7 +8,7 @@ description: 'Use when asked to implement a feature spec, fix a bug, sync client
 ## Overview
 Nob automates cross-layer development workflows in a fullstack monorepo. This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the PM Agent and ends with the Reviewer.
 
-Sub-skills (`/nob:tech-lead`, `/nob:backend`, `/nob:frontend`, `/nob:security`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`, `/nob:ask`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
+Sub-skills (`/nob:tech-lead`, `/nob:backend`, `/nob:frontend`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
 
 ## Agent Dispatch Model
 
@@ -164,24 +164,17 @@ Skip (not a project root):
 
 ```yaml
 agents:
-  enabled: [pm, tech-lead, backend, frontend, security, reviewer, ideation, ask]
+  enabled: [pm, tech-lead, backend, frontend, reviewer, ideation]
   models:
     backend: sonnet
     frontend: sonnet
     tech-lead: sonnet
     pm: haiku
     reviewer: haiku
-    security: haiku
     init: sonnet
-    idea-framer: haiku
-    market-researcher: sonnet
-    business-modeler: haiku
-    gtm-strategist: haiku
-    financial-modeler: haiku
-    venture-reviewer: haiku
+    venture: sonnet
     refactor: sonnet
     ideation: haiku
-    ask: haiku
   max_parallel_slices: 3
   venture:
     enabled: true
@@ -259,8 +252,6 @@ If all four checks pass: proceed to Step 2.
 | "I want to build a startup", "I want to build a product", "I want to build a company", "I have an idea", "bring to market", "startup idea", "business idea", "validate my idea", "launch a startup", "launch a product", "launch a company", "nob venture" | Venture |
 | "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure" | Refactor |
 | "nob ideate", "ideate [direction]", "what should I build next", "suggest features for", "I want to add [vague goal]", "what feature should I add" | Ideate |
-| "nob ask [question]", "ask [question]" | Ask |
-
 If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
 > "Is this a new feature to implement, a bug to fix, an API contract sync, a business idea you'd like to validate, a project to restructure, or feature ideation?"
 
@@ -271,8 +262,6 @@ If the identified workflow is `Init`, skip to the **Init workflow early exit** s
 If the identified workflow is `Refactor`, skip to the **Refactor workflow early exit** section immediately below before proceeding to Phase 0.
 
 If the identified workflow is `Ideate`, skip to the **Ideation workflow early exit** section immediately below before proceeding to Phase 0.
-
-If the identified workflow is `Ask`, skip to the **Ask workflow early exit** section immediately below before proceeding to Phase 0.
 
 ## Init workflow early exit
 
@@ -301,28 +290,20 @@ User intent: {user's original message}
 If the identified workflow is `Venture`:
 - Read `agents.venture.enabled` from RESOLVED_CONFIG. Default to `true` if absent.
 - If `false`: print "Venture mode is disabled in `.nob.yml`. Set `agents.venture.enabled: true` to enable." and exit.
-- Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
-- Read `{SKILL_BASE_DIR}/../venture-workflow/SKILL.md`.
-- Dispatch an Agent with `model: "sonnet"` and this prompt:
+- Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
+- Read `{SKILL_BASE_DIR}/../venture/SKILL.md`.
+- Dispatch an Agent with `model: agents.models["venture"] ?? "sonnet"` and this prompt:
 
 ```
 [INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../venture-workflow/SKILL.md}
+{full contents of {SKILL_BASE_DIR}/../venture/SKILL.md}
 [/INSTRUCTIONS]
 
 [INPUTS]
 Working directory: {current working directory path}
-Skill base dir: {SKILL_BASE_DIR}
 Venture idea: {user's original message}
 Checkpoint path: {agents.checkpoint.path, or: .nob/}
 Checkpoint enabled: {agents.checkpoint.enabled, or: true}
-Agent models:
-  idea-framer: {agents.models["idea-framer"] ?? haiku}
-  market-researcher: {agents.models["market-researcher"] ?? sonnet}
-  business-modeler: {agents.models["business-modeler"] ?? haiku}
-  gtm-strategist: {agents.models["gtm-strategist"] ?? haiku}
-  financial-modeler: {agents.models["financial-modeler"] ?? haiku}
-  venture-reviewer: {agents.models["venture-reviewer"] ?? haiku}
 [/INPUTS]
 ```
 
@@ -356,7 +337,7 @@ If the identified workflow is `Refactor`:
 ## Ideation workflow early exit
 
 If the identified workflow is `Ideate`:
-- Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
+- Skip Phase 0, Phase 1, Phase 2, and Phase 3 entirely.
 - Parse direction: strip trigger phrases ("nob ideate", "ideate", "what should I build next", "suggest features for", "what feature should I add"). Remaining text = direction; default = "general improvements".
 - Parse constraints: flags `--simple`, `--no-new-deps`, `--mobile-first`, `--backend-only`, `--frontend-only` or natural language equivalents. Store as a plain string, empty if none.
 - Read `{SKILL_BASE_DIR}/../ideation/SKILL.md`.
@@ -381,32 +362,6 @@ Current date: {today's date in YYYY-MM-DD format}
 
 ---
 
-## Ask workflow early exit
-
-If the identified workflow is `Ask`:
-- Skip Phase 0, Phase 1, Phase 2, Phase 2.5, and Phase 3 entirely.
-- Parse question: strip trigger phrases ("nob ask", "ask"). Remaining text = question. If nothing remains, ask: "What would you like to know about the codebase?"
-- Read `{SKILL_BASE_DIR}/../ask/SKILL.md`.
-- Dispatch an Agent with `model: agents.models["ask"] ?? "haiku"` and this prompt:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../ask/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-Question: {parsed question}
-[/INPUTS]
-```
-
-- Print the agent's response verbatim as the terminal output. No pipeline summary header.
-- No checkpoint is written. No retry loop. No Reviewer.
-- If the PushNotification tool is available, skip it for Ask runs.
-- Exit.
-
----
-
 ## Output Block Validation Procedure
 
 After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, apply this procedure before passing the output to the next agent. The required fields per agent are:
@@ -417,7 +372,6 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 | PM Agent | `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
 | Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
 | Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
-| Security Agent | `Status:`, `Findings:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
 
 **Validation steps:**
@@ -557,7 +511,7 @@ Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH
 
 Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
 
-Proceed to Phase 2.5.
+Proceed to Phase 3.
 
 ---
 
@@ -580,82 +534,10 @@ Extract `[TECH LEAD OUTPUT]`, `[BACKEND OUTPUT]`, and `[FRONTEND OUTPUT]` from t
 
 Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
 
-Proceed to Phase 2.5.
+Proceed to Phase 3.
 
 ---
 
-## Phase 2.5: Security review
-
-If `security` is not in `agents.enabled`: set SECURITY_OUTPUT = "[SECURITY-DISABLED]" and skip the rest of this phase. Proceed to Phase 3.
-
-**Prepare Security Agent input:**
-
-If Mode: single — BACKEND_OUTPUT and FRONTEND_OUTPUT are already in context from Phase 2. Pass them directly.
-
-If Mode: fan-out — construct MERGED_OUTPUTS by concatenating all SLICE OUTPUT blocks from SLICE_RESULTS:
-```
-[MERGED SLICE OUTPUTS]
-{all SLICE OUTPUT blocks from SLICE_RESULTS concatenated}
-[/MERGED SLICE OUTPUTS]
-```
-
-**Dispatch Security Agent:**
-
-Run `date +%s` and store as SEC_START_EPOCH.
-
-Read `{SKILL_BASE_DIR}/../security/SKILL.md`. Dispatch with `model: agents.models["security"] ?? "haiku"`:
-
-For Mode: single:
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../security/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-
-[BACKEND OUTPUT]
-{BACKEND_OUTPUT}
-[/BACKEND OUTPUT]
-
-[FRONTEND OUTPUT]
-{FRONTEND_OUTPUT}
-[/FRONTEND OUTPUT]
-[/INPUTS]
-```
-
-For Mode: fan-out:
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../security/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {current working directory path}
-
-{MERGED_OUTPUTS block}
-[/INPUTS]
-```
-
-Extract `[SECURITY OUTPUT]...[/SECURITY OUTPUT]`. Store as SECURITY_OUTPUT. Apply the **Output Block Validation Procedure** for Security Agent before proceeding.
-
-Run `date +%s` and store as SEC_END_EPOCH. Compute SEC_DURATION_MS = (SEC_END_EPOCH - SEC_START_EPOCH) × 1000. Read checkpoint, set `agents["security"] = { "model": "{resolved security model}", "started_at": "{SEC_START_EPOCH}", "duration_ms": SEC_DURATION_MS, "error": null }`, write back. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  security        {model}  OK    {SEC_DURATION_MS}ms`.
-
-**Apply severity gate:**
-
-Check SECURITY_OUTPUT for any `[CRITICAL]` lines.
-
-If one or more `[CRITICAL]` lines are present:
-1. Count them as N.
-2. Print each critical finding to the user.
-3. Print: "Security Agent found N critical issue(s) listed above. Fix and re-run, or skip security check? (fix / skip)"
-4. Wait for user response.
-   - `fix` or any non-skip response: exit. Print "Fix the issues above and re-run `/nob` to continue." Do not proceed to Phase 3.
-   - `skip`: set SECURITY_OUTPUT = "[SECURITY-SKIPPED]". Print "Security check skipped — findings will be noted in the Reviewer report." Proceed to Phase 3.
-
-If no `[CRITICAL]` lines: proceed to Phase 3 with SECURITY_OUTPUT as-is.
-
----
 
 ## Phase 3: Merge review
 
@@ -702,9 +584,6 @@ All agent outputs for review:
 {BACKEND_OUTPUT}
 
 {FRONTEND_OUTPUT}
-
-Security Agent output:
-{SECURITY_OUTPUT}
 [/INPUTS]
 ```
 
@@ -726,9 +605,6 @@ All agent outputs for review:
 {TECH_LEAD_OUTPUT}
 
 {MERGED SLICE OUTPUTS block constructed above}
-
-Security Agent output:
-{SECURITY_OUTPUT}
 [/INPUTS]
 ```
 
@@ -742,8 +618,6 @@ Update `{checkpoint.path}checkpoint.json` — set `reviewer_output` to the full 
 ---
 
 ## Phase 3.5: Retry loop
-
-Note: the Security Agent is not re-dispatched during retry. SECURITY_OUTPUT from Phase 2.5 carries through unchanged — retry fixes spec compliance failures, not security findings.
 
 Initialize: RETRY_COUNT = 0. PREV_RETRY_ITEMS = []. RETRY_RAN = false.
 
@@ -916,7 +790,7 @@ Extract `[TECH LEAD OUTPUT]`, `[BACKEND OUTPUT]`, and `[FRONTEND OUTPUT]`. Repla
 
 ## Step 4: Print terminal summary
 
-**If workflow is `Venture`**: the venture-workflow sub-agent prints its own summary before exiting. This section is not reached for Venture runs.
+**If workflow is `Venture`**: the venture sub-agent prints its own summary before exiting. This section is not reached for Venture runs.
 
 **If workflow is `Ideate`**, use this summary:
 
@@ -998,7 +872,7 @@ Nob complete.
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Mode:      [single | fan-out (N slices)]
-Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · backend(sonnet) · frontend(sonnet) · security(haiku) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
+Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · backend(sonnet) · frontend(sonnet) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
 Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · backend 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 
 [if Mode: fan-out:]
@@ -1007,7 +881,7 @@ Slices:
   ...
 
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
-Security:  [derive from SECURITY_OUTPUT: if "[SECURITY-DISABLED]" → "SKIPPED (disabled)", if "[SECURITY-SKIPPED]" → "SKIPPED (user)", if "Status: PASS" → "PASS", if "Status: FINDINGS" → count [MEDIUM] and [LOW] lines and print "FINDINGS: N medium, M low"]
+Security:  [derive from the Security section of REVIEWER_OUTPUT: PASS, FINDINGS: N medium M low, or SKIPPED — no files changed]
 CI:        [CI_STATUS — PASS | FAIL | SKIPPED (gh unavailable) | SKIPPED (disabled) | SKIPPED (timeout)]
 Review status: [PASS | NEEDS REVIEW | FAIL]
 [Retry line — derive from RETRY_COUNT, RETRY_RAN, and exit reason:

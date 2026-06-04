@@ -13,6 +13,13 @@ Answer the user's codebase question in a single pass using only read-only tools.
 - **Single pass**: no retry loop, no checkpoint, no Reviewer.
 - **Grounded only**: answer only from what you can observe in the codebase. Do not answer questions about external libraries, best practices, or opinions.
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. Use the current working directory as the working directory and the user's message as the question. No prior agent output needed — proceed to Step 1.
+
 ## Process
 
 ### Step 1: Parse the question

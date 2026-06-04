@@ -21,6 +21,13 @@ Provided by the hub in the `[INPUTS]` block:
 
 ---
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. Use the current working directory as the working directory and the user's message as the intent. No prior agent output needed — proceed to Step 1.
+
 ## Step 1: Analysis pass
 
 Extract `Working directory` from `[INPUTS]`. Store as WORKING_DIR.

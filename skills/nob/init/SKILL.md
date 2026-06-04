@@ -22,6 +22,13 @@ Provided by the hub in the `[INPUTS]` block:
 
 Extract `Working directory` from the `[INPUTS]` block. Store it as WORKING_DIR. All Bash commands and Write tool calls in this skill use WORKING_DIR as the base path (e.g., `ls -A {WORKING_DIR}`, `mkdir -p {WORKING_DIR}/apps/frontend/src/app`).
 
+## Mode 0: Mode Detection
+
+Check whether an `[INPUTS]` block is present in the current context.
+
+- **Hub-dispatched mode** (`[INPUTS]` present): all required values are provided in that block. Follow the steps below using those values — do not prompt the user.
+- **Standalone mode** (`[INPUTS]` absent): you have been invoked directly. Use the current working directory as the working directory and the user's message as the intent. No prior agent output needed — proceed to Step 1.
+
 ## Step 1: Check directory is empty
 
 Run via Bash: `ls -A {WORKING_DIR}`

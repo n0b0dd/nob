@@ -1252,7 +1252,7 @@ Implementation complete. What next?
   verify  — run build + test suite in worktree
   push    — print push command (create PR manually)
 ```
-Wait for user response.
+Wait for user response. If the response is anything other than `verify` or `push`: print `Worktree preserved at {WORKTREE_PATH} — run \`git worktree remove {WORKTREE_PATH}\` when done.` and exit.
 
 If `verify`:
 

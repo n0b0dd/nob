@@ -202,6 +202,7 @@ Also extract:
 - `agents.checkpoint.path` (default: `.nob/` if not present)
 - `agents.max_tokens_per_run` (absent/null if not present — budget guard disabled when absent)
 - `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
+- `agents.auto_pr` (default: false if not present — set true to opt-in to automatic PR creation after Reviewer PASS)
 
 **Stack guidance paths**: compute from SKILL_BASE_DIR and resolved stack types:
 - BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/../backend/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)

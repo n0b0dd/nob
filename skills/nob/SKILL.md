@@ -1,6 +1,6 @@
 ---
 name: nob
-description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, or migrate an existing project to nob''s monorepo structure. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [intent]". Orchestrates PM Agent → Tech Lead Agent → Reviewer in sequence. Also auto-detects structure mismatch on any run and offers refactor before proceeding.'
+description: 'Use when asked to implement a feature spec, fix a bug, sync clients after an API change, migrate an existing project, or build something from a rough idea. Triggers on: "implement [spec]", "build [feature] from [spec]", "fix [bug report]", "sync clients after [change]", "nob refactor", "nob [idea or intent]". For rough ideas with no spec file, PM Agent writes the spec first then the full pipeline runs automatically. Orchestrates PM Agent → Tech Lead Agent → Reviewer in sequence.'
 ---
 
 # Nob — Hub Orchestrator
@@ -126,48 +126,41 @@ find . \( -name "package.json" -o -name "requirements.txt" -o -name "pyproject.t
 
 Also check separately: does `android/` exist? Does `ios/Podfile` exist?
 
-**Classify each found file:**
+**Classify each found manifest into a unit** (`{ name, type, path }`):
 
-Frontend candidates (record path = that file's directory, detect type):
 - `package.json` with `next` in dependencies or devDependencies → type `next`
 - `package.json` with `vue` in dependencies or devDependencies → type `vue`
 - `package.json` with `react` or `react-dom` in dependencies → type `react`
 - `package.json` with `svelte` in dependencies → type `react` (treat as generic component framework)
+- `package.json` with `express`, `fastify`, `koa`, `hapi`, or `@nestjs/core` in dependencies → type `node`
+- `package.json` with no recognized framework markers → type `node`
+- `requirements.txt` or `pyproject.toml` → type `python`
+- `go.mod` → type `go`
+- `pom.xml` or `build.gradle` or `build.gradle.kts` → type `java`
 - `pubspec.yaml` → type `flutter`
 - `android/` directory present → type `android`, path = `android/`
 - `ios/Podfile` present → type `ios`, path = `ios/`
 
-Backend candidates (record path = that file's directory, detect type):
-- `package.json` with `express`, `fastify`, `koa`, `hapi`, or `@nestjs/core` in dependencies → type `node`
-- `requirements.txt` or `pyproject.toml` → type `python`
-- `go.mod` → type `go`
-- `pom.xml` or `build.gradle` or `build.gradle.kts` → type `java`
+For each recognized manifest: `name` = the manifest file's parent directory name (e.g. `apps/frontend/package.json` → name `frontend`); `path` = that directory.
 
-Monolith (same `package.json` has both frontend and backend markers):
-- Set `stack.frontend.path` and `stack.backend.path` to that directory. Set type for each layer.
+Skip workspace-root `package.json` files that contain only a `workspaces` field and no dependency markers.
 
-Skip (not a project root):
-- `package.json` with no recognized frontend or backend markers (e.g. workspace root with only `workspaces` field, or a tooling-only config) → skip
+**Resolve units list:**
 
-**Resolve configuration from classification results:**
-
-- **1 frontend + 1 backend at different paths** → use those paths and types directly.
-- **1 monolith** → both frontend and backend path = that directory.
-- **Multiple frontend candidates** → ask: "I found multiple frontend candidates: [list with paths and types]. Which should Nob use?" Wait for answer.
-- **Multiple backend candidates** → ask: "I found multiple backend candidates: [list with paths and types]. Which should Nob use?" Wait for answer.
-- **Framework not recognised in a `package.json`** → ask: "Found `package.json` in `[dir]` but couldn't identify the framework. Is this frontend or backend, and what type? (e.g. react / vue / next / express / other)" Wait for answer.
-- **No frontend found** → `stack.frontend.enabled: false`
-- **No backend found** → `stack.backend.enabled: false`
-- **Nothing detected at all** → ask: "Could not detect your stack. What is your frontend directory? (or 'none' to skip)" then "What is your backend directory? (or 'none' to skip)" Proceed once answered.
+- Each recognized manifest → one unit in the list.
+- If nothing is detected at all → ask: "Could not detect your stack. Provide `path:type` pairs (e.g. `apps/api:node apps/web:react`), or press Enter to use one `generic` unit at repo root." Wait for answer. If user provides pairs: parse into units list. If Enter/empty: units = `[{ name: "root", type: "generic", path: "." }]`.
 
 **Build RESOLVED_CONFIG** as a YAML string using detected values plus these defaults:
 
 ```yaml
+units:
+  - name: {detected name}
+    type: {detected type}
+    path: {detected path}
 agents:
-  enabled: [pm, tech-lead, backend, frontend, reviewer, ideation]
+  enabled: [pm, tech-lead, dev, reviewer, ideation]
   models:
-    backend: sonnet
-    frontend: sonnet
+    dev: sonnet
     tech-lead: sonnet
     pm: haiku
     reviewer: haiku
@@ -193,15 +186,14 @@ Also extract:
 - `agents.max_parallel_slices` (default: 3 if not present)
 - `agents.checkpoint.enabled` (default: true if not present)
 - `agents.checkpoint.path` (default: `.nob/` if not present)
-- `agents.max_tokens_per_run` (absent/null if not present — budget guard disabled when absent)
+- `RUN_LOG_PATH` = `{agents.checkpoint.path}run-log.tsv` — the per-run timing log. On the first append of the run, create the file (and its parent directory) if absent: `mkdir -p {agents.checkpoint.path} && touch {RUN_LOG_PATH}`. All "Append to RUN_LOG_PATH" steps below append one tab-separated line via Bash (`printf '%s\n' "<line>" >> {RUN_LOG_PATH}`), which creates the file if it does not yet exist. If the write fails, skip silently (see Error Handling H2).
 - `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
 - `agents.auto_pr` (default: false if not present — set true to opt-in to automatic PR creation after Reviewer PASS)
-- `BACKEND_MODEL_RESOLVED` = `agents.models["backend"] ?? "sonnet"` — Tech Lead handles complexity-based dispatch internally
-- `FRONTEND_MODEL_RESOLVED` = `agents.models["frontend"] ?? "sonnet"`
+- `DEV_MODEL_RESOLVED` = `agents.models["dev"] ?? "sonnet"`
 
-**Stack guidance paths**: compute from SKILL_BASE_DIR and resolved stack types:
-- BACKEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/../backend/stacks/{stack.backend.type}.md` (or `none` if `stack.backend.enabled: false`)
-- FRONTEND_STACK_GUIDANCE_PATH = `{SKILL_BASE_DIR}/../frontend/stacks/{stack.frontend.type}.md` (or `none` if `stack.frontend.enabled: false`)
+**Unit guidance map**: compute `UNIT_GUIDANCE_MAP` from SKILL_BASE_DIR and each unit's type. For every unit in `units`:
+- `UNIT_GUIDANCE_MAP[unit.name]` = `{SKILL_BASE_DIR}/../dev/stacks/{unit.type}.md`
+- If `unit.type` is `generic` or unrecognized (not one of: node, python, go, java, ruby, react, vue, next, flutter, android, ios, react-native): set to `none`
 
 **Project memory**: load structured memory in this order:
 
@@ -252,10 +244,12 @@ If all four checks pass: proceed to Step 2.
 | "I want to build a startup", "I want to build a product", "I want to build a company", "I have an idea", "bring to market", "startup idea", "business idea", "validate my idea", "launch a startup", "launch a product", "launch a company", "nob venture" | Venture |
 | "nob refactor", "restructure project", "migrate to nob structure", "migrate project", "refactor project structure" | Refactor |
 | "nob ideate", "ideate [direction]", "what should I build next", "suggest features for", "I want to add [vague goal]", "what feature should I add" | Ideate |
-If the intent does not clearly match any workflow, ask ONE clarifying question before proceeding:
+| Plain text with no `/` and not ending in `.md`, not matching any pattern above | Idea → Spec → Code |
+
+If the intent does not clearly match any workflow AND contains a `/` or `.md` but is not a valid path, ask ONE clarifying question before proceeding:
 > "Is this a new feature to implement, a bug to fix, an API contract sync, a business idea you'd like to validate, a project to restructure, or feature ideation?"
 
-Do NOT guess the workflow type. If ambiguous, ask.
+Do NOT guess the workflow type for ambiguous path-like inputs. Plain text ideas always route to `Idea → Spec → Code` — do not ask.
 
 If the identified workflow is `Init`, skip to the **Init workflow early exit** section immediately below before proceeding to Phase 0.
 
@@ -360,6 +354,31 @@ Current date: {today's date in YYYY-MM-DD format}
 - If extraction fails: re-dispatch once with the same prompt. If still missing: print raw agent output and stop.
 - Jump directly to Step 4 (Print terminal summary) using the Ideation terminal summary format.
 
+## Idea → Spec → Code workflow
+
+If the identified workflow is `Idea → Spec → Code`:
+
+1. Read `{SKILL_BASE_DIR}/../pm/SKILL.md`.
+2. Dispatch PM Agent with `model: agents.models["pm"] ?? "haiku"` in spec-writing mode:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../pm/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Hub dispatch: spec-writing
+Working directory: {current working directory path}
+Idea: {user's original message}
+[/INPUTS]
+```
+
+3. Extract `[PM SPECWRITER OUTPUT]...[/PM SPECWRITER OUTPUT]` from the result.
+   - If extraction fails: print `"PM agent did not produce a spec file path — cannot continue. Run \`/nob:pm <idea>\` directly to debug."` and exit.
+4. Extract the `Spec file:` line from `[PM SPECWRITER OUTPUT]`. Store the value as SOURCE_FILE.
+5. If `checkpoint.enabled` is true: write initial checkpoint with `spec_path: {SOURCE_FILE}` before proceeding.
+6. Continue to **Step 1.5** using SOURCE_FILE as the spec file path. From this point forward treat the run as a `Spec → Code` workflow.
+
 ---
 
 ## Output Block Validation Procedure
@@ -370,8 +389,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 |---|---|
 | Tech Lead | `Run mode:`, `Affected layers:`, `API contracts written:`, `Risks:` |
 | PM Agent | `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
-| Backend Agent | `Files changed:`, `New API contracts:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
-| Frontend Agent | `Files changed:`, `API endpoints consumed:`, `Items not implemented (needs human):`, `Deferred items:`, `Test results:`, `Test output:`, `Memory conflicts:` |
+| Dev Agent | `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
 
 **Validation steps:**
@@ -398,12 +416,13 @@ If the file does not exist or cannot be read: proceed to Phase 1 as a fresh run.
 
 If the file exists and is valid JSON:
 0. **Spec binding check** (Spec→Code and Bug→Fix workflows only — skip for Init, Venture, Refactor, Ideate, Ask):
+   - If checkpoint has a `spec_path` field AND the identified workflow is `Idea → Spec → Code`: this is a resumed idea run — the spec was already written. Set `SOURCE_FILE = checkpoint.spec_path`, set `WORKFLOW_OVERRIDE = "Spec→Code"`, and skip the `Idea → Spec → Code` dispatch block entirely. Continue resume as a `Spec → Code` run using `SOURCE_FILE`.
    - If checkpoint has a `spec_path` field AND it does not match the current spec file path: print `"Warning: checkpoint is for \`{checkpoint.spec_path}\`, not \`{current spec path}\` — starting fresh run."` Treat the checkpoint as absent. Proceed to Phase 2 as a fresh run.
    - If checkpoint has no `spec_path` field (legacy format): proceed with resume as normal.
 1. If `reviewer_output` is non-null → run is already complete. Print the terminal summary using stored outputs and exit. Do not re-run any agents.
-2. If `"phase1"` is in `phases_completed` → skip Phase 1 dispatch. Restore the slice list from the checkpoint `slices` keys. For each slice:
-   - `status: completed` → inject its outputs: add it to SLICE_RESULTS as {name: slice-name, slice_output: checkpoint.slices[name].slice_output}; skip its mini-pipeline in Phase 2
-   - `status: in_progress` → treat as pending; re-run its full mini-pipeline in Phase 2 (partial output not trusted)
+2. If `"phase1"` is in `phases_completed` → skip Phase 1 dispatch. Restore the task list from the checkpoint `tasks` map. For each task (keyed by task id):
+   - `status: completed` → inject as completed; skip re-running in Phase 2
+   - `status: in_progress` → treat as pending; re-run in Phase 2 (partial output not trusted)
    - `status: pending` → run normally in Phase 2
 3. If `phases_completed` is empty → proceed to Phase 1 as normal.
 4. If `worktree_path` is set in the checkpoint: restore `WORKTREE_PATH` from it. If the path does not exist on disk, re-create the worktree: run `git worktree add {worktree_path} {worktree_branch}`.
@@ -420,18 +439,14 @@ Proceed directly to Phase 2.
 
 ---
 
-## Phase 2: Parallel pipelines
+## Phase 2: Tech Lead → dev pipeline
 
 **Initial checkpoint write** (if `checkpoint.enabled` is true and no checkpoint file exists yet — fresh run only):
 Write `{checkpoint.path}checkpoint.json` with:
 ```json
-{ "spec_path": "{spec file path}", "worktree_path": "{WORKTREE_PATH}", "worktree_branch": "{WORKTREE_BRANCH}", "phases_completed": [], "slices": {} }
+{ "spec_path": "{spec file path}", "worktree_path": "{WORKTREE_PATH}", "worktree_branch": "{WORKTREE_BRANCH}", "phases_completed": [], "tasks": {} }
 ```
 Skip this write if the checkpoint file already exists (resume run — Phase 0 already loaded it).
-
-### Single-slice path
-
-Run PM Agent first (sequential), then Tech Lead (which manages Backend + Frontend internally).
 
 **Agent 1 — PM Agent**
 
@@ -475,8 +490,8 @@ Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch with `model: agents.mode
 [INPUTS]
 Working directory: {current working directory path}
 
-Backend stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
-Frontend stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
+Unit guidance map:
+{for each entry in UNIT_GUIDANCE_MAP: "  {name}: {path-or-none}"}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -491,78 +506,37 @@ Project memory:
 {PROJECT_MEMORY}
 
 Agent models:
-  backend: {BACKEND_MODEL_RESOLVED}
-  frontend: {FRONTEND_MODEL_RESOLVED}
+  dev: {DEV_MODEL_RESOLVED}
+
+Max parallel slices: {agents.max_parallel_slices}
 [/INPUTS]
 ```
 
 Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. Apply Output Block Validation for Tech Lead.
-Extract `[BACKEND OUTPUT]...[/BACKEND OUTPUT]`. Store as BACKEND_OUTPUT.
-Extract `[FRONTEND OUTPUT]...[/FRONTEND OUTPUT]`. Store as FRONTEND_OUTPUT.
+Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
 
-If BACKEND_OUTPUT or FRONTEND_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing after re-dispatch: mark the missing layer as `failed`; proceed with available outputs.
+If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing after re-dispatch: mark as `failed`; stop pipeline.
+
+Set IMPL_OUTPUT = DEV_OUTPUT.
 
 Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH - TL_START_EPOCH) × 1000. Append to RUN_LOG_PATH:
 ```
 {date -u +%FT%TZ}  tech-lead       {model}  OK    {TL_DURATION_MS}ms
-{date -u +%FT%TZ}  backend         {BACKEND_MODEL_RESOLVED}  OK    {TL_DURATION_MS}ms
-{date -u +%FT%TZ}  frontend        {FRONTEND_MODEL_RESOLVED}  OK    {TL_DURATION_MS}ms
+{date -u +%FT%TZ}  dev             {DEV_MODEL_RESOLVED}  OK    {TL_DURATION_MS}ms
 ```
-
-Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
-
-Proceed to Phase 3.
-
----
-
-### Fan-out path (Mode: fan-out)
-
-PM Agent runs once for the full spec (same as single-slice path above — run it first if not already done). Then dispatch Tech Lead with fan-out context:
-
-Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch Tech Lead with `model: agents.models["tech-lead"] ?? "sonnet"` using the same prompt as the single-slice path, but append to the [INPUTS] block:
-
-```
-Fan-out mode: true
-Max parallel slices: {agents.max_parallel_slices}
-Spec file path: {spec file path}
-Spec file contents: {spec file content}
-```
-
-Tech Lead determines slices internally and dispatches N Backend+Frontend pairs concurrently (up to max_parallel_slices).
-
-Extract `[TECH LEAD OUTPUT]`, `[BACKEND OUTPUT]`, and `[FRONTEND OUTPUT]` from the result. For fan-out runs, Backend and Frontend outputs will contain labeled slice sections.
-
-Set SLICE_RESULTS = [{name: "main", pm_output: PM_OUTPUT, backend_output: BACKEND_OUTPUT, frontend_output: FRONTEND_OUTPUT}]
 
 Proceed to Phase 3.
 
 ---
 
 
-## Phase 3: Merge review
-
-**Prepare Reviewer input:**
-
-If Mode: single — pass outputs directly as individual labeled blocks (PM_OUTPUT, BACKEND_OUTPUT, FRONTEND_OUTPUT).
-
-If Mode: fan-out — construct a merged context:
-```
-[MERGED SLICE OUTPUTS]
---- Slice: {slice-name-1} ---
-{slice 1 full SLICE OUTPUT contents}
-
---- Slice: {slice-name-2} ---
-{slice 2 full SLICE OUTPUT contents}
-[/MERGED SLICE OUTPUTS]
-```
+## Phase 3: Review
 
 **Dispatch Reviewer agent:**
 
 Run `date +%s` and store as REVIEWER_START_EPOCH.
 
 Read `{SKILL_BASE_DIR}/../reviewer/SKILL.md`. Dispatch with `model: agents.models["reviewer"] ?? "haiku"`:
-
-**For Mode: single**, use this [INPUTS] block ending:
 
 ```
 [INSTRUCTIONS]
@@ -581,30 +555,7 @@ All agent outputs for review:
 
 {PM_OUTPUT}
 
-{BACKEND_OUTPUT}
-
-{FRONTEND_OUTPUT}
-[/INPUTS]
-```
-
-**For Mode: fan-out**, use this [INPUTS] block ending:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../reviewer/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {working directory path}
-Spec file path: {spec file path}
-Spec file contents:
-{spec file content}
-
-All agent outputs for review:
-
-{TECH_LEAD_OUTPUT}
-
-{MERGED SLICE OUTPUTS block constructed above}
+{DEV_OUTPUT}
 [/INPUTS]
 ```
 
@@ -773,18 +724,15 @@ Project memory:
 {PROJECT_MEMORY}
 
 Agent models:
-  backend: {BACKEND_MODEL_RESOLVED}
-  frontend: {FRONTEND_MODEL_RESOLVED}
+  dev: {DEV_MODEL_RESOLVED}
 [/INPUTS]
 ```
 
-Extract `[TECH LEAD OUTPUT]`, `[BACKEND OUTPUT]`, and `[FRONTEND OUTPUT]`. Replace TECH_LEAD_OUTPUT, BACKEND_OUTPUT, and FRONTEND_OUTPUT with results.
+Extract `[TECH LEAD OUTPUT]` and `[DEV OUTPUT]`. Replace TECH_LEAD_OUTPUT and DEV_OUTPUT with results.
 
-**After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3 (Mode: single). Extract new REVIEWER_OUTPUT. If checkpoint.enabled: update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
+**After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3. Extract new REVIEWER_OUTPUT. If checkpoint.enabled: update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
 
 --- Loop end ---
-
-**Fan-out mode:** Re-dispatch all slices as a new batch (same structure as Phase 2 fan-out). Merge outputs and re-run Reviewer once. Increment RETRY_COUNT. Continue loop.
 
 ---
 
@@ -871,14 +819,8 @@ Nob complete.
 
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
-Mode:      [single | fan-out (N slices)]
-Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · backend(sonnet) · frontend(sonnet) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use BACKEND_MODEL_RESOLVED and FRONTEND_MODEL_RESOLVED for those two agents.]
-Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · backend 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
-
-[if Mode: fan-out:]
-Slices:
-  [slice-name]: [PASS | FAIL | SKIPPED]
-  ...
+Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · dev(sonnet) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use DEV_MODEL_RESOLVED for the dev agent.]
+Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · dev 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 
 Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
 Security:  [derive from the Security section of REVIEWER_OUTPUT: PASS, FINDINGS: N medium M low, or SKIPPED — no files changed]
@@ -1061,7 +1003,7 @@ Append new entries (skip if duplicate):
 
 Write the updated YAML back to `.nob/project-memory.yml` using the Write tool.
 
-Append final summary line to RUN_LOG_PATH using the Edit tool:
+Append final summary line to RUN_LOG_PATH (Bash append, as defined in Step 1):
 ```
 {date -u +%FT%TZ}  run            -       {Overall status from REVIEWER_OUTPUT}   -  total
 ```
@@ -1078,7 +1020,7 @@ Append final summary line to RUN_LOG_PATH using the Edit tool:
 - **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer
 - **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
 - **Reviewer status is FAIL**: print all failing items prominently; Phase 3.5 retry loop handles up to MAX_RETRIES passes (1 automatic + user-gated after that)
-- **Non-slice agent result missing expected output block**: re-dispatch once; if still missing after re-dispatch, mark status `timed_out` (store `timed_out_at: "<phase>/<agent-name>"`). Do NOT pass null output to downstream agents. For fan-out: skip this slice and continue remaining slices. For single mode: stop pipeline and skip Reviewer.
+- **Agent result missing expected output block**: re-dispatch once; if still missing after re-dispatch, mark status `timed_out` (store `timed_out_at: "<phase>/<agent-name>"`). Do NOT pass null output to downstream agents. Stop pipeline and skip Reviewer.
 - **Any early-exit agent (Init, Refactor, Ideation, Venture) returns no expected output block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop
 - **Pre-flight validation fails (Step 1.5)**: print specific error message, exit immediately — no agents dispatched
 - **`gh pr create` fails (M1)**: print the error output; print the `git push -u origin {WORKTREE_BRANCH}` command as fallback

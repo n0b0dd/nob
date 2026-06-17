@@ -420,11 +420,8 @@ If the file exists and is valid JSON:
    - If checkpoint has a `spec_path` field AND it does not match the current spec file path: print `"Warning: checkpoint is for \`{checkpoint.spec_path}\`, not \`{current spec path}\` — starting fresh run."` Treat the checkpoint as absent. Proceed to Phase 2 as a fresh run.
    - If checkpoint has no `spec_path` field (legacy format): proceed with resume as normal.
 1. If `reviewer_output` is non-null → run is already complete. Print the terminal summary using stored outputs and exit. Do not re-run any agents.
-2. If `"phase1"` is in `phases_completed` → skip Phase 1 dispatch. Restore the task list from the checkpoint `tasks` map. For each task (keyed by task id):
-   - `status: completed` → inject as completed; skip re-running in Phase 2
-   - `status: in_progress` → treat as pending; re-run in Phase 2 (partial output not trusted)
-   - `status: pending` → run normally in Phase 2
-3. If `phases_completed` is empty → proceed to Phase 1 as normal.
+2. If `"phase2"` is in `phases_completed` AND `reviewer_output` is null → implementation ran but review did not finish. Build RESUME_COMPLETED_TASKS = the set of task ids in the checkpoint `tasks` map whose status is `"completed"`. These ids are passed to the dev coordinator (via the Tech Lead) in Phase 2 so already-implemented tasks are skipped; tasks with status `"pending"`/`"in_progress"` (and any task not in the map) are re-run normally. Proceed to Phase 2.
+3. If `phases_completed` is empty → proceed to Phase 1 as normal. Set RESUME_COMPLETED_TASKS = empty (no tasks to skip).
 4. If `worktree_path` is set in the checkpoint: restore `WORKTREE_PATH` from it. If the path does not exist on disk, re-create the worktree: run `git worktree add {worktree_path} {worktree_branch}`.
 
 If the file exists but cannot be parsed as valid JSON: print "Warning: checkpoint file is corrupted — starting fresh run." Proceed to Phase 1 without resume.
@@ -447,6 +444,8 @@ Write `{checkpoint.path}checkpoint.json` with:
 { "spec_path": "{spec file path}", "worktree_path": "{WORKTREE_PATH}", "worktree_branch": "{WORKTREE_BRANCH}", "phases_completed": [], "tasks": {} }
 ```
 Skip this write if the checkpoint file already exists (resume run — Phase 0 already loaded it).
+
+On a fresh run, RESUME_COMPLETED_TASKS is empty (no tasks were completed in a prior run).
 
 **Agent 1 — PM Agent**
 
@@ -509,6 +508,8 @@ Agent models:
   dev: {DEV_MODEL_RESOLVED}
 
 Max parallel slices: {agents.max_parallel_slices}
+
+Already-completed tasks (resume — skip these task ids): {RESUME_COMPLETED_TASKS as comma-separated ids, or: none}
 [/INPUTS]
 ```
 
@@ -518,6 +519,9 @@ Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
 If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing after re-dispatch: mark as `failed`; stop pipeline.
 
 Set IMPL_OUTPUT = DEV_OUTPUT.
+
+**Write task statuses to checkpoint** (if `checkpoint.enabled`):
+Parse the `Tasks:` list from DEV_OUTPUT — each line has the form `- [task-id] (unit: name): [done | partial | failed] — ...`. Build a map TASK_STATUS where `done` → `"completed"` and `partial`/`failed` → `"pending"`. Read `{checkpoint.path}checkpoint.json`, set its `tasks` field to TASK_STATUS, append `"phase2"` to `phases_completed` (only if not already present), and write it back with the Write tool. If the checkpoint write fails, skip silently (see Error Handling H2).
 
 Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH - TL_START_EPOCH) × 1000. Append to RUN_LOG_PATH:
 ```
@@ -718,7 +722,7 @@ Max parallel slices: {agents.max_parallel_slices}
 
 Extract `[TECH LEAD OUTPUT]` and `[DEV OUTPUT]`. Replace TECH_LEAD_OUTPUT and DEV_OUTPUT with results.
 
-**After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3. Extract new REVIEWER_OUTPUT. If checkpoint.enabled: update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
+**After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3. Extract new REVIEWER_OUTPUT. If `checkpoint.enabled`: update the `tasks` map in checkpoint.json from the new DEV_OUTPUT `Tasks:` list (same `done`→`"completed"`, `partial`/`failed`→`"pending"` mapping). Update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
 
 --- Loop end ---
 

@@ -44,6 +44,7 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
    - **Per-unit stack-guidance path map** — a map of `unit name → stacks/{type}.md` path for each unit declared in the task list (see stack type map below). If absent, derive from `.nob.yml` units.
 2. Read `[PM OUTPUT]` — extract acceptance criteria. Store as PM_CRITERIA.
 3. Read `Project memory:` from `[INPUTS]`. Extract `corrections` entries — these are highest priority and describe past mistakes or pattern overrides from previous runs. Apply every applicable correction during implementation. If a correction directly conflicts with the spec or PM requirements (i.e. you cannot satisfy both), note it in `Memory conflicts:` in the output block. If no corrections apply or all applied cleanly, write `none`.
+4. Read `Already-completed tasks (skip these task ids):` from `[INPUTS]`. Store as COMPLETED_TASKS (a set of task ids). If absent or `none`, COMPLETED_TASKS is empty.
 
 **Stack type → guidance file map:**
 - `node` → `skills/dev/stacks/node.md`
@@ -62,8 +63,15 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
 
 ### Step 2: Build the execution plan (coordinator decision)
 
-1. Parse the task list into a dependency graph using each task's `depends_on` field.
-2. **Trivial path**: if total work is ≤4 files across a single unit and PLAN_RISKS is empty, implement **in-session** directly (skip sub-agent dispatch, go to Step 3.5 Inline Implementation).
+**Resume-skip rule** (applied before any other scheduling): for each task in the task list, check whether its `id` is in COMPLETED_TASKS. If it is:
+- Do NOT dispatch it (not in-session, not as a sub-agent) — it was implemented in a prior run.
+- Carry it into the final `[DEV OUTPUT]` `Tasks:` list as `done — (resumed: already implemented in a prior run)` with empty `Files changed:` and `Files created:` entries for that task.
+- If a skipped task is a `depends_on` prerequisite of a remaining task, treat the dependency as satisfied — the dependent sub-agent must explore the codebase to find the contracts produced in the prior run rather than receiving a prior `[TASK OUTPUT]` block.
+- If ALL tasks are in COMPLETED_TASKS, emit a `[DEV OUTPUT]` reporting every task as `done — (resumed)` with empty `Files changed:` / `Files created:` / `Contracts produced:` / `Contracts consumed:` and no new work performed. Skip Steps 3, 3.5, and 4 (go directly to Output).
+- The trivial in-session path: if the single trivial task is in COMPLETED_TASKS, skip it the same way (emit the resumed `[DEV OUTPUT]` directly).
+
+1. Parse the task list into a dependency graph using each task's `depends_on` field. Exclude COMPLETED_TASKS ids from all scheduling and dependency resolution.
+2. **Trivial path**: if total work (after excluding COMPLETED_TASKS) is ≤4 files across a single unit and PLAN_RISKS is empty, implement **in-session** directly (skip sub-agent dispatch, go to Step 3.5 Inline Implementation).
 3. **Coordinator path**: group tasks into dependency levels:
    - **Level 0**: tasks with no `depends_on` (or all dependencies already satisfied)
    - **Level N**: tasks whose `depends_on` all belong to levels < N
@@ -134,7 +142,7 @@ Enter this section only when Step 2 determined the trivial path (≤4 files, sin
 
 ### Step 4: Aggregate
 
-Once all sub-agent dispatches (and any in-session work) are complete, merge all `[TASK OUTPUT]` blocks into one `[DEV OUTPUT]`:
+Once all sub-agent dispatches (and any in-session work) are complete, merge all `[TASK OUTPUT]` blocks into one `[DEV OUTPUT]`. Carried/skipped completed tasks (those in COMPLETED_TASKS) appear in the aggregated `Tasks:` list alongside freshly-run tasks — each with status `done — (resumed: already implemented in a prior run)`.
 
 - **Units touched**: collect the distinct unit names across all tasks.
 - **Tasks**: one line per task — id, unit, status (done / partial / failed), one-line summary.

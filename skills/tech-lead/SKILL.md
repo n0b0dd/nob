@@ -88,6 +88,8 @@ Wait for user response before dispatching dev agents.
 
 Derive a flat list of tasks from the PM changes. Each task maps a concrete change item to a specific unit from the `units` list in `.nob.yml`. Use AFFECTED_FILES for known target paths.
 
+Task ids must be assigned **deterministically and stably** (`t1`, `t2`, … in PM-change order). On a resumed run the same set of PM changes must produce the same ids — this is what lets the dev coordinator match the hub's completed-task set against the checkpoint.
+
 For each task, emit an entry in this exact format:
 ```
 - id: [t1]
@@ -146,6 +148,8 @@ Project memory:
 {project memory from [INPUTS]}
 
 Max parallel slices: {Max parallel slices from [INPUTS], or: 3}
+
+Already-completed tasks (skip these task ids): {Already-completed tasks from [INPUTS], or: none}
 [/INPUTS]
 ```
 

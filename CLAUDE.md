@@ -14,9 +14,9 @@ skills/
     SKILL.md      — Hub skill: entry point for /nob
     templates/    — CLAUDE.md.template and .nob.yml.template for user projects
   pm/             — PM skill: spec-writing and requirements extraction (/nob:pm)
-  tech-lead/      — Technical lead: writes contracts, coordinates dev team (/nob:tech-lead)
-  backend/        — Implements backend/API changes (/nob:backend)
-  frontend/       — Implements frontend/UI changes (/nob:frontend)
+  tech-lead/      — Technical lead: writes contracts + task list (/nob:tech-lead)
+  dev/            — Implements changes per declared units (/nob:dev)
+    stacks/       — Per-stack implementation helpers (e.g. nextjs.md, rails.md)
   reviewer/       — Final pass/fail review + inline security scan (/nob:reviewer)
   init/           — Scaffolds a new fullstack project (/nob:init)
   ideation/       — Generates ranked feature ideas from an existing codebase (/nob:ideation)
@@ -39,9 +39,9 @@ Version is tracked in **both** `.claude-plugin/plugin.json` and `.claude-plugin/
 
 Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) orchestrates all sub-skills:
 
-**PM → Tech Lead → Reviewer**
+**PM → Tech Lead → dev → Reviewer**
 
-(Tech Lead dispatches Backend + Frontend concurrently. Reviewer includes inline security scanning.)
+(Tech Lead writes a task list; the dev agent self-manages parallel/sequential sub-agents per unit. Reviewer includes inline security scanning.)
 
 - The hub resolves `SKILL_BASE_DIR` at runtime from its `Base directory for this skill:` context line — all sub-skill paths use `{SKILL_BASE_DIR}/../X/SKILL.md` (sub-skills live one level up from the hub at `skills/X/`).
 - The hub reads `.nob.yml` from the user's project root to configure models, enabled skills, and parallelism. If absent, it auto-detects the stack.
@@ -54,4 +54,4 @@ Feature specs live in `docs/superpowers/specs/` and implementation plans in `doc
 
 ## .nob.yml Template
 
-Users configure their project by copying `skills/nob/templates/.nob.yml.template` to their project root. Key fields: `stack.frontend`, `stack.backend`, `agents.enabled`, `agents.models`, `agents.max_parallel_slices`, `agents.checkpoint`.
+Users configure their project by copying `skills/nob/templates/.nob.yml.template` to their project root. Key fields: `units` (list of project units — name, path, stack, and optional `depends_on`), `agents.enabled`, `agents.models`, `agents.max_parallel_slices`, `agents.checkpoint`.

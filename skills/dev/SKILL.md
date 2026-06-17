@@ -39,7 +39,7 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
        files: [known target paths, or: unknown]
        depends_on: [list of task ids, or: empty]
      ```
-   - **Contracts:** — the full contracts section. Store as PLAN_CONTRACTS.
+   - **Interfaces / contracts:** — the full contracts section. Store as PLAN_CONTRACTS.
    - **Risks:** — store as PLAN_RISKS. If `none` or absent, set PLAN_RISKS to empty.
    - **Per-unit stack-guidance path map** — a map of `unit name → stacks/{type}.md` path for each unit declared in the task list (see stack type map below). If absent, derive from `.nob.yml` units.
 2. Read `[PM OUTPUT]` — extract acceptance criteria. Store as PM_CRITERIA.
@@ -76,7 +76,7 @@ For each task dispatched as a sub-agent, use the `dev` model from `[INPUTS]` (de
 
 - The task's `id`, `title`, `description`, `files` (target paths)
 - The stack guidance file path for this unit (from the map in Step 1) — instruct the sub-agent to read it using the Read tool before implementing. Skip if type is `generic`/`ruby`/unrecognized or the file path is absent.
-- The relevant `Contracts:` entries from PLAN_CONTRACTS (producer must implement exactly; consumer must call exactly)
+- The relevant `Interfaces / contracts:` entries from PLAN_CONTRACTS (producer must implement exactly; consumer must call exactly)
 - PLAN_RISKS handling:
   - `[AUTH]` → match auth wiring exactly as comparable routes/screens do
   - `[MIGRATION]` → create a migration file following the existing migration pattern

@@ -387,7 +387,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 
 | Agent | Required fields |
 |---|---|
-| Tech Lead | `Run mode:`, `Affected layers:`, `API contracts written:`, `Risks:` |
+| Tech Lead | `Affected units:`, `Interfaces written:`, `Task count:`, `Risks:` |
 | PM Agent | `Changes needed:`, `Acceptance criteria:` |
 | Dev Agent | `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |

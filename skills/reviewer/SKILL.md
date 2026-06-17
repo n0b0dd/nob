@@ -32,8 +32,7 @@ Check whether an `[INPUTS]` block is present in the current context.
 ### Step 0: Detect input mode
 Check the context provided by the hub:
 
-- **Single-slice mode**: context contains individual `[PM OUTPUT]` and `[DEV OUTPUT]` blocks → proceed to Step 1 as normal.
-- **Multi-slice mode**: context contains a `[MERGED SLICE OUTPUTS]` block with multiple named slice sections, each containing its own PM/Dev output blocks → repeat Steps 1–5 once per slice, collecting all criteria and review items, then produce one combined `[REVIEWER OUTPUT]` covering the full feature. The overall status is the worst status across all slices (one FAIL → overall FAIL; any NEEDS REVIEW and no FAIL → overall NEEDS REVIEW).
+Context contains individual `[PM OUTPUT]` and `[DEV OUTPUT]` blocks → proceed to Step 1 as normal.
 
 ### Step 1: Read the original source file
 Read the spec or bug report file using the Read tool. The path is in the `[PLAN OUTPUT]` block (field: "Source file").
@@ -88,7 +87,7 @@ Add all CONTRACT VIOLATIONS to "Items for human review" regardless of criterion 
 
 ### Step 3.6: Security scan
 
-Collect SECURITY_FILES = all paths from `Files changed:` and `Files created:` across all units in `[DEV OUTPUT]`. If fan-out mode, collect from all slice outputs. Deduplicate.
+Collect SECURITY_FILES = all paths from `Files changed:` and `Files created:` across all units in `[DEV OUTPUT]`. Deduplicate.
 
 If SECURITY_FILES is empty: store SECURITY_STATUS = "SKIPPED — no files changed". Skip to Step 3.65.
 
@@ -146,7 +145,7 @@ If triggered:
 
 ### Step 3.7: Code quality scan
 
-Collect QUALITY_FILES = all file paths from `Files changed:` and `Files created:` across all units in `[DEV OUTPUT]`. If fan-out mode, collect from all slice outputs.
+Collect QUALITY_FILES = all file paths from `Files changed:` and `Files created:` across all units in `[DEV OUTPUT]`.
 
 If QUALITY_FILES is empty: set QUALITY_FINDINGS = [] and skip the rest of this step.
 
@@ -185,6 +184,8 @@ For every acceptance criterion from [PM OUTPUT]:
 - **⚠ partial**: covered in `[DEV OUTPUT]` but also listed in "Items not implemented (needs human):", or tests for the relevant unit are FAIL
 
 Do NOT batch-check criteria. Check each one individually. Do NOT mark ✓ based on a file existing alone — read it.
+
+**Unit tagging**: for each criterion line, identify which unit the criterion maps to (from the task that covers it in `[DEV OUTPUT]`). Append `[unit-name]` at the end of the line. If the criterion spans multiple units, tag with the primary unit. If no unit can be determined, omit the tag.
 
 ### Step 5: Determine overall status
 Apply the status definitions above exactly. Do not soften FAIL to NEEDS REVIEW.
@@ -231,9 +232,9 @@ Code quality:
   [if FINDINGS and minor items: list each minor finding as "- [MINOR] {category} | {file}:{line} | {description}"]
 
 Criteria check:
-- [criterion 1]: ✓ implemented in [exact file path]
-- [criterion 2]: ✗ NOT implemented — [reason]
-- [criterion 3]: ⚠ partial — [what is missing]
+- [criterion 1]: ✓ implemented in [exact file path] [unit-name]
+- [criterion 2]: ✗ NOT implemented — [reason] [unit-name]
+- [criterion 3]: ⚠ partial — [what is missing] [unit-name]
 
 Overall status: PASS | NEEDS REVIEW | FAIL
 

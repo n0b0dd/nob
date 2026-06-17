@@ -28,13 +28,13 @@ Read `.nob.yml` at the repo root using the Read tool. Extract:
 Extract 3–5 key entity, route, or component names from the PM output. For each key term, run targeted searches:
 
 ```bash
-# Backend — routes, services, controllers, models
+# Server-side / API files — routes, services, controllers, models
 grep -rl "<term>" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --include="*.rb" . 2>/dev/null | grep -v node_modules | head -10
 
 # Schema / migrations
 find . \( -name "*.prisma" -o -name "schema.rb" -o -name "*.migration.*" -o -name "*.sql" \) 2>/dev/null | grep -v node_modules | head -5
 
-# Frontend — components, screens, pages, views
+# Client-side / UI files — components, screens, pages, views
 grep -rl "<term>" --include="*.tsx" --include="*.jsx" --include="*.vue" --include="*.dart" . 2>/dev/null | grep -v node_modules | head -10
 ```
 
@@ -163,7 +163,7 @@ After the dev coordinator returns its result, check for `[BLOCKER]` blocks.
 |---|---|
 | `type: technical` | Resolve autonomously: pick the best option from your technical context. Amend the relevant section of the Tech Lead spec. Re-dispatch the dev coordinator scoped to the unresolved task(s) with the resolved spec. |
 | `type: ambiguity` | Check PM output first. If resolvable from PM output: resolve autonomously. If not resolvable: escalate to human. Print the blocker description and your proposed resolution. Wait for human approval or override. Resume after response. |
-| `type: cross-layer` | Coordinate: extract the relevant partial output from the completed task(s) and inject the produced contracts into the blocked task's re-dispatch prompt. |
+| `type: cross-unit` | Coordinate: extract the relevant partial output from the completed task(s) and inject the produced contracts into the blocked task's re-dispatch prompt. |
 | `type: risk` (AUTH or BREAKING) | Always escalate to human. Print the blocker and proposed resolution. Wait for human response before re-dispatching. |
 
 **Re-dispatch the dev coordinator scoped to the blocked task(s) only.** Completed tasks' outputs are held as-is.

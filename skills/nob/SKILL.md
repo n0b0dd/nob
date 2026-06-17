@@ -6,7 +6,7 @@ description: 'Use when asked to implement a feature spec, fix a bug, sync client
 # Nob — Hub Orchestrator
 
 ## Overview
-Nob automates cross-layer development workflows in a fullstack monorepo. This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the PM Agent and ends with the Reviewer.
+Nob automates development workflows across a project's declared units — any project shape (CLI, library, single service, or fullstack monorepo). This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the PM Agent and ends with the Reviewer.
 
 Sub-skills (`/nob:tech-lead`, `/nob:dev`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
 
@@ -489,7 +489,7 @@ Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch with `model: agents.mode
 [INPUTS]
 Working directory: {current working directory path}
 
-Unit guidance map:
+Per-unit stack-guidance path map:
 {for each entry in UNIT_GUIDANCE_MAP: "  {name}: {path-or-none}"}
 
 .nob.yml contents:
@@ -509,7 +509,7 @@ Agent models:
 
 Max parallel slices: {agents.max_parallel_slices}
 
-Already-completed tasks (resume — skip these task ids): {RESUME_COMPLETED_TASKS as comma-separated ids, or: none}
+Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS as comma-separated ids, or: none}
 [/INPUTS]
 ```
 
@@ -794,12 +794,11 @@ Config written:
   .nob.yml
 
 Next steps:
-  1. Copy .env.example → .env in apps/frontend/ and apps/backend/ and fill in values
-  2. Start backend:  [backend start command from INIT_OUTPUT]
-  3. Start frontend: [frontend start command from INIT_OUTPUT]
-  4. Write a spec:   docs/specs/your-feature.md
-  5. Then run:       /nob implement docs/specs/your-feature.md
-  6. When ready:     git push -u origin nob/init
+  1. Copy .env.example → .env in each unit directory and fill in values
+  2. Start each unit: [start commands per unit from INIT_OUTPUT]
+  3. Write a spec:   docs/specs/your-feature.md
+  4. Then run:       /nob implement docs/specs/your-feature.md
+  5. When ready:     git push -u origin nob/init
 ```
 
 If any field is unavailable (e.g. init returned partial output), substitute "unknown" for that field.
@@ -825,9 +824,9 @@ Review status: [PASS | NEEDS REVIEW | FAIL]
   if RETRY_RAN = false and first review was not PASS: "Retry:     skipped — [no failing tasks identified | user declined]"]
 [if NEEDS REVIEW or FAIL: list items from REVIEWER OUTPUT "Items for human review" section]
 
-[if any dev agent returned no [DEV OUTPUT] block after two attempts:]
+[if any agent was marked `timed_out` (returned no valid output block after two attempts):]
 Malformed output:
-  dev: dev agent returned invalid output block after two attempts
+  [agent-name]: returned invalid/no output block after two attempts
   Check agent output above, then re-run `/nob [spec-file]` to retry.
 
 [if checkpoint.enabled:]

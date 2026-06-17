@@ -1,6 +1,6 @@
 {
   "name": "nob",
-  "description": "Orchestrates cross-layer fullstack monorepo development. Includes refactor workflow to migrate existing projects to nob's monorepo structure.",
+  "description": "Orchestrates spec-to-reviewed-code development across a project's declared units, for any project shape. Includes a refactor workflow to migrate existing projects to nob's structure.",
   "version": "1.5.0",
   "author": { "name": "n0b0dd" },
   "homepage": "https://github.com/n0b0dd/nob",

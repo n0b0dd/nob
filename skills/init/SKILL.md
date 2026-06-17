@@ -1380,10 +1380,10 @@ Write `.nob.yml`:
 ```yaml
 units:
   - name: web
-    type: [next | react | vue | flutter]
+    type: [next | react | vue | flutter]  # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
     path: apps/frontend/
   - name: api
-    type: [node | python | go]
+    type: [node | python | go]  # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
     path: apps/backend/
 
 docs:

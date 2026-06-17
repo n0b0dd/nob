@@ -239,10 +239,10 @@ Write `{WORKING_DIR}/.nob.yml` (overwrite if exists) using the Write tool:
 ```yaml
 units:
   - name: web
-    type: {FRONTEND_TYPE}
+    type: {FRONTEND_TYPE}  # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
     path: apps/frontend/
   - name: api
-    type: {BACKEND_TYPE}
+    type: {BACKEND_TYPE}  # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
     path: apps/backend/
 
 docs:

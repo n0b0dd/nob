@@ -124,7 +124,7 @@ Test output:
   [verbatim last 80 lines; prepend truncation note if >80 lines; or: SKIPPED — reason]
 Items not implemented (needs human):
   - [item and reason, or: none]
-Deferred:
+Deferred items:
   - [item not implemented due to scope limit, or: none]
 [/TASK OUTPUT: {id}]
 ```
@@ -172,7 +172,7 @@ When to emit a blocker:
 Blocker block format:
 ```
 [BLOCKER]
-type: technical | ambiguity | cross-layer | risk
+type: technical | ambiguity | cross-unit | risk
 flag: AUTH | MIGRATION | BREAKING | SHARED | none
 description: <one sentence describing the blocker>
 proposed_resolution: <your best suggestion, or: none>

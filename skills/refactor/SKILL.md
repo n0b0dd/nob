@@ -237,26 +237,34 @@ Write `{WORKING_DIR}/CLAUDE.md` (overwrite if exists) using the Write tool:
 Write `{WORKING_DIR}/.nob.yml` (overwrite if exists) using the Write tool:
 
 ```yaml
-stack:
-  frontend:
-    enabled: true
+units:
+  - name: web
     type: {FRONTEND_TYPE}
     path: apps/frontend/
-  backend:
-    enabled: true
+  - name: api
     type: {BACKEND_TYPE}
     path: apps/backend/
-  shared:
-    core: shared/core/
+
+docs:
+  enabled: true
+  specs: docs/specs
+  bugs: docs/bugs
+
+structure:
+  check: false
 
 agents:
-  enabled: [pm, backend, frontend, security, reviewer]
+  enabled:
+    - pm
+    - tech-lead
+    - dev
+    - reviewer
+    - ideation
   models:
-    backend: sonnet
-    frontend: sonnet
+    dev: sonnet
+    tech-lead: sonnet
     pm: haiku
     reviewer: haiku
-    security: haiku
     refactor: sonnet
   max_parallel_slices: 3
   checkpoint:

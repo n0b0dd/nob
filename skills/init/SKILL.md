@@ -1364,34 +1364,48 @@ Write `CLAUDE.md`:
 
 ## Step 6: Generate .nob.yml
 
-Determine backend type value:
+Determine backend unit type value:
 - `express` → `node`
 - `fastapi` → `python`
 - `go` → `go`
 
+Determine frontend unit type value:
+- `next` → `next`
+- `react-vite` → `react`
+- `vue` → `vue`
+- `flutter` → `flutter`
+
 Write `.nob.yml`:
 
 ```yaml
-stack:
-  frontend:
-    type: [FRONTEND_TYPE]
-    enabled: true
+units:
+  - name: web
+    type: [next | react | vue | flutter]
     path: apps/frontend/
-  backend:
+  - name: api
     type: [node | python | go]
-    enabled: true
     path: apps/backend/
-  shared:
-    core: shared/core/
+
+docs:
+  enabled: true
+  specs: docs/specs
+  bugs: docs/bugs
+
+structure:
+  check: false
 
 agents:
-  enabled: [pm, backend, frontend, security, reviewer]
+  enabled:
+    - pm
+    - tech-lead
+    - dev
+    - reviewer
+    - ideation
   models:
-    backend: sonnet
-    frontend: sonnet
+    dev: sonnet
+    tech-lead: sonnet
     pm: haiku
     reviewer: haiku
-    security: haiku
     init: sonnet
   max_parallel_slices: 3
   checkpoint:
@@ -1430,9 +1444,10 @@ Emit:
 [INIT OUTPUT]
 Status: [complete | partial | aborted]
 Project: [PROJECT_NAME]
-Frontend: [FRONTEND_TYPE]
-Backend: [BACKEND_TYPE]
 Database: [DATABASE_TYPE]
+Units:
+  - web ([next | react | vue | flutter]) → apps/frontend/
+  - api ([node | python | go]) → apps/backend/
 
 Files created:
 - [list every file path written, one per line, relative to working dir]
@@ -1447,10 +1462,10 @@ Installs:
 Install errors — run manually:
   [exact retry command with correct directory]
 
-Frontend start command: [command]
-Frontend directory: apps/frontend/
-Backend start command: [command]
-Backend directory: apps/backend/
+web start command: [command]
+web directory: apps/frontend/
+api start command: [command]
+api directory: apps/backend/
 [/INIT OUTPUT]
 ```
 

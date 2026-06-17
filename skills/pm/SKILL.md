@@ -16,7 +16,8 @@ PM Agent owns all product definition work. It detects which mode to run from the
 
 Inspect the input:
 
-- If the input contains a `[INPUTS]` block with a `Plan context:` field → always run **Requirements Extraction Mode** (this is a Nob hub dispatch)
+- If the input contains a `[INPUTS]` block with `Hub dispatch: spec-writing` → run **Spec-Writing Mode (hub-dispatched)** — use the `Idea:` value from `[INPUTS]` as the raw idea. Skip Step 4's "Ready to implement?" prompt; emit `[PM SPECWRITER OUTPUT]` instead (see Step 4).
+- If the input contains a `[INPUTS]` block with a `Spec file path:` field or a `Plan context:` field → always run **Requirements Extraction Mode** (this is a Nob hub dispatch)
 - Input contains `/` or ends in `.md` → go to **Requirements Extraction Mode**
 - Input is plain text with no path characters → go to **Spec-Writing Mode**
 - Ambiguous → ask: "Are you giving me a spec file path or a rough idea to turn into a spec?"
@@ -144,8 +145,17 @@ If the user types "done" immediately (before requesting any revision), proceed t
 
 ### Step 4: Offer implementation
 
-**Note:** This step only applies when PM Agent is invoked directly by the user. If you were dispatched by the Nob hub (i.e., you received a `[INPUTS]` block), skip this step entirely.
+**If dispatched by hub (`Hub dispatch: spec-writing` in `[INPUTS]`):**
+Do not ask "Ready to implement?". Emit this output block and stop — the hub continues the pipeline automatically:
 
+```
+[PM SPECWRITER OUTPUT]
+Status: ok
+Spec file: {SPECS_DIR}/<filename>.md
+[/PM SPECWRITER OUTPUT]
+```
+
+**If invoked directly by the user:**
 Ask:
 > "Ready to implement? I can hand this to the engineering pipeline now. (yes / no)"
 
@@ -210,11 +220,10 @@ From the spec, extract:
 
 1. **Feature name and summary** — one sentence
 2. **Acceptance criteria** — convert every requirement into a testable checkbox. If vague, be specific and flag as an assumption.
-3. **Backend changes needed** — HTTP method, path, request shape, response shape. If not specified: "not specified in spec — backend agent should infer from acceptance criteria"
-4. **Frontend changes needed** — screen, component, user interaction. If not specified: "not specified in spec — frontend agent should infer from acceptance criteria"
-5. **Edge cases** — explicitly mentioned only. If none: "none specified"
-6. **Out of scope** — explicitly excluded. If none: "none specified"
-7. **Ambiguities** — requirements that could be interpreted two ways, phrased as questions
+3. **Changes needed** — a flat list of all changes across all units/components or files. For each item, reference the unit/component or file where known (e.g. "add route to `src/routes/users.ts`", "add component in `src/components/Button`"). If files/units are not specified: "not specified — dev agent should infer from acceptance criteria"
+4. **Edge cases** — explicitly mentioned only. If none: "none specified"
+5. **Out of scope** — explicitly excluded. If none: "none specified"
+6. **Ambiguities** — requirements that could be interpreted two ways, phrased as questions
 
 ### Step 3: Never invent requirements
 
@@ -225,7 +234,7 @@ Do NOT add anything not in the spec. Mark missing items as "not specified" and l
 Your output block must:
 - Begin with `[PM OUTPUT]` on its own line (no leading spaces or characters)
 - End with `[/PM OUTPUT]` on its own line
-- Include every required field: `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:`
+- Include every required field: `Changes needed:`, `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:`, `Third-party API notes:`
 - Use the exact field names listed — no synonyms, no omissions
 
 Missing or misformatted fields will cause your output to be rejected and re-requested by the hub.
@@ -243,16 +252,9 @@ Acceptance criteria:
 - [ ] [specific, testable criterion]
 - [ ] [specific, testable criterion]
 
-Backend changes needed:
-- [HTTP method] [/path] in `[file from RELATED_FILES, or: new file to create]`: request: [shape] → response: [shape]
-- [or: not specified in spec — backend agent should infer from acceptance criteria]
-
-Frontend changes needed:
-- [screen/component] in `[file from RELATED_FILES, or: new file to create]`: [what changes]
-- [or: not specified in spec — frontend agent should infer from acceptance criteria]
-
-API contracts:
-not applicable — defined by Tech Lead Agent
+Changes needed:
+- [unit/component or file where known, e.g. `src/routes/users.ts` or `LoginComponent`]: [what changes]
+- [or: not specified — dev agent should infer from acceptance criteria]
 
 Edge cases to handle:
 - [case, or: none specified]
@@ -264,6 +266,7 @@ Ambiguities flagged:
 - [blocking] [question that must be answered before implementation can proceed]
 - [non-blocking] [question where implementation agent can make a safe assumption]
 (or: none)
+
 Third-party API notes:
 - [service name]: [relevant API shape or endpoint, or: none]
 [/PM OUTPUT]

@@ -1,61 +1,48 @@
 # Nob configuration
 # Copy this file to your project root as .nob.yml and fill in your stack details.
 
-stack:
-  frontend:
-    enabled: true
-    type: react          # react | vue | next | flutter | android | ios | react-native
-    path: apps/frontend/   # path relative to repo root — change to your actual directory
+# Each unit is a buildable/testable piece of the project. A unit has a stack
+# `type` (which selects dev/stacks/<type>.md guidance) and a `path`.
+# A fullstack app is just two units; a CLI is one; a multi-service repo is N.
+units:
+  - name: api          # unique label — used in task routing and output
+    type: node         # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
+    path: services/api/
+  - name: web
+    type: react
+    path: apps/web/
 
-  backend:
-    enabled: true
-    type: node           # node | python | go | java | ruby
-    path: apps/backend/  # path relative to repo root — change to your actual directory
+docs:
+  enabled: true
+  specs: docs/specs        # where spec files live
+  bugs: docs/bugs          # where bug reports live
 
-  shared:
-    core: shared/core/     # domain-organized shared contracts and schema
-
-  docs:
-    enabled: true
-    specs: /docs/specs        # change to wherever your spec files live
-    bugs: /docs/bugs          # change to wherever your bug reports live
-    backlog: /docs/backlog    # change to wherever your backlog items live
-
-  structure:
-    check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected
+structure:
+  check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected
 
 agents:
+  # Pipeline agents that run on every /nob implement. Init, refactor, and venture
+  # are invoked explicitly (e.g. /nob refactor) — venture has its own toggle below.
   enabled:
     - pm
     - tech-lead
-    - backend
-    - frontend
-    - security
+    - dev
     - reviewer
     - ideation
-    - ask
 
   models:
-    # Models set here are always respected. For simple specs, nob automatically
-    # downgrades backend and frontend to haiku unless set explicitly here.
-    backend: sonnet   # code-writing agents need sonnet
-    frontend: sonnet
-    tech-lead: sonnet       # tech lead writes contracts and coordinates dev team
+    # Models set here are always respected. Security review is performed inline
+    # by the reviewer, so it has no separate model entry.
+    dev: sonnet           # the generic implementation agent — code-writing needs sonnet
+    tech-lead: sonnet     # writes contracts + task list, coordinates the dev agent
     pm: haiku
     reviewer: haiku
-    security: haiku
-    idea-framer: haiku           # venture pipeline agents
-    market-researcher: sonnet    # web research needs sonnet
-    business-modeler: haiku
-    gtm-strategist: haiku
-    financial-modeler: haiku
-    venture-reviewer: haiku
+    init: sonnet          # project scaffolding agent
+    venture: sonnet       # end-to-end venture validation pipeline
     refactor: sonnet      # project migration agent
     ideation: haiku       # feature ideation agent
-    ask: haiku            # codebase Q&A agent
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
-  max_tokens_per_run: 500000  # optional; omit or remove to disable budget guard
   max_retries: 3              # max retry passes: 1 automatic + user-gated after that (default: 3)
 
   # CI/CD integration — polls GitHub Actions after PR creation.

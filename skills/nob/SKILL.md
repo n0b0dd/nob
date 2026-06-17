@@ -8,7 +8,7 @@ description: 'Use when asked to implement a feature spec, fix a bug, sync client
 ## Overview
 Nob automates cross-layer development workflows in a fullstack monorepo. This hub reads the user's intent, identifies the workflow type, and invokes sub-skills in the correct sequence. Every run starts with the PM Agent and ends with the Reviewer.
 
-Sub-skills (`/nob:tech-lead`, `/nob:backend`, `/nob:frontend`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
+Sub-skills (`/nob:tech-lead`, `/nob:dev`, `/nob:reviewer`, `/nob:init`, `/nob:refactor`, `/nob:ideation`) can be invoked directly for targeted work. When invoked via the hub, each sub-skill receives an `[INPUTS]` block with all required context and runs in hub-dispatched mode. When invoked standalone, each sub-skill sources inputs from `.nob/` output files or prompts the user.
 
 ## Agent Dispatch Model
 
@@ -388,7 +388,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 | Agent | Required fields |
 |---|---|
 | Tech Lead | `Run mode:`, `Affected layers:`, `API contracts written:`, `Risks:` |
-| PM Agent | `Backend changes needed:`, `Frontend changes needed:`, `Acceptance criteria:` |
+| PM Agent | `Changes needed:`, `Acceptance criteria:` |
 | Dev Agent | `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
 
@@ -400,7 +400,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
      > "Your previous response was missing these required fields: [list the missing fields].
      > Re-emit the complete [X OUTPUT] block with ALL required fields present.
      > Do not omit any field even if its value is 'none' or 'n/a'."
-4. If still missing after re-dispatch: mark the agent/slice status as `malformed`. Do not pass a malformed block to downstream agents. Treat `malformed` the same as `failed` for all pipeline flow decisions.
+4. If still missing after re-dispatch: mark the agent status as `malformed`. Do not pass a malformed block to downstream agents. Treat `malformed` the same as `failed` for all pipeline flow decisions.
 
 Apply this procedure after every agent dispatch in Phases 1, 2, 2.5, and 3.
 
@@ -600,18 +600,13 @@ If RETRY_COUNT >= MAX_RETRIES:
   ```
   Exit loop. Proceed to Step 4.
 
-**Determine which agents to re-dispatch:**
+**Determine which tasks to re-dispatch:**
 
 Extract from REVIEWER_OUTPUT:
-- `Test results: Backend: FAIL` → set RETRY_BACKEND = true
-- `Test results: Frontend: FAIL` → set RETRY_FRONTEND = true
-- For each `✗` or `⚠` criterion line: cross-reference its text against PM_OUTPUT's `Backend changes needed:` and `Frontend changes needed:` sections
-  - Found in `Backend changes needed:` → RETRY_BACKEND = true
-  - Found in `Frontend changes needed:` → RETRY_FRONTEND = true
-  - Found in both → set both to true
-- Any CONTRACT VIOLATION in contract check → RETRY_FRONTEND = true; also set CONTRACT_RETRY = true
+- For each `✗` or `⚠` criterion line: extract the failing task id (e.g. `[api]`, `[web]`, `[cli]`) noted on that line or in the `Test results:` per-unit list. Collect the set of failing task ids as FAILING_TASK_IDS.
+- Any CONTRACT VIOLATION in contract check → add all affected unit ids to FAILING_TASK_IDS; also set CONTRACT_RETRY = true.
 
-If RETRY_BACKEND and RETRY_FRONTEND are both false: no agent can auto-fix the remaining items. Exit loop. Proceed to Step 4.
+If FAILING_TASK_IDS is empty: no failing task ids identified — no agent can auto-fix the remaining items. Exit loop. Proceed to Step 4.
 
 **User gate:**
 
@@ -647,13 +642,10 @@ You are a focused retry diagnostic agent. Read the provided file lists. For each
 Emit exactly:
 
 [RETRY-DIAGNOSTIC OUTPUT]
-Backend fix scope:
-  - {path}: {one sentence — what specifically needs to change}
-  (or: none — backend fix not needed)
-
-Frontend fix scope:
-  - {path}: {one sentence — what specifically needs to change}
-  (or: none — frontend fix not needed)
+Fix scope per unit:
+  [{unit-name}]:
+    - {path}: {one sentence — what specifically needs to change}
+  (repeat for each failing unit; use "none" if no specific file identified for a unit)
 
 Root cause summary: {1–2 sentences}
 [/RETRY-DIAGNOSTIC OUTPUT]
@@ -663,21 +655,21 @@ Root cause summary: {1–2 sentences}
 Failing items:
 {RETRY_ITEMS listed one per line}
 
-Backend files from previous pass:
-{all paths from BACKEND_OUTPUT "Files changed:" and "Files created:", or: none}
+Failing task ids / units:
+{FAILING_TASK_IDS listed one per line}
 
-Frontend files from previous pass:
-{all paths from FRONTEND_OUTPUT "Files changed:" and "Files created:", or: none}
+Files changed per unit from previous pass:
+{for each unit in DEV_OUTPUT "Files changed:" grouped by unit tag [unit]: list paths, or: none}
 [/INPUTS]
 ```
 
 Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_OUTPUT. If extraction fails: DIAG_OUTPUT = null (does not block retry).
 
 **Parse fix scope:**
-- If DIAG_OUTPUT non-null: extract `Backend fix scope:` paths as BACKEND_FIX_SCOPE (empty→null if RETRY_BACKEND=true); extract `Frontend fix scope:` paths as FRONTEND_FIX_SCOPE (empty→null if RETRY_FRONTEND=true).
-- If DIAG_OUTPUT null: BACKEND_FIX_SCOPE = null, FRONTEND_FIX_SCOPE = null.
+- If DIAG_OUTPUT non-null: extract `Fix scope per unit:` as UNIT_FIX_SCOPE map (unit name → list of paths). Units not listed → null fix scope.
+- If DIAG_OUTPUT null: UNIT_FIX_SCOPE = {} (empty map).
 
-**Tech Lead retry** (re-dispatches only failing layer(s)):
+**Tech Lead retry** (re-dispatches only failing tasks):
 
 Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch Tech Lead with `model: agents.models["tech-lead"] ?? "sonnet"`:
 
@@ -689,8 +681,7 @@ Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch Tech Lead with `model: a
 [INPUTS]
 Working directory: {current working directory path}
 
-Backend stack guidance path: {BACKEND_STACK_GUIDANCE_PATH}
-Frontend stack guidance path: {FRONTEND_STACK_GUIDANCE_PATH}
+Per-unit stack-guidance path map: {UNIT_GUIDANCE_MAP}
 
 .nob.yml contents:
 {.nob.yml content}
@@ -701,20 +692,15 @@ CLAUDE.md contents:
 PM Agent output:
 {PM_OUTPUT}
 
-Reviewer found these failures — re-implement only the failing layer(s):
+Reviewer found these failures — re-implement only the failing tasks:
 {RETRY_ITEMS listed one per line}
 
-Layers to retry:
-  backend: {RETRY_BACKEND}
-  frontend: {RETRY_FRONTEND}
+Failing task ids to re-implement:
+{FAILING_TASK_IDS listed one per line}
 
-{if BACKEND_FIX_SCOPE non-null:
-Backend fix scope (touch only these files):
-{BACKEND_FIX_SCOPE listed one path per line}
-}
-{if FRONTEND_FIX_SCOPE non-null:
-Frontend fix scope (touch only these files):
-{FRONTEND_FIX_SCOPE listed one path per line}
+{if UNIT_FIX_SCOPE non-empty:
+Fix scope per unit (touch only these files):
+{for each unit in UNIT_FIX_SCOPE: "  [{unit}]:\n    - {paths listed one per line}"}
 }
 
 Root cause (from diagnostic):
@@ -725,6 +711,8 @@ Project memory:
 
 Agent models:
   dev: {DEV_MODEL_RESOLVED}
+
+Max parallel slices: {agents.max_parallel_slices}
 [/INPUTS]
 ```
 
@@ -819,10 +807,10 @@ Nob complete.
 
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
-Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · dev(sonnet) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use DEV_MODEL_RESOLVED for the dev agent.]
-Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · dev 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
+Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use DEV_MODEL_RESOLVED for the dev agent.]
+Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · dev({DEV_MODEL_RESOLVED}) 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 
-Tests:     Backend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT] · Frontend [PASS | FAIL | SKIPPED from REVIEWER OUTPUT]
+Tests:     [per-unit results derived from REVIEWER_OUTPUT "Test results:" per-unit list — e.g.: api ✓ · web ✗ · cli ✓. Use ✓ for PASS, ✗ for FAIL, — for SKIPPED. If no per-unit data: show overall PASS / FAIL / SKIPPED.]
 Security:  [derive from the Security section of REVIEWER_OUTPUT: PASS, FINDINGS: N medium M low, or SKIPPED — no files changed]
 CI:        [CI_STATUS — PASS | FAIL | SKIPPED (gh unavailable) | SKIPPED (disabled) | SKIPPED (timeout)]
 Review status: [PASS | NEEDS REVIEW | FAIL]
@@ -830,17 +818,12 @@ Review status: [PASS | NEEDS REVIEW | FAIL]
   if RETRY_RAN = true and not stuck and not max-hit: "Retry:     {RETRY_COUNT} pass(es) → Final review: [Overall status from final REVIEWER_OUTPUT]"
   if stuck: "Retry:     stuck after {RETRY_COUNT} pass(es) — same failures in 2 consecutive rounds"
   if max retries hit: "Retry:     max retries ({MAX_RETRIES}) reached after {RETRY_COUNT} pass(es)"
-  if RETRY_RAN = false and first review was not PASS: "Retry:     skipped — [no fixable agents | user declined]"]
+  if RETRY_RAN = false and first review was not PASS: "Retry:     skipped — [no failing tasks identified | user declined]"]
 [if NEEDS REVIEW or FAIL: list items from REVIEWER OUTPUT "Items for human review" section]
 
-[if any slice status is timed_out:]
-Timed out:
-  [slice-name]: timed out at [timed_out_at value]
-  Re-run `/nob [spec-file]` to resume — checkpoint skips completed slices.
-
-[if any slice status is malformed:]
+[if any dev agent returned no [DEV OUTPUT] block after two attempts:]
 Malformed output:
-  [slice-name]: [agent-name] returned invalid output block after two attempts
+  dev: dev agent returned invalid output block after two attempts
   Check agent output above, then re-run `/nob [spec-file]` to retry.
 
 [if checkpoint.enabled:]
@@ -978,12 +961,12 @@ Run only when `Overall status: PASS` or `Overall status: NEEDS REVIEW`, and `age
 Run `date +%F` via the Bash tool to get TODAY (YYYY-MM-DD format).
 
 Extract from agent outputs:
-1. **Test runner**: scan BACKEND_OUTPUT `Test output:` for the strings `jest`, `vitest`, `pytest`, `go test`, `rspec`, `mocha`. First match wins. Default: `unknown`.
-2. **New routes**: extract up to 5 lines from `New API contracts:` in BACKEND_OUTPUT. If absent or `none`: use empty list.
-3. **Backend files**: first 3 paths from `Files changed:` in BACKEND_OUTPUT. If absent or `none`: use empty list.
-4. **Frontend files**: first 3 paths from `Files changed:` in FRONTEND_OUTPUT. If absent or `none`: use empty list.
-5. **Patterns observed**: scan BACKEND_OUTPUT and FRONTEND_OUTPUT for any explicit pattern notes (e.g. naming conventions, middleware patterns). Extract up to 3 as short summary strings. If none: use empty list.
-6. **Corrections**: check BACKEND_OUTPUT and FRONTEND_OUTPUT `Memory conflicts:` fields for any noted conflicts. If any: record them as corrections. If none: use empty list.
+1. **Test runner**: scan DEV_OUTPUT `Test output:` for the strings `jest`, `vitest`, `pytest`, `go test`, `rspec`, `mocha`. First match wins. Default: `unknown`.
+2. **New routes**: extract up to 5 lines from `Contracts produced:` in DEV_OUTPUT. If absent or `none`: use empty list.
+3. **Files per unit**: from DEV_OUTPUT `Files changed:` grouped by unit tag `[unit]`, collect the first 3 paths per unit. Build a map: `{ unit-name: [path1, path2, ...] }`. If a unit has no paths: skip it.
+4. **Units changed this run**: collect all unit names that have at least one changed file (from step 3 above). Store as UNITS_CHANGED.
+5. **Patterns observed**: scan DEV_OUTPUT for any explicit pattern notes (e.g. naming conventions, middleware patterns). Extract up to 3 as short summary strings. If none: use empty list.
+6. **Corrections**: check DEV_OUTPUT `Memory conflicts:` field for any noted conflicts. If any: record them as corrections. If none: use empty list.
 
 Read existing `.nob/project-memory.yml` using the Read tool. If not found, start with this base YAML structure:
 ```yaml
@@ -997,9 +980,9 @@ Parse the YAML. Compute a content hash for each new entry (use a short determini
 
 Append new entries (skip if duplicate):
 - Under `patterns`: one entry per observed pattern: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{pattern description}" }`
-- Under `routes`: one entry per new route: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{METHOD} {/path}" }`
-- Under `file_clusters`: one entry: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{backend-file-1}, {frontend-file-1} changed together" }` (only if both backend and frontend files are non-empty)
-- Under `corrections`: one entry per conflict noted in `Memory conflicts:` fields: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{conflict description}" }`
+- Under `routes`: one entry per new route extracted from `Contracts produced:` in DEV_OUTPUT: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{METHOD} {/path}" }`
+- Under `file_clusters`: one entry per run (only if UNITS_CHANGED has 2 or more units): `{ run_id: "{run-id}", date: "{TODAY}", summary: "{comma-joined UNITS_CHANGED} changed together" }` — e.g. `"api, web changed together"`
+- Under `corrections`: one entry per conflict noted in `Memory conflicts:` field of DEV_OUTPUT: `{ run_id: "{run-id}", date: "{TODAY}", summary: "{conflict description}" }`
 
 Write the updated YAML back to `.nob/project-memory.yml` using the Write tool.
 
@@ -1016,9 +999,7 @@ Append final summary line to RUN_LOG_PATH (Bash append, as defined in Step 1):
 - **Checkpoint file corrupted/unparseable**: warn user, start fresh run (Phase 0)
 - **Sub-skill file not found**: warn "sub-skill file {SKILL_BASE_DIR}/../[name]/SKILL.md not found — ensure the nob plugin is installed correctly"
 - **Tech Lead output has ambiguities**: pause and ask user before proceeding (Phase 2)
-- **Slice agent returns no [SLICE OUTPUT] block**: re-dispatch that slice once; if still missing, mark `status: timed_out` (store `timed_out_at: "phase2/slice-runner"`), continue other slices, report in terminal summary (Phase 2)
-- **All slices failed**: stop before Phase 3; list all failures prominently; do NOT dispatch Reviewer
-- **Some slices failed, others succeeded**: Reviewer runs on successful outputs; failed slices listed prominently in terminal summary
+- **Dev agent returns no [DEV OUTPUT] block**: re-dispatch once; if still missing after re-dispatch, mark as `failed`; stop pipeline; do NOT dispatch Reviewer
 - **Reviewer status is FAIL**: print all failing items prominently; Phase 3.5 retry loop handles up to MAX_RETRIES passes (1 automatic + user-gated after that)
 - **Agent result missing expected output block**: re-dispatch once; if still missing after re-dispatch, mark status `timed_out` (store `timed_out_at: "<phase>/<agent-name>"`). Do NOT pass null output to downstream agents. Stop pipeline and skip Reviewer.
 - **Any early-exit agent (Init, Refactor, Ideation, Venture) returns no expected output block**: re-dispatch once with the same prompt; if still missing, print raw agent output and stop

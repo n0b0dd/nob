@@ -10,14 +10,14 @@ A solo developer juggles every role: PM, architect, backend, frontend, reviewer.
 
 You give Nob a spec or a rough idea. It runs the entire dev cycle as a structured agent pipeline:
 
-**PM (spec) → Tech Lead (contracts + tasks) → dev (parallel/sequential per unit) → Reviewer (incl. inline security)**
+**PM (PRD) → Tech Lead (design: contracts + tasks) → dev (parallel/sequential per unit) → Reviewer (incl. inline security)**
 
 Each agent is specialized and receives only what it needs. The Tech Lead writes contracts and a flat task list before the dev agent runs — so all units start from a shared, consistent interface. The dev agent runs independent units concurrently and dependent ones in order. The Reviewer blocks completion until the output meets the spec. You step in only when a decision genuinely requires a human.
 
 ## What you get
 
-- **PM** turns a rough idea into a formal spec so nothing starts from ambiguity
-- **Tech Lead** defines contracts upfront so all units stay aligned
+- **PM** turns a rough idea into a pure-product PRD (the *what/why*) so nothing starts from ambiguity
+- **Tech Lead** owns the *how* — defines contracts upfront, persists a technical design doc, and keeps all units aligned
 - **dev agent** runs independent units concurrently and dependent ones in order — work that would take a solo dev multiple context-switches happens automatically
 - **Reviewer** gives you a pass/fail with a diff to scan, not a debugging session to start
 - **Checkpoint/resume** means long runs survive interruption — you don't babysit the pipeline
@@ -61,7 +61,7 @@ In any Claude Code session in your project:
 
 ## Configuration (optional)
 
-By default, Nob auto-detects your stack. For explicit control over units (name, path, stack, dependencies), models, and enabled agents, copy `skills/nob/templates/.nob.yml.template` to your project root as `.nob.yml` and declare your `units`.
+By default, Nob auto-detects your stack — and on the first config-less run it offers to save the detected units to `.nob.yml` for you. For explicit control, copy the minimal starter `skills/nob/templates/.nob.yml.template` to your project root as `.nob.yml` and declare your `units`. Only `units` is required; every other setting (models, parallelism, CI, checkpoint, the unit-boundary guard) is optional with sensible defaults — see the full annotated `skills/nob/templates/.nob.yml.reference.yml` to override any of them.
 
 ## License
 

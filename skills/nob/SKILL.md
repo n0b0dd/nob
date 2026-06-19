@@ -158,9 +158,10 @@ units:
     type: {detected type}
     path: {detected path}
 agents:
-  enabled: [pm, tech-lead, dev, reviewer, ideation]
+  enabled: [pm, tech-lead, dev, debug, reviewer, ideation]
   models:
     dev: sonnet
+    debug: sonnet
     tech-lead: sonnet
     pm: haiku
     reviewer: haiku
@@ -185,6 +186,7 @@ Extract the model for each agent under `agents.models`. If an agent has no entry
 | Agent | Default model |
 |---|---|
 | dev | sonnet |
+| debug | sonnet |
 | tech-lead | sonnet |
 | init | sonnet |
 | venture | sonnet |
@@ -206,6 +208,7 @@ Also extract:
 - `agents.unit_boundary.enabled` (default: true if not present — the PreToolUse guard that blocks dev edits outside declared unit paths during a run)
 - `MARKER_PATH` = `{agents.checkpoint.path}.boundary.json` — the unit-boundary marker read by the `hooks/unit-boundary.sh` PreToolUse hook. **Remove any stale marker now** (run `rm -f {MARKER_PATH}` via Bash, ignore errors): a marker left behind by a previously interrupted run must not police edits in this one. A fresh marker is written at Phase 2.
 - `DEV_MODEL_RESOLVED` = `agents.models["dev"] ?? "sonnet"`
+- `DEBUG_MODEL_RESOLVED` = `agents.models["debug"] ?? agents.models["dev"] ?? "sonnet"` — model for the read-only debug investigation agent (dispatched by the Tech Lead before dev on `Bug→Fix` runs)
 
 **Unit guidance map**: compute `UNIT_GUIDANCE_MAP` from SKILL_BASE_DIR and each unit's type. For every unit in `units`:
 - `UNIT_GUIDANCE_MAP[unit.name]` = `{SKILL_BASE_DIR}/../dev/stacks/{unit.type}.md`
@@ -242,12 +245,16 @@ If PLAN_ONLY = true:
 
 For `Spec→Code` and `Bug→Fix` workflows only (skip for Init, Venture, Refactor, Ideate, API→Sync, and `--plan-only` runs) — validate the spec before dispatching any agents:
 
-1. **Path present**: confirm the user's message contains a file path (not empty string). If not: print `"Error: no spec file path provided. Usage: /nob implement <path-to-spec.md>"` and exit.
-2. **File exists**: use the Read tool to open the spec file. If the Read tool returns an error: print `"Error: spec file not found: <path>. Check the path and try again."` and exit.
-3. **File non-empty**: check that the file content length > 0 characters. If empty: print `"Error: spec file is empty: <path>."` and exit.
-4. **Acceptance criteria present**: check that the file content contains `## acceptance criteria` (case-insensitive substring match). If absent: print `"Error: spec file has no ## Acceptance criteria section: <path>. Add one before running nob."` and exit.
+First, classify the run: set `IS_BUG_FIX` = true when the user's intent matches a Bug→Fix pattern from the Step 2 table (`"fix [file]"`, `"there's a bug in [area]"`, `"bug report [file]"`) — match case-insensitively. Otherwise `IS_BUG_FIX` = false (treat as Spec→Code). The acceptance-criteria check below is relaxed for bug reports: a bug report's implicit acceptance criterion is "the reported behaviour no longer occurs", so it needs reproduction detail, not a `## Acceptance criteria` section.
 
-If all four checks pass: proceed to Step 2.
+1. **Path present**: confirm the user's message contains a file path (not empty string). If not: print `"Error: no spec file path provided. Usage: /nob implement <path-to-spec.md>"` and exit.
+2. **File exists**: use the Read tool to open the spec/bug-report file. If the Read tool returns an error: print `"Error: file not found: <path>. Check the path and try again."` and exit.
+3. **File non-empty**: check that the file content length > 0 characters. If empty: print `"Error: file is empty: <path>."` and exit.
+4. **Content check** — branch on `IS_BUG_FIX`:
+   - **Spec→Code** (`IS_BUG_FIX` = false): require an acceptance-criteria section. Check that the file content contains `## acceptance criteria` (case-insensitive substring match). If absent: print `"Error: spec file has no ## Acceptance criteria section: <path>. Add one before running nob."` and exit.
+   - **Bug→Fix** (`IS_BUG_FIX` = true): a bug report does **not** need a `## Acceptance criteria` section — do not hard-fail. Check (case-insensitive substring) whether the file contains any reproduction signal: `reproduc` (covers "reproduce" / "reproduction" / "steps to reproduce"), `expected`, `actual`, or `## acceptance criteria`. If at least one is present: proceed. If none is present (but the file is non-empty, per check 3): print `"Warning: bug report has no reproduction / expected / actual section: <path>. The debug agent will reconstruct repro steps from the report text — add these sections for a more reliable fix."` and **proceed** (do not exit).
+
+If all checks pass (or the bug-report warning was printed): proceed to Step 2.
 
 ## Step 2: Identify workflow type
 
@@ -521,9 +528,59 @@ Run `date +%s` and store as PM_END_EPOCH. Compute PM_DURATION_MS = (PM_END_EPOCH
 
 ---
 
-**Agent 2 — Tech Lead Agent**
+**Agent 1.5 — Debug diagnosis + routing (Bug→Fix runs only)**
 
-Run `date +%s` via the Bash tool and store as TL_START_EPOCH.
+For feature builds (WORKFLOW is **not** a bug fix — match `Bug→Fix` / `Bug → Fix` / `bug-fix` case-insensitively): set DEBUG_OUTPUT = `none`, set IMPL_PATH = `tech-lead`, and skip directly to **Agent 2 — Implementation**.
+
+For Bug→Fix runs, diagnose the bug first, then route on how complicated the fix is. Diagnosis is cheap and the debug agent self-reports complexity, so this lets a localized bug skip the Tech Lead while a deep one still gets full planning.
+
+1. Run `date +%s` → DEBUG_START_EPOCH.
+2. Read `{SKILL_BASE_DIR}/../debug/SKILL.md`. Dispatch with `model: {DEBUG_MODEL_RESOLVED}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../debug/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+
+Per-unit stack-guidance path map:
+{for each entry in UNIT_GUIDANCE_MAP: "  {name}: {path-or-none}"}
+
+.nob.yml contents:
+{.nob.yml content}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: "CLAUDE.md not found"}
+
+Bug report:
+{spec file content (the bug report — reproduction / expected / actual)}
+
+Project memory:
+{PROJECT_MEMORY}
+[/INPUTS]
+```
+
+3. Extract `[DEBUG OUTPUT]...[/DEBUG OUTPUT]`. Store as DEBUG_OUTPUT and print it verbatim. If missing: re-dispatch once; if still missing, set DEBUG_OUTPUT = `none`, set IMPL_PATH = `tech-lead` (let the Tech Lead diagnose and plan from the bug report itself), and skip to step 6.
+4. Run `date +%s` → DEBUG_END_EPOCH. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  debug           {DEBUG_MODEL_RESOLVED}  OK    {(DEBUG_END_EPOCH-DEBUG_START_EPOCH)×1000}ms`.
+5. **Routing decision** — parse complexity signals from DEBUG_OUTPUT:
+   - AFFECTED_UNIT_COUNT = count of comma-separated names on the `Affected units:` line.
+   - RISK_ESCALATE = true if the `Risks:` section contains `[BREAKING]`, `[MIGRATION]`, or `[AUTH]`.
+   - LOW_CONFIDENCE = true if the `Confidence:` line begins with `low` (case-insensitive).
+   - FIX_FILE_COUNT = count of `- [unit] path:` lines under `Recommended fix:`.
+   - Set **ESCALATE** = true if ANY of: AFFECTED_UNIT_COUNT ≥ 2, RISK_ESCALATE, LOW_CONFIDENCE, FIX_FILE_COUNT > 4.
+   - If ESCALATE: set IMPL_PATH = `tech-lead`. Print: `"Debug: complicated fix ({list the triggers, e.g. 'multi-unit, [BREAKING]'}) — routing through Tech Lead for planning."`
+   - Else: set IMPL_PATH = `direct-dev`. Print: `"Debug: localized fix ({FIX_FILE_COUNT} file(s), 1 unit, confidence {level}) — dispatching dev directly, skipping Tech Lead."`
+6. **Risk gate** (only when RISK_ESCALATE is true and `[AUTH]` or `[BREAKING]` is present): print the offending risk line(s) and the `Recommended fix:` section, then prompt: `"This fix touches [AUTH/BREAKING]. Proceed? (yes / no)"`. Wait for the response. If `no` or any non-yes response: print `"Halted before code changes — worktree preserved at {WORKTREE_PATH}."` and exit without dispatching dev. If `yes`: continue (IMPL_PATH is already `tech-lead` since RISK_ESCALATE forced ESCALATE).
+
+---
+
+**Agent 2 — Implementation**
+
+Run `date +%s` via the Bash tool and store as TL_START_EPOCH. Branch on IMPL_PATH.
+
+### Path A — Tech Lead (feature builds, and complicated bug fixes)
 
 Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch with `model: agents.models["tech-lead"] ?? "sonnet"`:
 
@@ -544,6 +601,8 @@ Per-unit stack-guidance path map:
 CLAUDE.md contents:
 {CLAUDE.md content, or: "CLAUDE.md not found"}
 
+Workflow: {identified workflow type — e.g. Spec→Code or Bug→Fix}
+
 Spec file path: {spec file path}
 Spec file contents:
 {spec file content}
@@ -551,11 +610,17 @@ Spec file contents:
 PM Agent output:
 {PM_OUTPUT}
 
+{if DEBUG_OUTPUT is not "none", include:
+Debug diagnosis:
+{DEBUG_OUTPUT}
+}
+
 Project memory:
 {PROJECT_MEMORY}
 
 Agent models:
   dev: {DEV_MODEL_RESOLVED}
+  debug: {DEBUG_MODEL_RESOLVED}
 
 Max parallel slices: {agents.max_parallel_slices}
 
@@ -563,21 +628,109 @@ Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS as comma-
 [/INPUTS]
 ```
 
+When a `Debug diagnosis:` is supplied (complicated bug fix), the Tech Lead uses it as the already-completed investigation — it does **not** re-run debug; it plans the task graph from the diagnosis, gates risks, dispatches dev, and runs the blocker loop. Feature builds receive no diagnosis and the Tech Lead plans from the spec as usual.
+
 Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. Apply Output Block Validation for Tech Lead.
 Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
-
 If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing after re-dispatch: mark as `failed`; stop pipeline.
+
+Append to RUN_LOG_PATH (after computing TL_DURATION_MS as below): a `tech-lead` line and a `dev` line (model `{DEV_MODEL_RESOLVED}`). Then proceed to **Common: checkpoint + timing** below.
+
+### Path B — Direct dev (localized bug fixes)
+
+Skip the Tech Lead entirely. Build a minimal `[TECH LEAD SPEC]` from DEBUG_OUTPUT, then dispatch dev directly.
+
+1. **Construct the task list** from DEBUG_OUTPUT `Recommended fix:` — one task per listed file, ids `t1`, `t2`, … in listed order:
+   ```
+   - id: t{N}
+     title: fix {basename of path}
+     description: {the recommended change for that file from DEBUG_OUTPUT; if DEBUG_OUTPUT "Suggested regression test:" is not "none", append "Also add the suggested regression test: {test description}."}
+     unit: {the [unit] tag on that Recommended fix line}
+     files: {the path on that line}
+     depends_on: empty
+   ```
+   If `Recommended fix:` lists a single file, produce a single task `t1`.
+2. Set IMPL_RISKS = the DEBUG_OUTPUT `Risks:` lines (or `none`).
+3. Read `{SKILL_BASE_DIR}/../dev/SKILL.md`. Dispatch ONE `dev` Agent with `model: {DEV_MODEL_RESOLVED}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../dev/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+
+Per-unit stack-guidance path map:
+{for each entry in UNIT_GUIDANCE_MAP: "  {name}: {path-or-none}"}
+
+.nob.yml contents:
+{.nob.yml content}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: "CLAUDE.md not found"}
+
+[TECH LEAD SPEC]
+Interfaces / contracts:
+none
+
+Data schemas:
+none
+
+Task list:
+{the task list constructed in step 1}
+
+Risks:
+{IMPL_RISKS}
+[/TECH LEAD SPEC]
+
+Acceptance criteria:
+{PM_OUTPUT acceptance criteria}
+
+Bug diagnosis (root cause — implement the fix it recommends):
+{DEBUG_OUTPUT}
+
+Project memory:
+{PROJECT_MEMORY}
+
+Max parallel slices: {agents.max_parallel_slices}
+
+Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS as comma-separated ids, or: none}
+[/INPUTS]
+```
+
+4. Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT. Apply the **Output Block Validation Procedure** for Dev Agent. If missing: re-dispatch once; if still missing: mark `failed`; stop pipeline.
+5. **Synthesize TECH_LEAD_OUTPUT** (the Reviewer reads it for the contract check). Set it to:
+   ```
+   [TECH LEAD OUTPUT]
+   Affected units: {DEBUG_OUTPUT Affected units}
+   Interfaces written:
+   - none
+   Data schemas written:
+   - none
+   Task count: {N from the constructed task list}
+   Risks:
+   {IMPL_RISKS}
+   Escalations made:
+   - none
+   Unresolved blockers:
+   - none
+   Contract violations:
+   - none
+   Note: direct-dev path (localized bug fix) — Tech Lead skipped; diagnosis in [DEBUG OUTPUT].
+   [/TECH LEAD OUTPUT]
+   ```
+   This makes the Reviewer's contract check SKIP cleanly (no contracts) while still flagging the run shape.
+6. Append to RUN_LOG_PATH: a `dev` line (model `{DEV_MODEL_RESOLVED}`) — no `tech-lead` line (it was skipped). Then proceed to **Common: checkpoint + timing**.
+
+### Common: checkpoint + timing (both paths)
 
 Set IMPL_OUTPUT = DEV_OUTPUT.
 
 **Write task statuses to checkpoint** (if `checkpoint.enabled`):
 Parse the `Tasks:` list from DEV_OUTPUT — each line has the form `- [task-id] (unit: name): [done | partial | failed] — ...`. Build a map TASK_STATUS where `done` → `"completed"` and `partial`/`failed` → `"pending"`. Read `{checkpoint.path}checkpoint.json`, set its `tasks` field to TASK_STATUS, append `"phase2"` to `phases_completed` (only if not already present), and write it back with the Write tool. If the checkpoint write fails, skip silently (see Error Handling H2).
 
-Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH - TL_START_EPOCH) × 1000. Append to RUN_LOG_PATH:
-```
-{date -u +%FT%TZ}  tech-lead       {model}  OK    {TL_DURATION_MS}ms
-{date -u +%FT%TZ}  dev             {DEV_MODEL_RESOLVED}  OK    {TL_DURATION_MS}ms
-```
+Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH - TL_START_EPOCH) × 1000. Append the run-log line(s) noted for the path taken, using `{date -u +%FT%TZ}  {agent}         {model}  OK    {TL_DURATION_MS}ms`.
 
 Proceed to Phase 3.
 
@@ -725,6 +878,8 @@ Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_
 
 **Tech Lead retry** (re-dispatches only failing tasks):
 
+The retry loop always routes through the Tech Lead — even for a bug that took the direct-dev fast path in Phase 2. This is deliberate: if a localized fix failed review, the bug is more involved than debug judged, so it now gets full planning (the `Debug diagnosis:` is forwarded so the Tech Lead has the root cause).
+
 Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch Tech Lead with `model: agents.models["tech-lead"] ?? "sonnet"`:
 
 ```
@@ -743,12 +898,19 @@ Per-unit stack-guidance path map: {UNIT_GUIDANCE_MAP}
 CLAUDE.md contents:
 {CLAUDE.md content, or: "CLAUDE.md not found"}
 
+Workflow: {identified workflow type — e.g. Spec→Code or Bug→Fix}
+
 Spec file path: {spec file path}
 Spec file contents:
 {spec file content}
 
 PM Agent output:
 {PM_OUTPUT}
+
+{if DEBUG_OUTPUT is not "none", include:
+Debug diagnosis:
+{DEBUG_OUTPUT}
+}
 
 Reviewer found these failures — re-implement only the failing tasks:
 {RETRY_ITEMS listed one per line}
@@ -769,12 +931,13 @@ Project memory:
 
 Agent models:
   dev: {DEV_MODEL_RESOLVED}
+  debug: {DEBUG_MODEL_RESOLVED}
 
 Max parallel slices: {agents.max_parallel_slices}
 [/INPUTS]
 ```
 
-Extract `[TECH LEAD OUTPUT]` and `[DEV OUTPUT]`. Replace TECH_LEAD_OUTPUT and DEV_OUTPUT with results.
+Extract `[TECH LEAD OUTPUT]` and `[DEV OUTPUT]`. Replace TECH_LEAD_OUTPUT and DEV_OUTPUT with results. (On a `Bug→Fix` retry the Tech Lead may re-run the debug investigation; a forwarded `[DEBUG OUTPUT]` block, if present, replaces DEBUG_OUTPUT.)
 
 **After retry agents return:** Re-dispatch Reviewer using the same prompt structure as Phase 3. Extract new REVIEWER_OUTPUT. If `checkpoint.enabled`: update the `tasks` map in checkpoint.json from the new DEV_OUTPUT `Tasks:` list (same `done`→`"completed"`, `partial`/`failed`→`"pending"` mapping). Update `reviewer_output` in checkpoint.json. Increment RETRY_COUNT. Go to Loop start.
 
@@ -867,8 +1030,10 @@ Nob complete.
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Design:    [Design doc field from TECH_LEAD_OUTPUT — e.g. docs/design/2026-06-19-user-export.md; omit this line if the field is absent or "none"]
-Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use DEV_MODEL_RESOLVED for the dev agent.]
-Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · dev({DEV_MODEL_RESOLVED}) 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
+Agents:    [each agent that ACTUALLY ran as "name(model)" separated by " · " — list only what ran, skip disabled/skipped agents. Feature build: pm(haiku) · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). Bug→Fix always includes debug({DEBUG_MODEL_RESOLVED}) after pm; the Tech Lead appears ONLY if the bug escalated (IMPL_PATH = tech-lead) — on the direct-dev fast path omit tech-lead, e.g.: pm(haiku) · debug({DEBUG_MODEL_RESOLVED}) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku).]
+Timing:    [each agent that ran as "name Ns" separated by " · ", mirroring the Agents line. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
+[Bug→Fix runs only — print the root-cause line from DEBUG_OUTPUT if present:]
+Root cause: [Root cause field from DEBUG_OUTPUT, or omit this line if absent]
 
 Tests:     [per-unit results derived from REVIEWER_OUTPUT "Test results:" per-unit list — e.g.: api ✓ · web ✗ · cli ✓. Use ✓ for PASS, ✗ for FAIL, — for SKIPPED. If no per-unit data: show overall PASS / FAIL / SKIPPED.]
 Security:  [derive from the Security section of REVIEWER_OUTPUT: PASS, FINDINGS: N medium M low, or SKIPPED — no files changed]

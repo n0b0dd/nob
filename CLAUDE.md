@@ -17,6 +17,7 @@ skills/
   tech-lead/      — Technical lead: writes contracts + task list (/nob:tech-lead)
   dev/            — Implements changes per declared units (/nob:dev)
     stacks/       — Per-stack implementation helpers (e.g. nextjs.md, rails.md)
+  debug/          — Investigates a bug, finds root cause, recommends a fix (read-only) (/nob:debug)
   reviewer/       — Final pass/fail review + inline security scan (/nob:reviewer)
   init/           — Scaffolds a new fullstack project (/nob:init)
   ideation/       — Generates ranked feature ideas from an existing codebase (/nob:ideation)
@@ -45,6 +46,18 @@ Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via 
 **PM → Tech Lead → dev → Reviewer**
 
 (PM is pure product — it owns the *what/why* and never touches code. Tech Lead owns all technical work — it discovers affected files, resolves any third-party API shapes, writes contracts + a flat task list, and **persists a technical design doc** to `docs/design/`. The dev agent self-manages parallel/sequential sub-agents per unit. Reviewer includes inline security scanning.)
+
+On a **Bug→Fix** run a **debug** investigation runs first and then the hub *routes by how complicated the fix is*:
+
+- **PM → debug → dev → Reviewer** for a localized bug (the fast path), or
+- **PM → debug → Tech Lead → dev → Reviewer** for a complicated bug (the escalated path).
+
+The hub dispatches the **read-only** debug agent right after PM. Debug diagnoses (reproduce → root cause with file:line → recommended fix + risk flags + a *suggested* regression test) and emits `[DEBUG OUTPUT]` — it never edits code. The hub then reads debug's own self-reported complexity signals and sets `IMPL_PATH`:
+
+- **Escalate to Tech Lead** if ANY of: ≥2 affected units, a `[BREAKING]`/`[MIGRATION]`/`[AUTH]` risk, `Confidence: low`, or >4 files in the recommended fix. The Tech Lead receives the diagnosis (it does **not** re-run debug), plans a sequenced task graph, gates risk, dispatches dev, and runs the blocker loop.
+- **Direct dev** otherwise: the hub builds a minimal `[TECH LEAD SPEC]` task list straight from debug's recommended fix and dispatches `dev`, skipping the Tech Lead. It synthesizes a stub `[TECH LEAD OUTPUT]` (no contracts) so the Reviewer's contract check skips cleanly.
+
+A `[AUTH]`/`[BREAKING]` risk also triggers a **human confirm gate** before any code is written. The Phase 3.5 retry loop always routes through the Tech Lead, so a localized fix that fails review naturally escalates. `dev` does all code changes (its usual flow, including running tests); Reviewer, checkpoint, and the retry loop are unchanged. Debug reuses `skills/dev/stacks/` for per-stack context; its model defaults to `agents.models.debug` → `agents.models.dev` → `sonnet`.
 
 - The hub resolves `SKILL_BASE_DIR` at runtime from its `Base directory for this skill:` context line — all sub-skill paths use `{SKILL_BASE_DIR}/../X/SKILL.md` (sub-skills live one level up from the hub at `skills/X/`).
 - The hub reads `.nob.yml` from the user's project root to configure models, enabled skills, and parallelism. If absent, it auto-detects the stack.

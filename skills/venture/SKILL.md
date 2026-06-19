@@ -8,6 +8,8 @@ description: End-to-end venture validation pipeline. Clarifies the idea, researc
 ## Overview
 Run the complete venture validation pipeline in one agent. Guide the founder through idea framing, market research, business modeling, GTM strategy, and financial projection. Produce a validated venture spec ready for technical implementation.
 
+**Be an opinionated advisor, not a form.** At every decision point, take a position: recommend a specific choice, mark it clearly, lead with it, and back it with a short rationale grounded in the idea, target user, and market findings. Present alternatives with the honest condition under which they'd win instead. The founder owns the final call — but they should be reacting to a strong recommendation, not picking from a neutral menu. If the founder defers ("you decide", "whatever you recommend"), proceed with your recommendation rather than re-asking.
+
 ## Mode Detection
 
 Check whether an `[INPUTS]` block is present in the current context.
@@ -48,6 +50,8 @@ Ask up to 5 questions to understand:
 3. What is the proposed solution in one sentence?
 4. What makes this different from existing solutions?
 5. Is this a tech product, physical product, or service?
+
+**Don't ask blind.** For each question, take a first guess from what the founder already told you and offer it as a default they can confirm or correct — e.g. "Target user: I'm assuming **mid-market ops managers** rather than enterprise — right?" or "Differentiation: my read is you're betting on **speed-to-setup**, not feature breadth — is that the wedge?" A founder confirming a sharp guess is faster and surfaces more than a founder filling in a blank field. Offer 1–2 concrete directions per open question where you have a real opinion.
 
 Wait for the user's answers before proceeding. You may ask them in one batch.
 
@@ -164,10 +168,11 @@ Based on the idea and market research, propose 2–3 revenue model options. For 
 - Typical unit economics: ARPU estimate, CAC estimate, payback period
 - Key trade-offs (pros and cons)
 
-Present as a numbered list and ask:
-> "Which revenue model fits your vision?"
+**Be opinionated.** Don't present a neutral menu — make a clear recommendation. Pick the model you'd choose if this were your own venture, mark it **★ Recommended**, list it first, and give a 2–3 sentence rationale grounded in the idea, target user, and market research (competitor pricing norms, buyer's willingness to pay, sales motion). For the non-recommended options, state plainly when they'd be the right call instead ("choose marketplace commission *only if* you can guarantee supply-side liquidity first"). End with:
 
-Wait for the founder's choice. Store as CHOSEN_MODEL.
+> "My recommendation is **[model]** because [one-line reason]. Want to go with that, or does one of the alternatives fit your vision better?"
+
+If the founder defers ("you decide", "whatever you recommend", no clear preference), proceed with your recommended model — don't re-ask. Wait only if they're actively weighing options. Store as CHOSEN_MODEL.
 
 ### Step 2: Build value proposition canvas
 Define:
@@ -232,10 +237,11 @@ Based on the idea, target user, and revenue model, propose 4–6 distribution ch
 - Why it fits this idea and target user
 - Effort to test (low / medium / high), Time to first signal (in weeks), Cost to test
 
-Ask:
-> "Which 1–2 channels should I prioritize for your launch plan?"
+**Be opinionated.** Rank the channels best-fit first and explicitly name the **★ Top 2** you'd test in the first 90 days, with a 1–2 sentence rationale each (where the target user already congregates, fastest path to a real signal, cost vs. the chosen revenue model's economics). Call out at least one channel that *looks* tempting but you'd skip for now, and say why. End with:
 
-Wait for selection. Store as PRIORITY_CHANNELS.
+> "I'd start with **[channel A]** and **[channel B]** because [one-line reason]. Want to run with those, or swap one?"
+
+If the founder defers or gives no clear preference, proceed with your recommended top 2 — don't re-ask. Store as PRIORITY_CHANNELS.
 
 Note if founder selects 3+ channels: "3+ channels is a common early-stage mistake — recommend focusing on 1–2 for the first 90 days." Proceed with their selection.
 

@@ -1,77 +1,24 @@
-# Nob configuration
-# Copy this file to your project root as .nob.yml and fill in your stack details.
+# Nob configuration — minimal starter.
+# Copy this file to your project root as .nob.yml and declare your units.
+#
+# Only `units` matters here. Each unit is a buildable/testable piece of the
+# project — a service, an app, a package — with a stack `type` (which selects
+# dev/stacks/<type>.md guidance) and a `path`. A fullstack app is two units; a
+# CLI is one; a multi-service repo is N.
+#
+# Everything else — models, parallelism, CI, checkpoint, the unit-boundary guard
+# — is OPTIONAL and has sensible defaults. To override any of it, copy the
+# section you want from the full annotated reference:
+#   skills/nob/templates/.nob.yml.reference.yml
+#
+# You can also delete this file entirely: with no .nob.yml present, nob
+# auto-detects your stack (and offers to save the result back here).
 
-stack:
-  frontend:
-    enabled: true
-    type: react          # react | vue | next | flutter | android | ios | react-native
-    path: apps/frontend/   # path relative to repo root — change to your actual directory
-
-  backend:
-    enabled: true
-    type: node           # node | python | go | java | ruby
-    path: apps/backend/  # path relative to repo root — change to your actual directory
-
-  shared:
-    core: shared/core/     # domain-organized shared contracts and schema
-
-  docs:
-    enabled: true
-    specs: /docs/specs        # change to wherever your spec files live
-    bugs: /docs/bugs          # change to wherever your bug reports live
-    backlog: /docs/backlog    # change to wherever your backlog items live
-
-  structure:
-    check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected
-
-agents:
-  enabled:
-    - planner
-    - pm
-    - backend
-    - frontend
-    - security
-    - reviewer
-    - ideation
-    - ask
-
-  models:
-    # Models set here are always respected. For simple specs, nob automatically
-    # downgrades backend and frontend to haiku unless set explicitly here.
-    backend: sonnet   # code-writing agents need sonnet
-    frontend: sonnet
-    planner: haiku          # planning/review/qa agents can use haiku
-    pm: haiku
-    reviewer: haiku
-    security: haiku
-    idea-framer: haiku           # venture pipeline agents
-    market-researcher: sonnet    # web research needs sonnet
-    business-modeler: haiku
-    gtm-strategist: haiku
-    financial-modeler: haiku
-    venture-reviewer: haiku
-    refactor: sonnet      # project migration agent
-    ideation: haiku       # feature ideation agent
-    ask: haiku            # codebase Q&A agent
-
-  max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
-  max_tokens_per_run: 500000  # optional; omit or remove to disable budget guard
-  max_retries: 3              # max retry passes: 1 automatic + user-gated after that (default: 3)
-
-  # CI/CD integration — polls GitHub Actions after PR creation.
-  ci:
-    enabled: true                   # set to false to skip CI polling entirely
-    timeout_minutes: 10             # how long to wait for CI checks before giving up
-
-  # Structured project memory — tracks patterns, routes, and corrections across runs.
-  memory:
-    structured: true                # set to false to disable .nob/project-memory.yml writes
-
-  venture:
-    enabled: true           # set false to disable /nob venture detection
-
-  checkpoint:
-    enabled: true           # write/read checkpoint files on disk (default: true)
-    path: .nob/             # directory for checkpoint.json
-
-  auto_pr: false            # set true to auto-create a GitHub PR after Reviewer PASS (default: false — you create the PR manually)
+units:
+  - name: api          # unique label — used in task routing and output
+    type: node         # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
+    path: services/api/
+  - name: web
+    type: react
+    path: apps/web/
+    # depends_on: [api]   # optional — declare cross-unit build/test ordering

@@ -1,43 +1,32 @@
 # Project: [Your Project Name]
 
-## Stack
-- Frontend: [e.g., React 18, TypeScript, Tailwind]
-- Backend: [e.g., Node.js 20, Express, PostgreSQL]
-- Mobile: [e.g., Flutter 3, Dart — or remove this line]
+## Units
+
+Units are declared in `.nob.yml` under the `units:` key. Each unit has:
+- `name`: unique label used in task routing and output
+- `type`: stack type (node, python, go, java, ruby, react, vue, next, flutter, android, ios, react-native, generic)
+- `path`: path relative to repo root
+
+Example: a fullstack app with React frontend and Node.js API is two units. A CLI is one. A multi-service repo is N.
 
 ## Folder Structure
-- `apps/frontend/` — UI layer. Deployable target. No business logic.
-- `apps/backend/` — API layer. Deployable target. No shared contracts here.
-- `shared/core/contracts/` — Source of truth for types and API shapes.
-- `shared/core/schema/` — Source of truth for database schema and migrations.
+
+Define your project's actual structure and adapt these examples to match your unit paths:
 - `/docs/specs` — feature specifications (PM writes here)
 - `/docs/bugs` — bug reports (QA writes here)
-- `/docs/backlog` — acceptance criteria (PO writes here)
 
-## AI Agent Rules
-- Feature work → edit `apps/`
-- Shared types or API shape changes → edit `shared/core/contracts/`
-- Database changes → edit `shared/core/schema/`
-- Adding a new domain → create `shared/[domain]/contracts/` and `shared/[domain]/schema/`
-- Never put app-specific logic in `shared/`
-- Never put shared contracts inside `apps/`
+## AI Agent Pipeline
 
-## API Conventions
-- Base URL: `/api/v1`
-- Auth: [e.g., Bearer token in Authorization header]
-- Error format: `{ "error": { "code": "string", "message": "string" } }`
+The Nob pipeline runs: **PM → Tech Lead → dev → Reviewer**
 
-## Frontend Conventions
-- Component pattern: [e.g., functional components with hooks]
-- State management: [e.g., Zustand]
-- API client: [e.g., axios in /frontend/src/api/]
+- **PM** extracts requirements and writes specs to `/docs/specs`
+- **Tech Lead** reads specs, writes task contracts, and coordinates the dev agent
+- **dev** implements changes across all units in parallel (guided by `dev/stacks/<type>.md`)
+- **Reviewer** performs final pass/fail and inline security review
 
-## Backend Conventions
-- Route pattern: [e.g., /backend/src/routes/]
-- Middleware: [e.g., auth middleware at /backend/src/middleware/auth.js]
-- Tests: [e.g., Jest + Supertest, run with `npm test` from /backend]
+## Agent Conventions
 
-## Team Roles
-- PM specs live in: /docs/specs
-- QA bugs live in: /docs/bugs
-- PO backlog lives in: /docs/backlog
+The `dev` agent uses stack-specific guidance from `dev/stacks/<type>.md` for each unit. When implementing:
+- Follow the conventions and patterns for your unit's stack type
+- Keep unit-specific logic in each unit's path
+- Update shared types or contracts as needed

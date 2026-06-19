@@ -1,0 +1,76 @@
+# Nob configuration — full annotated reference.
+#
+# This documents every option nob understands. You do NOT need most of it:
+# `units` is the only field that matters; everything else has a sensible
+# default. For a clean start, copy `.nob.yml.template` (the minimal starter)
+# and pull individual sections from here only when you want to override a default.
+
+# Each unit is a buildable/testable piece of the project. A unit has a stack
+# `type` (which selects dev/stacks/<type>.md guidance) and a `path`.
+# A fullstack app is just two units; a CLI is one; a multi-service repo is N.
+units:
+  - name: api          # unique label — used in task routing and output
+    type: node         # node | python | go | java | ruby | react | vue | next | flutter | android | ios | react-native | generic
+    path: services/api/
+  - name: web
+    type: react
+    path: apps/web/
+
+docs:
+  enabled: true
+  specs: docs/specs        # where PRD / spec files live (PM writes here)
+  design: docs/design      # where the Tech Lead persists technical design docs
+  bugs: docs/bugs          # where bug reports live
+
+structure:
+  check: false  # set true to enable the nob monorepo migration offer when a non-standard layout is detected
+
+agents:
+  # Pipeline agents that run on every /nob implement. Init, refactor, and venture
+  # are invoked explicitly (e.g. /nob refactor) — venture has its own toggle below.
+  enabled:
+    - pm
+    - tech-lead
+    - dev
+    - reviewer
+    - ideation
+
+  models:
+    # Models set here are always respected. Security review is performed inline
+    # by the reviewer, so it has no separate model entry.
+    dev: sonnet           # the generic implementation agent — code-writing needs sonnet
+    tech-lead: sonnet     # writes contracts + task list, coordinates the dev agent
+    pm: haiku
+    reviewer: haiku
+    init: sonnet          # project scaffolding agent
+    venture: sonnet       # end-to-end venture validation pipeline
+    refactor: sonnet      # project migration agent
+    ideation: haiku       # feature ideation agent
+
+  max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
+  max_retries: 3              # max retry passes: 1 automatic + user-gated after that (default: 3)
+
+  # CI/CD integration — polls GitHub Actions after PR creation.
+  ci:
+    enabled: true                   # set to false to skip CI polling entirely
+    timeout_minutes: 10             # how long to wait for CI checks before giving up
+
+  # Structured project memory — tracks patterns, routes, and corrections across runs.
+  memory:
+    structured: true                # set to false to disable .nob/project-memory.yml writes
+
+  venture:
+    enabled: true           # set false to disable /nob venture detection
+
+  checkpoint:
+    enabled: true           # write/read checkpoint files on disk (default: true)
+    path: .nob/             # directory for checkpoint.json
+
+  auto_pr: false            # set true to auto-create a GitHub PR after Reviewer PASS (default: false — you create the PR manually)
+
+  # Unit-boundary guard — a PreToolUse hook (hooks/unit-boundary.sh) that blocks
+  # edits landing outside your declared unit paths during an active /nob run, so a
+  # dev agent can't wander outside the unit it was assigned. Edits to .nob/, your
+  # docs dirs, and .nob.yml are always allowed. Requires `jq` (no-ops without it).
+  unit_boundary:
+    enabled: true           # set false to disable the guard (default: true)

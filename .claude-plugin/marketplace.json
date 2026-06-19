@@ -7,8 +7,8 @@
   "plugins": [
     {
       "name": "nob",
-      "description": "Orchestrates cross-layer fullstack monorepo development. New in 1.4.0: structure-agnostic — works with any project layout out of the box, no monorepo required.",
-      "version": "1.4.0",
+      "description": "Automates the full dev cycle with minimal human-in-the-loop. PM → Tech Lead → dev → Reviewer — one command, spec to reviewed code, for any project shape.",
+      "version": "1.7.0",
       "source": "./",
       "author": {
         "name": "n0b0dd"

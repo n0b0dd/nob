@@ -32,6 +32,7 @@ agents:
     - pm
     - tech-lead
     - dev
+    - debug
     - reviewer
     - ideation
 
@@ -39,7 +40,8 @@ agents:
     # Models set here are always respected. Security review is performed inline
     # by the reviewer, so it has no separate model entry.
     dev: sonnet           # the generic implementation agent — code-writing needs sonnet
-    tech-lead: sonnet     # writes contracts + task list, coordinates the dev agent
+    debug: sonnet         # Bug→Fix investigation agent (read-only root-cause diagnosis, runs before dev); defaults to the dev model if unset
+    tech-lead: sonnet     # writes contracts + task list, coordinates the dev/debug agent
     pm: haiku
     reviewer: haiku
     init: sonnet          # project scaffolding agent

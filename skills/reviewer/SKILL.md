@@ -35,9 +35,9 @@ Check the context provided by the hub:
 Context contains individual `[PM OUTPUT]` and `[DEV OUTPUT]` blocks → proceed to Step 1 as normal.
 
 ### Step 1: Read the original source file
-Read the spec or bug report file using the Read tool. The path is in the `[PLAN OUTPUT]` block (field: "Source file").
+The hub passes the spec/bug report as `Spec file path:` and `Spec file contents:` in the `[INPUTS]` block — use the provided contents directly (no need to re-read). If only the path is present, read it with the Read tool.
 
-If [PLAN OUTPUT] is not in context, look for the source file path in the user's original message.
+In standalone mode (no `[INPUTS]`), look for the source file path in the user's original message and read it.
 
 ### Step 2: Read [PM OUTPUT]
 Find the acceptance criteria checklist. This is your primary validation list.

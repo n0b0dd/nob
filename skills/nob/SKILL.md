@@ -112,9 +112,9 @@ Read `CLAUDE.md` at the repo root. If not found, note it and continue.
 
 Read `.nob.yml` at the repo root using the Read tool.
 
-If `.nob.yml` is found: use its contents as RESOLVED_CONFIG. Skip to **Extract from RESOLVED_CONFIG** below.
+If `.nob.yml` is found: use its contents as RESOLVED_CONFIG. Set CONFIG_AUTODETECTED = false. Skip to **Extract from RESOLVED_CONFIG** below.
 
-If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG.
+If `.nob.yml` is NOT found: run auto-detection to build RESOLVED_CONFIG. Set CONFIG_AUTODETECTED = true.
 
 ### Auto-detection
 
@@ -180,7 +180,21 @@ Print: "No `.nob.yml` found — using auto-detected config. Create `.nob.yml` to
 
 ### Extract from RESOLVED_CONFIG
 
-Extract the model for each agent under `agents.models`. If an agent has no entry, default to `haiku`. Use this model value as the `model:` parameter when dispatching each Agent tool call.
+Extract the model for each agent under `agents.models`. If an agent has no entry (including when `.nob.yml` is present but minimal, with no `agents` block at all), fall back to that agent's **canonical default**, not a flat `haiku`:
+
+| Agent | Default model |
+|---|---|
+| dev | sonnet |
+| tech-lead | sonnet |
+| init | sonnet |
+| venture | sonnet |
+| refactor | sonnet |
+| pm | haiku |
+| reviewer | haiku |
+| ideation | haiku |
+| (any other) | haiku |
+
+Use the resolved model value as the `model:` parameter when dispatching each Agent tool call. This keeps a minimal `units`-only config behaving identically to a no-config (auto-detected) run.
 
 Also extract:
 - `agents.max_parallel_slices` (default: 3 if not present)
@@ -189,6 +203,8 @@ Also extract:
 - `RUN_LOG_PATH` = `{agents.checkpoint.path}run-log.tsv` — the per-run timing log. On the first append of the run, create the file (and its parent directory) if absent: `mkdir -p {agents.checkpoint.path} && touch {RUN_LOG_PATH}`. All "Append to RUN_LOG_PATH" steps below append one tab-separated line via Bash (`printf '%s\n' "<line>" >> {RUN_LOG_PATH}`), which creates the file if it does not yet exist. If the write fails, skip silently (see Error Handling H2).
 - `agents.max_retries` (default: 3 if not present — maximum retry passes in Phase 3.5)
 - `agents.auto_pr` (default: false if not present — set true to opt-in to automatic PR creation after Reviewer PASS)
+- `agents.unit_boundary.enabled` (default: true if not present — the PreToolUse guard that blocks dev edits outside declared unit paths during a run)
+- `MARKER_PATH` = `{agents.checkpoint.path}.boundary.json` — the unit-boundary marker read by the `hooks/unit-boundary.sh` PreToolUse hook. **Remove any stale marker now** (run `rm -f {MARKER_PATH}` via Bash, ignore errors): a marker left behind by a previously interrupted run must not police edits in this one. A fresh marker is written at Phase 2.
 - `DEV_MODEL_RESOLVED` = `agents.models["dev"] ?? "sonnet"`
 
 **Unit guidance map**: compute `UNIT_GUIDANCE_MAP` from SKILL_BASE_DIR and each unit's type. For every unit in `units`:
@@ -388,7 +404,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 | Agent | Required fields |
 |---|---|
 | Tech Lead | `Affected units:`, `Interfaces written:`, `Task count:`, `Risks:` |
-| PM Agent | `Changes needed:`, `Acceptance criteria:` |
+| PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
 | Dev Agent | `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
 
@@ -403,6 +419,29 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 4. If still missing after re-dispatch: mark the agent status as `malformed`. Do not pass a malformed block to downstream agents. Treat `malformed` the same as `failed` for all pipeline flow decisions.
 
 Apply this procedure after every agent dispatch in Phases 1, 2, 2.5, and 3.
+
+---
+
+## Step 3: Offer to save detected config
+
+Run this only if CONFIG_AUTODETECTED is true (no `.nob.yml` exists) — otherwise skip to Phase 0. This persists the detected stack so future runs skip detection and the user gets a real file to tweak. Init, Refactor, Venture, and Ideate runs never reach this step (they exit earlier and manage their own config).
+
+1. Print the detected units, one per line, as `- {name} ({type}) → {path}`.
+2. Prompt: `"No .nob.yml found — save the detected units above so future runs skip detection and you can customize them? (y/N)"`
+3. Wait for the response.
+   - `y`/`yes`/any clear affirmative → write a **minimal** `.nob.yml` to the repo root using the Write tool, containing only the detected `units` list plus this header (do NOT dump the full RESOLVED_CONFIG — keep it minimal):
+     ```yaml
+     # nob configuration (saved from auto-detected stack).
+     # Only `units` is required; everything else is optional with sensible defaults.
+     # Full annotated reference: skills/nob/templates/.nob.yml.reference.yml
+     units:
+       - name: {detected name}
+         type: {detected type}
+         path: {detected path}
+       # …one entry per detected unit
+     ```
+     Then print `"Wrote .nob.yml — edit it to customize units, models, or toggles."` Leave RESOLVED_CONFIG unchanged for the rest of this run (it already holds the full defaults). If the write fails, print a one-line warning and continue.
+   - anything else → continue with the in-memory auto-detected config; do not write a file.
 
 ---
 
@@ -437,6 +476,13 @@ Proceed directly to Phase 2.
 ---
 
 ## Phase 2: Tech Lead → dev pipeline
+
+**Unit-boundary marker write** (if `agents.unit_boundary.enabled` is true AND `units` is non-empty — runs on both fresh and resume, since dev edits files either way):
+Write `{MARKER_PATH}` using the Write tool. This tells the `hooks/unit-boundary.sh` PreToolUse hook which paths edits may touch during this run; the hook denies any edit inside the worktree that falls outside them. Content:
+```json
+{ "worktree": "{WORKTREE_PATH}", "allow": ["{path of each unit in units, in order}", ".nob/", "{docs.specs dir, or docs/specs}/", "{docs.design dir, or docs/design}/", "{docs.bugs dir, or docs/bugs}/", ".nob.yml"] }
+```
+The `allow` array is: every unit `path` (verbatim, trailing slash kept), then `.nob/`, the configured `docs.specs`, `docs.design`, and `docs.bugs` directories (each with a trailing slash — `docs.design` lets the Tech Lead persist its design doc), and `.nob.yml`. If the write fails, skip silently (the guard simply stays inactive — see Error Handling H2).
 
 **Initial checkpoint write** (if `checkpoint.enabled` is true and no checkpoint file exists yet — fresh run only):
 Write `{checkpoint.path}checkpoint.json` with:
@@ -497,6 +543,10 @@ Per-unit stack-guidance path map:
 
 CLAUDE.md contents:
 {CLAUDE.md content, or: "CLAUDE.md not found"}
+
+Spec file path: {spec file path}
+Spec file contents:
+{spec file content}
 
 PM Agent output:
 {PM_OUTPUT}
@@ -693,6 +743,10 @@ Per-unit stack-guidance path map: {UNIT_GUIDANCE_MAP}
 CLAUDE.md contents:
 {CLAUDE.md content, or: "CLAUDE.md not found"}
 
+Spec file path: {spec file path}
+Spec file contents:
+{spec file content}
+
 PM Agent output:
 {PM_OUTPUT}
 
@@ -729,6 +783,8 @@ Extract `[TECH LEAD OUTPUT]` and `[DEV OUTPUT]`. Replace TECH_LEAD_OUTPUT and DE
 ---
 
 ## Step 4: Print terminal summary
+
+**Lift the unit-boundary guard**: run `rm -f {MARKER_PATH}` via Bash (ignore errors). All dev and review editing for this run is complete, so the guard must not police the user's edits after the run ends.
 
 **If workflow is `Venture`**: the venture sub-agent prints its own summary before exiting. This section is not reached for Venture runs.
 
@@ -810,6 +866,7 @@ Nob complete.
 
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
+Design:    [Design doc field from TECH_LEAD_OUTPUT — e.g. docs/design/2026-06-19-user-export.md; omit this line if the field is absent or "none"]
 Agents:    [each agent that ran as "name(model)" separated by " · " — e.g.: pm(haiku) · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). List only agents that actually ran; skip disabled/skipped agents. Use DEV_MODEL_RESOLVED for the dev agent.]
 Timing:    [each agent that ran as "name Ns" separated by " · " — e.g.: pm 3s · tech-lead 18s · dev({DEV_MODEL_RESOLVED}) 18s · reviewer 8s. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 

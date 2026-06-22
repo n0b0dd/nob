@@ -11,8 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 skills/
   nob/            — Hub orchestrator (entry point for /nob)
-    SKILL.md      — Hub skill: entry point for /nob
-    templates/    — CLAUDE.md.template, .nob.yml.template (minimal starter), .nob.yml.reference.yml (full annotated), spec.template.md
+    SKILL.md          — Hub skill: pure router (classify, route, git, config, Step 4 summary)
+    checkpoint-gate/  — Pre-flight checkpoint check: runs first, alerts user, returns action
+    path-quick/       — Quick path: inline implementation for ≤3-file changes, no sub-agents
+    path-lite/        — Lite path: inline PM+TL reasoning + Dev + Reviewer, one auto-retry
+    path-full/        — Full path: PM→Debug→TL→Dev→Docs→Reviewer pipeline + Phase 0 resume scan
+    retry/            — Retry loop: Phase 3.5 stuck/max/user-gate loop
+    templates/        — CLAUDE.md.template, .nob.yml.template (minimal starter), .nob.yml.reference.yml (full annotated), spec.template.md
   pm/             — PM skill: spec-writing and requirements extraction (/nob:pm)
   tech-lead/      — Technical lead: writes contracts + task list (/nob:tech-lead)
   dev/            — Implements changes per declared units (/nob:dev)
@@ -40,29 +45,39 @@ Version is tracked in **both** `.claude-plugin/plugin.json` and `.claude-plugin/
 
 ## Skill Architecture
 
-Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) orchestrates all sub-skills:
+Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) is a **pure router** — it classifies intent, reads config, scans scope, and dispatches one of three path skills. Each path skill owns its pipeline end-to-end and returns a structured output block. The hub prints Step 4 terminal summary from that block.
 
-**PM → Tech Lead → dev → Reviewer**
+**Hub → path skill → Reviewer**
+
+The hub runs a **scope scan at Step 2.5** before dispatching, greps actual affected files, and routes to one path skill based on evidence — not on the user's word choice:
+
+- **Quick path** (`skills/nob/path-quick/`) — ≤3 files, single unit, no new contracts: path skill implements inline, no sub-agents dispatched.
+- **Lite path** (`skills/nob/path-lite/`) — 4–10 files, single unit: inline PM + TL reasoning, dispatches Dev + Reviewer, one auto-retry.
+- **Full path** (`skills/nob/path-full/`) — multi-unit, cross-unit contracts, or complex spec: full PM → Debug → TL → Dev → Docs → Reviewer pipeline, delegates Phase 3.5 retry to `skills/nob/retry/`.
+
+Override flags: `--quick` forces the quick path; `--full` forces the full pipeline.
 
 (PM is pure product — it owns the *what/why* and never touches code. Tech Lead owns all technical work — it discovers affected files, resolves any third-party API shapes, writes contracts + a flat task list, and **persists a technical design doc** to `docs/design/`. The dev agent self-manages parallel/sequential sub-agents per unit. Reviewer includes inline security scanning.)
 
-On a **Bug→Fix** run a **debug** investigation runs first and then the hub *routes by how complicated the fix is*:
+On a **Bug→Fix** run inside `path-full`, a **debug** investigation runs after PM and routes by complexity:
 
-- **PM → debug → dev → Reviewer** for a localized bug (the fast path), or
-- **PM → debug → Tech Lead → dev → Reviewer** for a complicated bug (the escalated path).
+- **PM → debug → dev → Reviewer** for a localized bug (IMPL_PATH = direct-dev), or
+- **PM → debug → Tech Lead → dev → Reviewer** for a complicated bug (IMPL_PATH = tech-lead, escalated).
 
-The hub dispatches the **read-only** debug agent right after PM. Debug diagnoses (reproduce → root cause with file:line → recommended fix + risk flags + a *suggested* regression test) and emits `[DEBUG OUTPUT]` — it never edits code. The hub then reads debug's own self-reported complexity signals and sets `IMPL_PATH`:
+Debug diagnoses (reproduce → root cause with file:line → recommended fix + risk flags + suggested regression test) and emits `[DEBUG OUTPUT]` — it never edits code. `path-full` reads debug's self-reported complexity signals and sets IMPL_PATH:
 
-- **Escalate to Tech Lead** if ANY of: ≥2 affected units, a `[BREAKING]`/`[MIGRATION]`/`[AUTH]` risk, `Confidence: low`, or >4 files in the recommended fix. The Tech Lead receives the diagnosis (it does **not** re-run debug), plans a sequenced task graph, gates risk, dispatches dev, and runs the blocker loop.
-- **Direct dev** otherwise: the hub builds a minimal `[TECH LEAD SPEC]` task list straight from debug's recommended fix and dispatches `dev`, skipping the Tech Lead. It synthesizes a stub `[TECH LEAD OUTPUT]` (no contracts) so the Reviewer's contract check skips cleanly.
+- **Escalate to Tech Lead** if ANY of: ≥2 affected units, `[BREAKING]`/`[MIGRATION]`/`[AUTH]` risk, `Confidence: low`, or >4 files in the recommended fix. A `[AUTH]`/`[BREAKING]` risk also triggers a human confirm gate.
+- **Direct dev** otherwise: `path-full` builds a minimal `[TECH LEAD SPEC]` from debug's recommended fix, dispatches dev directly, and synthesizes a stub `[TECH LEAD OUTPUT]` so the Reviewer's contract check skips cleanly.
 
-A `[AUTH]`/`[BREAKING]` risk also triggers a **human confirm gate** before any code is written. The Phase 3.5 retry loop always routes through the Tech Lead, so a localized fix that fails review naturally escalates. `dev` does all code changes (its usual flow, including running tests); Reviewer, checkpoint, and the retry loop are unchanged. Debug reuses `skills/dev/stacks/` for per-stack context; its model defaults to `agents.models.debug` → `agents.models.dev` → `sonnet`.
+The Phase 3.5 retry loop (`skills/nob/retry/`) always routes through Tech Lead — a localized fix that fails review naturally escalates.
 
-- The hub resolves `SKILL_BASE_DIR` at runtime from its `Base directory for this skill:` context line — all sub-skill paths use `{SKILL_BASE_DIR}/../X/SKILL.md` (sub-skills live one level up from the hub at `skills/X/`).
-- The hub reads `.nob.yml` from the user's project root to configure models, enabled skills, and parallelism. If absent, it auto-detects the stack.
-- Checkpoints are written to `.nob/checkpoint.json` in the user's project to support resume after interruption.
-- **Unit-boundary hook**: `hooks/hooks.json` registers a `PreToolUse` hook (`hooks/unit-boundary.sh`) on `Edit|Write|MultiEdit|NotebookEdit`. It is marker-gated: the hub writes `.nob/.boundary.json` (`{ worktree, allow }`) at Phase 2 and removes it at Step 4, so the guard is active only during a run's dev/review work. The hook polices only edits *inside* the run's worktree, denying any that fall outside the declared unit paths (plus `.nob/`, the docs dirs, and `.nob.yml`). It fails open (no marker, missing `jq`, or any parse issue → allow) so it can never brick the pipeline. Disable via `agents.unit_boundary.enabled: false`.
-- PM has two modes: **spec-writing** (plain text idea → writes a pure-product PRD to `docs/specs/YYYY-MM-DD-slug.md`) and **requirements extraction** (file path → `[PM OUTPUT]` block). In both, PM stays product-only — no file paths, API shapes, or contracts; those are the Tech Lead's. The Tech Lead reads the PRD directly, owns affected-file discovery and third-party API resolution, and persists its design to `docs/design/`.
+- The hub resolves `SKILL_BASE_DIR` at runtime. Path skills at `skills/nob/path-*/` receive `Hub skill base dir: {SKILL_BASE_DIR}` via [INPUTS] and use it to reach sibling sub-skills (`{SKILL_BASE_DIR}/../tech-lead/SKILL.md`, etc.). The checkpoint-gate, retry, and path skills are all at `{SKILL_BASE_DIR}/<name>/SKILL.md`.
+- The hub reads `.nob.yml` from the user's project root. If absent, it auto-detects the stack.
+- **Checkpoint pre-flight** (`skills/nob/checkpoint-gate/`) runs as the very first agent call — before git, config, or any scan. It reads `.nob/checkpoint.json`, determines state (none / completed / interrupted), alerts the user interactively, and returns `[CHECKPOINT GATE OUTPUT]` with `Action: none | fresh | resume | cancel`. The hub routes from this before doing anything else. `--fresh` bypasses the gate entirely.
+- **Resume flow**: when the gate returns `Action: resume`, the hub skips branch creation, worktree creation, spec preflight, and scope scan — it restores WORKTREE_PATH/BRANCH from the checkpoint and dispatches `path-full` directly with `ROUTE = full`. `path-full` Phase 0 handles task-level resume (which completed tasks to skip).
+- Checkpoints are written to `.nob/checkpoint.json` by `path-full` (initial write at Phase 2 start, task statuses updated after dev, `reviewer_output` written after review).
+- **Unit-boundary hook**: `hooks/hooks.json` registers a `PreToolUse` hook on `Edit|Write|MultiEdit|NotebookEdit`. Marker-gated: `path-full` writes `.nob/.boundary.json` at Phase 2 start; the hub removes it after the path skill returns. The hook fails open (no marker, missing `jq`, or parse error → allow) so it can never brick the pipeline. Disable via `agents.unit_boundary.enabled: false`.
+- PM has two modes: **spec-writing** (plain text idea → writes a PRD to `docs/specs/YYYY-MM-DD-slug.md`) and **requirements extraction** (file path → `[PM OUTPUT]` block). PM stays product-only — no file paths or contracts; those belong to the Tech Lead.
 
 ## Specs and Plans for This Repo
 

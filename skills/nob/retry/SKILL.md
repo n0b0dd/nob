@@ -26,6 +26,8 @@ Restore current agent outputs from the labeled sections in [INPUTS]:
 - DEBUG_OUTPUT = content of `Debug output:` section (or "none" if absent)
 - DESIGNER_OUTPUT = content of `Designer output:` section (or "none" if absent)
 
+**Plan approval state**: read `{Checkpoint path}checkpoint.json` (checkpoint path from [INPUTS] `Checkpoint path:` field, or default `.nob/`). If `plan_approval.status = "approved"` is present in the checkpoint: the plan was already approved in the original run — the retry loop inherits the approved (and possibly edited) task list without re-showing the approval prompt. Do NOT re-prompt for plan approval at any point during the retry loop. The TL and Dev re-dispatches in the retry loop use the task list from the current TECH_LEAD_OUTPUT directly.
+
 ---
 
 ## Loop
@@ -249,6 +251,7 @@ Status: {Overall status from final REVIEWER_OUTPUT — PASS | NEEDS REVIEW | FAI
 Exit reason: {pass | stuck | max-retries | user-declined | no-failing-tasks | tech-lead-failed}
 Retry count: {RETRY_COUNT}
 Retry ran: {true | false}
+Plan approval: {inherited — plan was approved before retry | n/a — plan flag was not set}
 [/RETRY OUTPUT]
 ```
 

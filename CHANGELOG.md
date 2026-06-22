@@ -2,6 +2,13 @@
 
 All notable changes to the nob plugin are documented here. Versions are bumped in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
+## [2.1.0] — 2026-06-22
+
+### Changed
+- **Quick path runs entirely in hub context — no sub-agents dispatched.** For ≤3-file, single-unit changes the hub now reads, edits, verifies, and commits directly. Eliminates the sub-agent spin-up that was the dominant latency on small tasks.
+- **Lite path drops PM/TL structured-block phases.** The `[PM OUTPUT]` and `[TECH LEAD OUTPUT]` block-production steps are removed. The hub reasons about what to change inline and passes Dev a plain `Task:` description instead of a formal `[TECH LEAD SPEC]` wrapper. Only Dev and Reviewer are dispatched as sub-agents (down from the former path-lite wrapper + Dev + Reviewer).
+- **Full path unchanged.** Multi-unit, cross-contract, and complex runs still go through the complete PM → Debug → Tech Lead → Dev → Docs → Reviewer pipeline with checkpoint and retry.
+
 ## [1.8.0] — 2026-06-19
 
 ### Added

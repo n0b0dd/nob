@@ -396,13 +396,107 @@ Skip for ROUTE = quick. Skip if CONFIG_AUTODETECTED = false.
 
 ---
 
-## Dispatch path skill
+## Dispatch: ROUTE = quick (hub inline — no sub-agents)
 
-Read `{SKILL_BASE_DIR}/path-{ROUTE}/SKILL.md`.
+Read the affected files from the scope scan. If none listed, grep for the key identifier from the user intent and read the first match; if still nothing, set QUICK_STATUS = FAIL, QUICK_SUMMARY = "No files found — re-run with --lite." and jump to **Step 4**.
 
-Construct the common `[INPUTS]` block (used for all three routes):
+Make all edits directly with Edit or Write tools per the user intent. Then run a stack-appropriate type-check (`npx tsc --noEmit` / `python -m py_compile <files>` / `go build ./...`) — skip for unrecognised stacks. On failure: one self-correction attempt, then QUICK_CHECK = FAIL or PASS. If skipped: QUICK_CHECK = SKIPPED.
+
+Commit: `git -C {WORKTREE_PATH} add -A && git -C {WORKTREE_PATH} commit -m "nob: {run-id}"` (skip if clean).
+
+Set QUICK_STATUS = PASS (or FAIL), QUICK_FILES_CHANGED, QUICK_SUMMARY, QUICK_CHECK. Proceed to **Step 4**.
+
+---
+
+## Dispatch: ROUTE = lite (hub implements; Reviewer sub-agent)
+
+No PM or Tech Lead phases. Understand what needs to change from the user intent, spec contents, and affected files — no structured output blocks needed.
+
+Dispatch Dev with a plain task description (no `[TECH LEAD SPEC]` wrapper). Run `date +%s` → DEV_START_EPOCH.
+
+Read `{SKILL_BASE_DIR}/../dev/SKILL.md`. Dispatch with `model: {DEV_MODEL_RESOLVED}`:
 
 ```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../dev/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {WORKTREE_PATH}
+
+Per-unit stack-guidance path map:
+{UNIT_GUIDANCE_MAP entries}
+
+.nob.yml contents:
+{.nob.yml content, or: not found}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: not found}
+
+Task: {2–4 sentences describing what to implement, derived directly from user intent and spec}
+Files to change: {affected files from scope scan, one per line}
+Acceptance criteria: {key criteria from spec / user intent, or: implement as described}
+
+Project memory:
+{PROJECT_MEMORY}
+
+Max parallel slices: 1
+Already-completed tasks: none
+[/INPUTS]
+```
+
+Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT. Apply Output Block Validation. If missing after one re-dispatch: set LITE_STATUS = FAIL; jump to **Step 4**.
+
+Run `date +%s` → DEV_END_EPOCH.
+
+Dispatch Reviewer. Run `date +%s` → REVIEWER_START_EPOCH.
+
+Read `{SKILL_BASE_DIR}/../reviewer/SKILL.md`. Dispatch with `model: {agents.models["reviewer"] ?? "haiku"}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../reviewer/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {WORKTREE_PATH}
+Spec file path: {spec file path, or: none}
+Spec file contents:
+{spec file content, or: none}
+User intent: {user's original message}
+
+All agent outputs for review:
+{DEV_OUTPUT}
+[/INPUTS]
+```
+
+Extract `[REVIEWER OUTPUT]...[/REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT. Apply Output Block Validation.
+
+Run `date +%s` → REVIEWER_END_EPOCH.
+
+**Auto-retry (1 pass):** Set LITE_RETRY_COUNT = 0. If `Overall status:` is not PASS: collect all `✗`/`⚠` lines from REVIEWER_OUTPUT as RETRY_ITEMS; print `"Reviewer found {N} item(s) — auto-fixing:\n{RETRY_ITEMS}"`; re-dispatch Dev prepending `"Fix only these:\n{RETRY_ITEMS}"`, extract new DEV_OUTPUT; re-dispatch Reviewer, extract new REVIEWER_OUTPUT; set LITE_RETRY_COUNT = 1.
+
+**Commit if PASS:** `git -C {WORKTREE_PATH} add -A && git -C {WORKTREE_PATH} commit -m "nob: {run-id}"`
+
+Set:
+- LITE_STATUS = `Overall status:` from REVIEWER_OUTPUT
+- LITE_RETRY_COUNT, LITE_RETRY_RAN = (LITE_RETRY_COUNT > 0)
+- LITE_TIMING = `dev {round(DEV_END_EPOCH - DEV_START_EPOCH)}s · reviewer {round(REVIEWER_END_EPOCH - REVIEWER_START_EPOCH)}s`
+- LITE_AGENTS_RUN = `dev({DEV_MODEL_RESOLVED}) · reviewer({agents.models["reviewer"] ?? "haiku"})`
+
+Proceed to **Step 4**.
+
+---
+
+## Dispatch: ROUTE = full (path-full sub-agent)
+
+Read `{SKILL_BASE_DIR}/path-full/SKILL.md`. Dispatch with `model: {DEV_MODEL_RESOLVED}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/path-full/SKILL.md}
+[/INSTRUCTIONS]
+
 [INPUTS]
 Working directory: {WORKTREE_PATH}
 Run ID: {run-id}
@@ -464,23 +558,9 @@ Resume completed tasks: {RESUME_COMPLETED_TASKS from checkpoint, or: none}
 [/INPUTS]
 ```
 
-Dispatch with `model: {DEV_MODEL_RESOLVED}`:
+Extract `[FULL PATH OUTPUT]...[/FULL PATH OUTPUT]`. Store as PATH_OUTPUT_META. Then extract embedded: `[PM OUTPUT]`, `[DEBUG OUTPUT]` (if present), `[TECH LEAD OUTPUT]`, `[DEV OUTPUT]`, `[DESIGNER OUTPUT]` (if present), `[DOCS OUTPUT]` (if present), `[REVIEWER OUTPUT]`.
 
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/path-{ROUTE}/SKILL.md}
-[/INSTRUCTIONS]
-
-{INPUTS block above}
-```
-
-**After the path skill returns:**
-
-For ROUTE = quick: extract `[QUICK PATH OUTPUT]...[/QUICK PATH OUTPUT]`. Store as PATH_OUTPUT_META.
-For ROUTE = lite: extract `[LITE PATH OUTPUT]...[/LITE PATH OUTPUT]`. Store as PATH_OUTPUT_META. Then extract embedded output blocks: `[PM OUTPUT]`, `[TECH LEAD OUTPUT]`, `[DEV OUTPUT]`, `[REVIEWER OUTPUT]`.
-For ROUTE = full: extract `[FULL PATH OUTPUT]...[/FULL PATH OUTPUT]`. Store as PATH_OUTPUT_META. Then extract embedded output blocks: `[PM OUTPUT]`, `[DEBUG OUTPUT]` (if present), `[TECH LEAD OUTPUT]`, `[DEV OUTPUT]`, `[DESIGNER OUTPUT]` (if present), `[DOCS OUTPUT]` (if present), `[REVIEWER OUTPUT]`.
-
-If PATH_OUTPUT_META is missing: re-dispatch the path skill once with the same prompt. If still missing: print raw output and exit.
+If PATH_OUTPUT_META is missing: re-dispatch once. If still missing: print raw output and exit.
 
 **Lift unit-boundary marker**: `rm -f {MARKER_PATH}` (ignore errors).
 
@@ -488,7 +568,7 @@ If PATH_OUTPUT_META is missing: re-dispatch the path skill once with the same pr
 
 ## Output Block Validation Procedure
 
-The path skills validate agent output blocks before passing them downstream. This table documents the required fields per agent — the linter checks this table against the producing skills.
+The hub (lite: Dev + Reviewer), path-full, and retry all validate agent output blocks before passing them downstream. This table documents the required fields per agent — the linter checks this table against the producing skills.
 
 | Agent | Required fields |
 |---|---|
@@ -498,7 +578,7 @@ The path skills validate agent output blocks before passing them downstream. Thi
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
 | Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
 
-Validation is enforced by path-lite, path-full, and retry — not the hub. When any required field is missing from an agent's output: re-dispatch once with a field list prepended. If still missing after re-dispatch: mark as `malformed` and treat as `failed` for all pipeline flow decisions.
+When any required field is missing from an agent's output: re-dispatch once with a field list prepended. If still missing after re-dispatch: mark as `malformed` and treat as `failed` for all pipeline flow decisions.
 
 ---
 
@@ -578,9 +658,9 @@ Next steps:
 Nob quick complete.
 
 Path:          quick (hub inline — no sub-agents)
-Files changed: {Files changed from PATH_OUTPUT_META}
-Changes:       {Summary from PATH_OUTPUT_META}
-Check:         {Check from PATH_OUTPUT_META}
+Files changed: {QUICK_FILES_CHANGED}
+Changes:       {QUICK_SUMMARY}
+Check:         {QUICK_CHECK}
 Branch:        {WORKTREE_BRANCH}
 
 Next:
@@ -592,15 +672,14 @@ Exit after printing. Do not proceed to the sections below.
 
 **For all other workflows** (Spec → Code, Bug → Fix, API → Sync — ROUTE = lite or full):
 
-Read from embedded output blocks:
-- REVIEWER_OUTPUT, DEV_OUTPUT, TECH_LEAD_OUTPUT, PM_OUTPUT from extracted blocks above.
+**ROUTE = lite**: DEV_OUTPUT and REVIEWER_OUTPUT are in hub context from the inline dispatch above. PM_OUTPUT, TECH_LEAD_OUTPUT, DEBUG_OUTPUT, DESIGNER_OUTPUT, DOCS_OUTPUT are all "none" (not produced on lite path). Set RETRY_COUNT = LITE_RETRY_COUNT, RETRY_RAN = LITE_RETRY_RAN, RETRY_EXIT_REASON = "n/a (lite)". Use LITE_AGENTS_RUN for the Agents line and LITE_TIMING for the Timing line.
+
+**ROUTE = full**: read from PATH_OUTPUT_META and the embedded output blocks extracted from the path-full sub-agent result:
+- REVIEWER_OUTPUT, DEV_OUTPUT, TECH_LEAD_OUTPUT, PM_OUTPUT from extracted `[X OUTPUT]` blocks.
 - DEBUG_OUTPUT (from [DEBUG OUTPUT] block, or "none").
 - DESIGNER_OUTPUT (from [DESIGNER OUTPUT] block, or "none").
 - DOCS_OUTPUT (from [DOCS OUTPUT] block, or "none").
-- RETRY_COUNT, RETRY_RAN, RETRY_EXIT_REASON from PATH_OUTPUT_META (lite has a fixed 1-pass retry; full delegates to the retry skill).
-
-For ROUTE = lite: RETRY_COUNT and RETRY_RAN come from `Retry count:` and `Retry ran:` in PATH_OUTPUT_META. RETRY_EXIT_REASON = "n/a (lite)".
-For ROUTE = full: extract `Retry count:`, `Retry ran:`, `Retry exit reason:` from PATH_OUTPUT_META.
+- RETRY_COUNT, RETRY_RAN, RETRY_EXIT_REASON: extract from PATH_OUTPUT_META.
 
 ```
 Nob complete.
@@ -609,8 +688,8 @@ Workflow:  {Spec→Code | Bug→Fix | API→Sync}
 Source:    {spec/bug file path}
 Design:    {Design doc field from TECH_LEAD_OUTPUT — omit if absent or "none"}
 UX design: {Design doc field from DESIGNER_OUTPUT — omit if DESIGNER_OUTPUT is "none" or field absent}
-Agents:    {Agents run from PATH_OUTPUT_META}
-Timing:    {Timing from PATH_OUTPUT_META}
+Agents:    {LITE_AGENTS_RUN for lite | Agents run from PATH_OUTPUT_META for full}
+Timing:    {LITE_TIMING for lite | Timing from PATH_OUTPUT_META for full}
 {Bug→Fix only, if DEBUG_OUTPUT is not "none":}
 Root cause: {Root cause field from DEBUG_OUTPUT}
 

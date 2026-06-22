@@ -209,4 +209,4 @@ Ambiguities flagged:
 - **Spec file not found** (extraction mode): output "PM Agent cannot proceed — spec file [path] not found."
 - **Spec is one-liners with no detail**: extract what exists, flag every missing dimension as an ambiguity
 - **Spec has contradictions**: flag each contradiction in Ambiguities
-- **`docs/specs/` cannot be created**: warn user and ask for an alternative path
+- **`{SPECS_DIR}/` cannot be created**: warn user and ask for an alternative path

@@ -30,9 +30,8 @@ hooks/
   hooks.json      — Plugin hook config (auto-discovered; PreToolUse → unit-boundary.sh)
   unit-boundary.sh — PreToolUse guard: blocks dev edits outside declared unit paths during a run
 docs/
-  superpowers/
-    specs/        — Feature specs for this repo itself
-    plans/        — Implementation plans for this repo itself
+  specs/          — Feature specs (PM writes here)
+  design/         — Technical design docs (Tech Lead writes here)
 ```
 
 ## Plugin Versioning
@@ -63,11 +62,11 @@ A `[AUTH]`/`[BREAKING]` risk also triggers a **human confirm gate** before any c
 - The hub reads `.nob.yml` from the user's project root to configure models, enabled skills, and parallelism. If absent, it auto-detects the stack.
 - Checkpoints are written to `.nob/checkpoint.json` in the user's project to support resume after interruption.
 - **Unit-boundary hook**: `hooks/hooks.json` registers a `PreToolUse` hook (`hooks/unit-boundary.sh`) on `Edit|Write|MultiEdit|NotebookEdit`. It is marker-gated: the hub writes `.nob/.boundary.json` (`{ worktree, allow }`) at Phase 2 and removes it at Step 4, so the guard is active only during a run's dev/review work. The hook polices only edits *inside* the run's worktree, denying any that fall outside the declared unit paths (plus `.nob/`, the docs dirs, and `.nob.yml`). It fails open (no marker, missing `jq`, or any parse issue → allow) so it can never brick the pipeline. Disable via `agents.unit_boundary.enabled: false`.
-- PM has two modes: **spec-writing** (plain text idea → writes a pure-product PRD to `docs/specs/YYYY-MM-DD-slug.md`) and **requirements extraction** (file path → `[PM OUTPUT]` block). In both, PM stays product-only — no file paths, API shapes, or contracts; those are the Tech Lead's. The Tech Lead reads the spec/PRD directly, owns affected-file discovery and third-party API resolution, and persists its design to `docs/design/`.
+- PM has two modes: **spec-writing** (plain text idea → writes a pure-product PRD to `docs/specs/YYYY-MM-DD-slug.md`) and **requirements extraction** (file path → `[PM OUTPUT]` block). In both, PM stays product-only — no file paths, API shapes, or contracts; those are the Tech Lead's. The Tech Lead reads the PRD directly, owns affected-file discovery and third-party API resolution, and persists its design to `docs/design/`.
 
 ## Specs and Plans for This Repo
 
-Feature specs live in `docs/superpowers/specs/` and implementation plans in `docs/superpowers/plans/`. These follow the Nob spec format but are about the plugin itself, not a user project.
+Feature specs live in `docs/specs/` and technical design docs in `docs/design/`. These follow the Nob spec format but are about the plugin itself, not a user project.
 
 ## .nob.yml Template
 

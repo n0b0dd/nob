@@ -15,6 +15,9 @@ Set SKILL_BASE_DIR from `Hub skill base dir:` in [INPUTS]. All sub-skill paths u
 Set WORKTREE_PATH from `Working directory:` in [INPUTS].
 Set RUN_ID from `Run ID:` in [INPUTS].
 Set RETRY_COUNT = 0.
+Set PLAN_FLAG from `Plan flag:` in [INPUTS] (true | false; default: false).
+
+Read `.nob/checkpoint.json` if it exists. If `plan_approval.status = "approved"` in the checkpoint: set PLAN_APPROVAL_DONE = true. Otherwise: PLAN_APPROVAL_DONE = false.
 
 ---
 
@@ -93,6 +96,54 @@ Contract violations:
 Note: lite path — PM and Tech Lead reasoning done inline by hub; no sub-agents dispatched for those roles.
 [/TECH LEAD OUTPUT]
 ```
+
+---
+
+## Step 2.5: Plan approval gate
+
+Skip this section if PLAN_FLAG = false OR PLAN_APPROVAL_DONE = true.
+
+If PLAN_FLAG = true AND PLAN_APPROVAL_DONE = false:
+
+Set PLAN_EDIT_COUNT = 0.
+
+**Render plan summary**:
+
+1. Extract the `Tasks:` list from TECH_LEAD_OUTPUT. For each task, print one line:
+   `[{unit}] {task-id}: {description} (files: {files})`
+   If the task list is absent or malformed, print `(incomplete plan — task list not available)` and continue.
+2. Extract `Risks:` from TECH_LEAD_OUTPUT. If non-empty and not `none`, print:
+   ```
+   Risks:
+   {Risks block from TECH_LEAD_OUTPUT}
+   ```
+3. Prompt: `"Proceed with this plan? (yes / edit / cancel)"`
+
+**Branch on response**:
+
+- **yes**: set PLAN_APPROVAL_DONE = true. Continue to Step 3.
+
+- **edit**: if PLAN_EDIT_COUNT >= 1: print `"One edit re-dispatch already used."` and prompt `"Proceed with current plan or cancel? (proceed / cancel)"`. If `proceed`: set PLAN_APPROVAL_DONE = true; continue to Step 3. If `cancel` or non-proceed: go to **cancel** branch.
+  Otherwise (PLAN_EDIT_COUNT = 0):
+  1. Ask: `"Describe your modification:"`. Store as PLAN_EDIT_INTENT.
+  2. Re-dispatch Tech Lead as a full sub-agent (not inline): read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`, dispatch with `model: {tech-lead model from Agent models in [INPUTS]}` using the same [INPUTS] as the hub would provide, appending: `"User plan modification request: {PLAN_EDIT_INTENT} — revise the task list and contracts to incorporate this change."` Extract new `[TECH LEAD OUTPUT]`. If extraction fails or validation fails after one re-dispatch: print `"Edit re-dispatch failed."` and prompt `"Retry edit or proceed with original plan? (retry / proceed / cancel)"`. If `retry`: repeat once; if still fails, prompt `(proceed / cancel)`. If `proceed`: use original TECH_LEAD_OUTPUT. If `cancel`: go to **cancel** branch.
+  3. Update TECH_LEAD_OUTPUT. Increment PLAN_EDIT_COUNT. Re-render plan summary and prompt again.
+
+- **cancel** (or any non-yes/non-edit response): print `"Run cancelled at plan approval — no changes made."`. Write to `.nob/checkpoint.json`: set `plan_approval` to `{ "status": "cancelled", "edits": {PLAN_EDIT_COUNT} }` (create the file if absent with fields: `{ "worktree_path": "{WORKTREE_PATH}", "phases_completed": [], "tasks": {}, "plan_approval": { "status": "cancelled", "edits": {PLAN_EDIT_COUNT} } }`). Emit:
+  ```
+  [LITE PATH OUTPUT]
+  Status: CANCELLED
+  Retry count: 0
+  Retry ran: false
+  Agents run: pm(inline) · tech-lead(inline)
+  Timing: n/a
+  Plan approval: cancelled
+  Failure: cancelled at plan approval
+  [/LITE PATH OUTPUT]
+  ```
+  Exit — do not proceed to Dev or Reviewer.
+
+**Write approval to checkpoint**: after approval (yes or edit→proceed), write to `.nob/checkpoint.json`: set `plan_approval` to `{ "status": "approved", "edits": {PLAN_EDIT_COUNT} }` (create or update the file). Set PLAN_APPROVAL_DONE = true.
 
 ---
 
@@ -215,6 +266,7 @@ Retry count: {RETRY_COUNT}
 Retry ran: {true | false}
 Agents run: pm({pm model}) · dev({dev model}) · reviewer({reviewer model})
 Timing: dev {round(DEV_DURATION_MS/1000)}s · reviewer {round(REVIEWER_DURATION_MS/1000)}s
+Plan approval: {approved (no edits) | approved (N edits) | n/a — from PLAN_APPROVAL_DONE and PLAN_EDIT_COUNT; n/a if PLAN_FLAG = false}
 [/LITE PATH OUTPUT]
 ```
 

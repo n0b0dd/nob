@@ -206,7 +206,7 @@ Extract:
 - If not found: check `.nob/project-memory.md`. If found: migrate to YAML (same structure, write as `.nob/project-memory.yml`, delete `.nob/project-memory.md`). Store summary as PROJECT_MEMORY.
 - If neither: set PROJECT_MEMORY = "none".
 
-**Flag detection**: `--plan-only` in user's message → PLAN_ONLY = true. `--diff-only` → DIFF_PREVIEW = true.
+**Flag detection**: `--plan-only` in user's message → PLAN_ONLY = true. `--diff-only` → DIFF_PREVIEW = true. `--plan` in user's message → PLAN = true (note: `--plan-only` exits before TL runs, so `--plan` has no additional effect on `--plan-only` runs; both flags may coexist but `--plan-only` takes precedence and exits before any approval gate is reached).
 
 ---
 
@@ -358,6 +358,8 @@ Skip for Init, Venture, Refactor, Ideate, API → Sync.
 If `--full` in user's message: ROUTE = full. Skip scan. Proceed to Step 3.
 If `--quick` in user's message: ROUTE = quick. Skip scan. Proceed to Step 3.
 
+Note: if PLAN = true and `--quick` is also in the user's message (or ROUTE resolves to quick after scope scan): print `"--plan not supported on quick path (no TL step) — proceeding as normal quick run."` and set PLAN = false before dispatching.
+
 **Determine scan source**: for `Idea → Spec → Code` (SOURCE_FILE set by PM): use the spec file at SOURCE_FILE. For Spec → Code / Bug → Fix: use the user's original message, supplemented by the spec/bug file content.
 
 **Extract targets** from the primary scan source:
@@ -444,6 +446,7 @@ Checkpoint path: {agents.checkpoint.path}
 Marker path: {MARKER_PATH}
 Run log path: {RUN_LOG_PATH}
 Unit boundary enabled: {agents.unit_boundary.enabled}
+Plan flag: {PLAN — true | false}
 
 Affected files (from scope scan):
 {SCAN_RESULT.affected_files — one per line, or: none}
@@ -613,6 +616,8 @@ Agents:    {Agents run from PATH_OUTPUT_META}
 Timing:    {Timing from PATH_OUTPUT_META}
 {Bug→Fix only, if DEBUG_OUTPUT is not "none":}
 Root cause: {Root cause field from DEBUG_OUTPUT}
+{if PLAN = true: read plan_approval from PATH_OUTPUT_META:}
+Plan:      {approved (no edits) | approved (N edits) | cancelled — from plan_approval in PATH_OUTPUT_META; omit this line if PLAN = false}
 
 Tests:     {per-unit test results from REVIEWER_OUTPUT "Test results:" — e.g. api ✓ · web ✗ · cli ✓. ✓=PASS, ✗=FAIL, —=SKIPPED. If no per-unit data: overall PASS/FAIL/SKIPPED.}
 Security:  {from REVIEWER_OUTPUT Security section: PASS | FINDINGS: N medium M low | SKIPPED}

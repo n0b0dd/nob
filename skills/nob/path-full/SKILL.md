@@ -16,6 +16,7 @@ Set WORKTREE_PATH from `Working directory:` in [INPUTS] (Phase 0 may update this
 Set WORKTREE_BRANCH from `Worktree branch:` in [INPUTS].
 Set RUN_ID from `Run ID:` in [INPUTS].
 Set IS_BUG_FIX from `Is bug fix:` in [INPUTS] (true | false).
+Set PLAN_FLAG from `Plan flag:` in [INPUTS] (true | false; default: false).
 
 Extract all agent models, checkpoint settings, marker path, run log path, and max retries from [INPUTS].
 
@@ -65,8 +66,8 @@ If found and valid JSON:
    [/FULL PATH OUTPUT]
    ```
    Then re-emit all stored output blocks from the checkpoint verbatim. Exit — do not re-run any phases.
-3. If `"phase2"` is in `phases_completed` AND `reviewer_output` is null → build RESUME_COMPLETED_TASKS from the checkpoint `tasks` map: collect all task ids whose status is `"completed"`. Tasks with `"pending"`/`"in_progress"` (and tasks not in the map) will be re-run.
-4. If `phases_completed` is empty: RESUME_COMPLETED_TASKS = empty. Fresh run.
+3. If `"phase2"` is in `phases_completed` AND `reviewer_output` is null → build RESUME_COMPLETED_TASKS from the checkpoint `tasks` map: collect all task ids whose status is `"completed"`. Tasks with `"pending"`/`"in_progress"` (and tasks not in the map) will be re-run. Also read `plan_approval` from the checkpoint — if `plan_approval.status = "approved"`: set PLAN_APPROVAL_DONE = true (skip the approval gate in Phase 2). If absent or status is not "approved": PLAN_APPROVAL_DONE = false.
+4. If `phases_completed` is empty: RESUME_COMPLETED_TASKS = empty. PLAN_APPROVAL_DONE = false. Fresh run.
 
 If found but not valid JSON: print `"Warning: checkpoint corrupted — starting fresh."` RESUME_COMPLETED_TASKS = empty. Proceed to Phase 2.
 
@@ -221,6 +222,43 @@ Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. A
 Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
 Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]` if present. Store as DESIGNER_OUTPUT (or "none" if absent).
 If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing: mark `failed`. Stop pipeline.
+
+#### Plan approval gate (Path A only)
+
+Skip this section if PLAN_FLAG = false OR PLAN_APPROVAL_DONE = true.
+
+If PLAN_FLAG = true AND PLAN_APPROVAL_DONE = false:
+
+Set PLAN_EDIT_COUNT = 0.
+
+**Render plan summary**:
+
+1. Extract the `Tasks:` list from TECH_LEAD_OUTPUT. For each task, print one line:
+   `[{unit}] {task-id}: {description} (files: {files})`
+   If the task list is absent or malformed, print `(incomplete plan — task list not available)` and continue.
+2. Extract `Risks:` from TECH_LEAD_OUTPUT. If non-empty and not `none`, print:
+   ```
+   Risks:
+   {Risks block from TECH_LEAD_OUTPUT}
+   ```
+3. Prompt: `"Proceed with this plan? (yes / edit / cancel)"`
+
+**Branch on response**:
+
+- **yes**: set PLAN_APPROVAL_DONE = true. Continue to Dev dispatch.
+
+- **edit**: if PLAN_EDIT_COUNT >= 1: print `"One edit re-dispatch already used."` and prompt `"Proceed with current plan or cancel? (proceed / cancel)"`. If `proceed`: set PLAN_APPROVAL_DONE = true; continue. If `cancel` or any non-proceed: go to **cancel** branch below.
+  Otherwise (PLAN_EDIT_COUNT = 0):
+  1. Ask: `"Describe your modification:"`. Store as PLAN_EDIT_INTENT.
+  2. Re-dispatch Tech Lead with the same prompt from Agent 2 Path A, appending to [INPUTS]: `"User plan modification request: {PLAN_EDIT_INTENT} — revise the task list and contracts to incorporate this change."`.
+  3. Extract new `[TECH LEAD OUTPUT]`. If extraction fails or validation fails after one re-dispatch: print `"Edit re-dispatch failed."` and prompt `"Retry edit or proceed with original plan? (retry / proceed / cancel)"`. If `retry`: repeat the re-dispatch once more; if still fails, prompt again with only `(proceed / cancel)`. If `proceed`: use original TECH_LEAD_OUTPUT and continue to Dev. If `cancel`: go to **cancel** branch.
+  4. Increment PLAN_EDIT_COUNT. Re-render plan summary and prompt again.
+
+- **cancel** (or any non-yes/non-edit response): print `"Run cancelled at plan approval — no changes made."`. Write to `{Checkpoint path}checkpoint.json`: set `plan_approval` to `{ "status": "cancelled", "edits": {PLAN_EDIT_COUNT} }`. Run `git worktree remove {WORKTREE_PATH} --force` (ignore errors). Exit — do not proceed to Dev or any further phase.
+
+**Write approval to checkpoint**: after approval (yes or edit→proceed), if `Checkpoint enabled:` is true: read `{Checkpoint path}checkpoint.json`, set `plan_approval` to `{ "status": "approved", "edits": {PLAN_EDIT_COUNT} }`, write back. Set PLAN_APPROVAL_DONE = true.
+
+Note: if `--plan` and `--tdd` are both active, this approval gate runs after TL and before the test-writer phase (i.e., before Dev dispatch), preserving the `--tdd` test-writing step that follows Dev.
 
 Append to RUN_LOG_PATH: a `tech-lead` line and a `dev` line. Proceed to **Common**.
 
@@ -508,6 +546,7 @@ Retry ran: {true | false}
 Retry exit reason: {RETRY_EXIT_REASON — none | pass | stuck | max-retries | user-declined | no-failing-tasks | tech-lead-failed}
 Agents run: {AGENTS_RUN string}
 Timing: pm {round(PM_DURATION_MS/1000)}s{· debug {round(DEBUG_DURATION/1000)}s if ran} · {tech-lead {round(TL_DURATION_MS/1000)}s if ran} · dev {round(TL_DURATION_MS/1000)}s{· docs {round(DOCS_DURATION_MS/1000)}s if ran} · reviewer {round(REVIEWER_DURATION_MS/1000)}s
+Plan approval: {approved (no edits) | approved (N edits) | cancelled | n/a — from plan_approval in checkpoint, or n/a if PLAN_FLAG = false}
 [/FULL PATH OUTPUT]
 ```
 

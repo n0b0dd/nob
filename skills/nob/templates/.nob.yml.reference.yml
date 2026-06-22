@@ -34,6 +34,7 @@ agents:
     - dev
     - debug
     - reviewer
+    - docs
     - ideation
 
   models:
@@ -44,6 +45,7 @@ agents:
     tech-lead: sonnet     # writes contracts + task list, coordinates the dev/debug agent
     pm: haiku
     reviewer: haiku
+    docs: haiku              # inline documentation agent — runs between dev and reviewer
     init: sonnet          # project scaffolding agent
     venture: sonnet       # end-to-end venture validation pipeline
     refactor: sonnet      # project migration agent

@@ -166,6 +166,7 @@ agents:
     designer: haiku
     pm: haiku
     reviewer: haiku
+    docs: haiku              # inline documentation agent
     init: sonnet
     venture: sonnet
     refactor: sonnet
@@ -196,6 +197,7 @@ Extract the model for each agent under `agents.models`. If an agent has no entry
 | pm | haiku |
 | reviewer | haiku |
 | ideation | haiku |
+| docs | haiku |
 | (any other) | haiku |
 
 Use the resolved model value as the `model:` parameter when dispatching each Agent tool call. This keeps a minimal `units`-only config behaving identically to a no-config (auto-detected) run.
@@ -212,6 +214,7 @@ Also extract:
 - `DEV_MODEL_RESOLVED` = `agents.models["dev"] ?? "sonnet"`
 - `DEBUG_MODEL_RESOLVED` = `agents.models["debug"] ?? agents.models["dev"] ?? "sonnet"` — model for the read-only debug investigation agent (dispatched by the Tech Lead before dev on `Bug→Fix` runs)
 - `DESIGNER_MODEL_RESOLVED` = `agents.models["designer"] ?? "haiku"` — model for the UX/UI designer agent (dispatched by Tech Lead when it discovers frontend units are affected; passed to Tech Lead via Agent models so it can dispatch Designer at the right model)
+- `DOCS_MODEL_RESOLVED` = `agents.models["docs"] ?? "haiku"` — model for the inline documentation agent (dispatched by the hub after dev)
 
 **Unit guidance map**: compute `UNIT_GUIDANCE_MAP` from SKILL_BASE_DIR and each unit's type. For every unit in `units`:
 - `UNIT_GUIDANCE_MAP[unit.name]` = `{SKILL_BASE_DIR}/../dev/stacks/{unit.type}.md`
@@ -417,6 +420,7 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 | PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
+| Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
 
 **Validation steps:**
 1. Check that every required field for this agent appears as `FieldName:` on its own line within the extracted block.
@@ -737,6 +741,52 @@ Parse the `Tasks:` list from DEV_OUTPUT — each line has the form `- [task-id] 
 
 Run `date +%s` and store as TL_END_EPOCH. Compute TL_DURATION_MS = (TL_END_EPOCH - TL_START_EPOCH) × 1000. Append the run-log line(s) noted for the path taken, using `{date -u +%FT%TZ}  {agent}         {model}  OK    {TL_DURATION_MS}ms`.
 
+Proceed to Phase 2.5.
+
+---
+
+## Phase 2.5: Docs
+
+**Check enabled:** read `agents.enabled` from RESOLVED_CONFIG. If `docs` is NOT in the list (and the list is explicitly set — i.e. not the auto-detected default), skip this phase and set DOCS_OUTPUT = `none`. Proceed to Phase 3.
+
+If docs is enabled (or `agents.enabled` has no explicit list — default is enabled):
+
+Run `date +%s` and store as DOCS_START_EPOCH.
+
+Read `{SKILL_BASE_DIR}/../docs/SKILL.md`. Dispatch with `model: {DOCS_MODEL_RESOLVED}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../docs/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {WORKTREE_PATH}
+
+Dev output:
+{DEV_OUTPUT}
+
+Units:
+{for each unit in units list: "  - name: {name}, type: {type}, path: {path}"}
+
+.nob.yml contents:
+{.nob.yml content}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: "CLAUDE.md not found"}
+
+Project memory:
+{PROJECT_MEMORY}
+
+Standalone target: none
+[/INPUTS]
+```
+
+Extract `[DOCS OUTPUT]...[/DOCS OUTPUT]`. Store as DOCS_OUTPUT. Apply the **Output Block Validation Procedure** for Docs Agent before proceeding.
+If missing: re-dispatch once. If still missing: set DOCS_OUTPUT = `none` — a failed docs agent must not block the pipeline. Note `docs: failed` in terminal summary.
+
+Run `date +%s` and store as DOCS_END_EPOCH. Compute DOCS_DURATION_MS = (DOCS_END_EPOCH - DOCS_START_EPOCH) × 1000. Append to RUN_LOG_PATH: `{date -u +%FT%TZ}  docs            {DOCS_MODEL_RESOLVED}  OK    {DOCS_DURATION_MS}ms`.
+
 Proceed to Phase 3.
 
 ---
@@ -771,6 +821,10 @@ All agent outputs for review:
 
 {if DESIGNER_OUTPUT is not "none", include:
 {DESIGNER_OUTPUT}
+}
+
+{if DOCS_OUTPUT is not "none", include:
+{DOCS_OUTPUT}
 }
 [/INPUTS]
 ```
@@ -1041,7 +1095,7 @@ Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Design:    [Design doc field from TECH_LEAD_OUTPUT — e.g. docs/design/2026-06-19-user-export.md; omit this line if the field is absent or "none"]
 UX design: [Design doc field from DESIGNER_OUTPUT — e.g. docs/design/ux-2026-06-19-user-export.md; omit this line if DESIGNER_OUTPUT is "none" or the field is absent]
-Agents:    [each agent that ACTUALLY ran as "name(model)" separated by " · " — list only what ran, skip disabled/skipped agents. Feature build: pm(haiku) [· designer({DESIGNER_MODEL_RESOLVED}) if DESIGNER_OUTPUT is not "none"] · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). Bug→Fix always includes debug({DEBUG_MODEL_RESOLVED}) after pm; the Tech Lead appears ONLY if the bug escalated (IMPL_PATH = tech-lead) — on the direct-dev fast path omit tech-lead, e.g.: pm(haiku) · debug({DEBUG_MODEL_RESOLVED}) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku).]
+Agents:    [each agent that ACTUALLY ran as "name(model)" separated by " · " — list only what ran, skip disabled/skipped agents. Feature build: pm(haiku) [· designer({DESIGNER_MODEL_RESOLVED}) if DESIGNER_OUTPUT is not "none"] · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) [· docs({DOCS_MODEL_RESOLVED}) if DOCS_OUTPUT is not "none"] · reviewer(haiku). Bug→Fix always includes debug({DEBUG_MODEL_RESOLVED}) after pm; the Tech Lead appears ONLY if the bug escalated (IMPL_PATH = tech-lead) — on the direct-dev fast path omit tech-lead, e.g.: pm(haiku) · debug({DEBUG_MODEL_RESOLVED}) · dev({DEV_MODEL_RESOLVED}) [· docs({DOCS_MODEL_RESOLVED}) if DOCS_OUTPUT is not "none"] · reviewer(haiku).]
 Timing:    [each agent that ran as "name Ns" separated by " · ", mirroring the Agents line. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 [Bug→Fix runs only — print the root-cause line from DEBUG_OUTPUT if present:]
 Root cause: [Root cause field from DEBUG_OUTPUT, or omit this line if absent]

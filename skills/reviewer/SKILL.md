@@ -65,6 +65,8 @@ Read `[DEV OUTPUT]` from context. The block groups results by unit. For each uni
 
 Store per-unit test results as UNIT_TEST_RESULTS[unit] and per-unit test output as UNIT_TEST_OUTPUT[unit].
 
+Also extract `[DOCS OUTPUT]` from context if present. Store as DOCS_OUTPUT (or `none` if absent).
+
 **Test output corroboration (apply per unit independently):**
 - If `Test output:` is absent for a unit → mark that unit's tests as `SKIPPED — agent did not provide raw test output`.
 - If `Test results:` for a unit claims PASS but `Test output:` for that unit contains any of these strings: `ERROR`, `FAILED`, `panic`, `tsc error`, `SyntaxError`, `TypeError`, `AssertionError` → downgrade that unit to `FAIL` and add to "Items for human review": "[unit] Test results claim PASS but Test output contains failure indicators — verify manually."
@@ -204,6 +206,19 @@ If DESIGN_IMPORTANT_COUNT > 0: overall status is at minimum NEEDS REVIEW. Add ea
 
 Set DESIGN_STATUS = "PASS" if no findings, otherwise "FINDINGS: N important".
 
+### Step 3.9: Doc coverage check
+
+**Trigger:** `[DOCS OUTPUT]` is present in context (DOCS_OUTPUT is not `none`). If absent: set DOC_COVERAGE_STATUS = "SKIPPED — no docs output". Skip to Step 4.
+
+If triggered:
+1. Extract `Files skipped:` from DOCS_OUTPUT. For each entry:
+   - Reason `malformed — skipped`: add to "Items for human review": `Docs: malformed doc block in {path} — skipped by docs agent, review manually`.
+   - Reason `stack type unknown`: add to "Items for human review": `Docs: stack type could not be detected for {path} — add unit type to .nob.yml`.
+   - Reason `unreadable`: informational only — do NOT add to Items for human review.
+   - Reason `already documented`: no action needed.
+2. Count IMPORTANT doc items added from step 1. If any: set DOC_COVERAGE_STATUS = "NEEDS REVIEW — N item(s)". Overall status cannot be PASS.
+3. Otherwise: set DOC_COVERAGE_STATUS = "PASS".
+
 ### Step 4: Check each criterion individually
 For every acceptance criterion from [PM OUTPUT]:
 - **✓ implemented**: read the specific file named in `[DEV OUTPUT]` and confirm it contains evidence of the implementation (the route exists, the component renders, etc.) AND the relevant unit's test result is PASS
@@ -222,6 +237,8 @@ Additional rule: if SECURITY_STATUS is "FINDINGS" and SECURITY_MEDIUM is non-emp
 Additional rule: if QUALITY_IMPORTANT_COUNT > 0, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass. Quality IMPORTANT findings require human attention before the feature ships.
 
 Additional rule: if DESIGN_IMPORTANT_COUNT > 0, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass. Design compliance findings mean the implementation diverged from the agreed design spec.
+
+Additional rule: if DOC_COVERAGE_STATUS contains 'NEEDS REVIEW', the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass.
 
 ### Step 6: List human review items
 For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete: name the missing feature and why it wasn't implemented (from the "items not implemented" field if available).
@@ -265,6 +282,10 @@ Code quality:
 Design compliance:
   Status: [PASS | FINDINGS: N important | SKIPPED — no Designer output | SKIPPED — no frontend files changed]
   [if FINDINGS: list each finding as "- [IMPORTANT] {component} | {file} | {description}"]
+
+Doc coverage:
+  Status: [PASS | NEEDS REVIEW: N item(s) | SKIPPED — no docs output]
+  [if NEEDS REVIEW: list each item as "- [IMPORTANT] {path} | {reason}"]
 
 Criteria check:
 - [criterion 1]: ✓ implemented in [exact file path] [unit-name]

@@ -156,6 +156,7 @@ Read each file in QUALITY_FILES. For each file, apply only the applicable catego
 - Severity: IMPORTANT
 
 **Category 2 — Frontend state completeness (.tsx, .jsx, .vue, .dart files only)**
+- **Skip when `[DESIGNER OUTPUT]` is present** — Step 3.8 performs a more precise per-component state check grounded in the Designer spec; running both would double-report the same issues.
 - For each component/screen file in QUALITY_FILES that calls an API endpoint (contains `fetch(`, `axios.`, `apiClient.`, `dio.`, `http.get`, `http.post`, `URLSession`, `Retrofit`, or similar API call patterns):
   - Check for a loading state (spinner, skeleton, `isLoading`, `loading`, `isFetching`)
   - Check for an error state (error message render, catch block that sets display state, `isError`, `error &&`, `catch`)
@@ -177,6 +178,32 @@ Read each file in QUALITY_FILES. For each file, apply only the applicable catego
 
 Store all findings as QUALITY_FINDINGS. Set QUALITY_IMPORTANT_COUNT = count of IMPORTANT findings. Set QUALITY_MINOR_COUNT = count of MINOR findings.
 
+### Step 3.8: Design compliance check
+
+**Trigger:** a `[DESIGNER OUTPUT]` block is present in context. If absent: skip this step entirely and set DESIGN_STATUS = "SKIPPED — no Designer output".
+
+If triggered:
+
+1. Collect FRONTEND_FILES = all paths from `Files changed:` and `Files created:` in `[DEV OUTPUT]` that belong to a frontend unit (`.tsx`, `.jsx`, `.vue`, `.dart`, `.swift`, `.kt`, `.js` component files).
+
+   If FRONTEND_FILES is empty: set DESIGN_STATUS = "SKIPPED — no frontend files changed". Skip to Step 4.
+
+2. **Component existence check:** read `Component architecture:` from `[DESIGNER OUTPUT]`. For each component marked `new` (not `reuse:`), check whether a file in FRONTEND_FILES contains the component name (PascalCase match). If not found: one finding — `Missing component: {ComponentName} not found in any changed file`.
+
+3. **State completeness check:** read `States per component:` from `[DESIGNER OUTPUT]`. For each component listed, read the corresponding file in FRONTEND_FILES. Check that each non-`n/a` state is present:
+   - `loading`: file contains loading indicator pattern (`isLoading`, `loading`, `Skeleton`, `Spinner`, `ActivityIndicator`, `CircularProgress`, or equivalent)
+   - `empty`: file contains empty-state pattern (`isEmpty`, `length === 0`, `!items`, empty state component, or a conditional rendering on zero-length data)
+   - `error`: file contains error-state pattern (`isError`, `error`, `catch`, `onError`, or conditional rendering on error)
+   - If a required state is absent: one finding — `Missing state: {ComponentName} has no {state} state`.
+
+4. **Accessibility check:** read `Accessibility:` from `[DESIGNER OUTPUT]`. For each component with a specified ARIA role or keyboard requirement, read the corresponding file in FRONTEND_FILES and check for the ARIA attribute (`role=`, `aria-label`, `aria-labelledby`, `aria-live`) or keyboard handler (`onKeyDown`, `onKeyPress`, `KeyboardEvent`, `accessibilityLabel`, `semanticsLabel`). If not found: one finding — `Missing a11y: {ComponentName} missing {aria/keyboard requirement}`.
+
+Classify all findings as IMPORTANT. Store as DESIGN_FINDINGS. Set DESIGN_IMPORTANT_COUNT = count of findings.
+
+If DESIGN_IMPORTANT_COUNT > 0: overall status is at minimum NEEDS REVIEW. Add each finding to "Items for human review" with prefix `Design:`.
+
+Set DESIGN_STATUS = "PASS" if no findings, otherwise "FINDINGS: N important".
+
 ### Step 4: Check each criterion individually
 For every acceptance criterion from [PM OUTPUT]:
 - **✓ implemented**: read the specific file named in `[DEV OUTPUT]` and confirm it contains evidence of the implementation (the route exists, the component renders, etc.) AND the relevant unit's test result is PASS
@@ -194,10 +221,14 @@ Additional rule: if SECURITY_STATUS is "FINDINGS" and SECURITY_MEDIUM is non-emp
 
 Additional rule: if QUALITY_IMPORTANT_COUNT > 0, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass. Quality IMPORTANT findings require human attention before the feature ships.
 
+Additional rule: if DESIGN_IMPORTANT_COUNT > 0, the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass. Design compliance findings mean the implementation diverged from the agreed design spec.
+
 ### Step 6: List human review items
 For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete: name the missing feature and why it wasn't implemented (from the "items not implemented" field if available).
 
 For each IMPORTANT quality finding, add one specific actionable item to "Items for human review". Format: `Quality: {description} in {file}:{line}`
+
+For each IMPORTANT design finding, add one specific actionable item to "Items for human review". Format: `Design: {description} in {file}`
 
 MINOR findings are listed in the Code quality section of the output block but are NOT added to "Items for human review".
 
@@ -230,6 +261,10 @@ Code quality:
   Status: [PASS | FINDINGS: N important, M minor | SKIPPED — no changed files]
   [if FINDINGS: list each important finding as "- [IMPORTANT] {category} | {file}:{line} | {description}"]
   [if FINDINGS and minor items: list each minor finding as "- [MINOR] {category} | {file}:{line} | {description}"]
+
+Design compliance:
+  Status: [PASS | FINDINGS: N important | SKIPPED — no Designer output | SKIPPED — no frontend files changed]
+  [if FINDINGS: list each finding as "- [IMPORTANT] {component} | {file} | {description}"]
 
 Criteria check:
 - [criterion 1]: ✓ implemented in [exact file path] [unit-name]

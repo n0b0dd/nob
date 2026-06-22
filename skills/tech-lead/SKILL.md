@@ -30,7 +30,9 @@ Read the **spec** from `[INPUTS]` — the hub passes `Spec file path:` and `Spec
 
 ### Step 1.5: Discover affected files
 
-Extract 3–5 key entity, route, or component names from the spec requirements and PM acceptance criteria. For each key term, run targeted searches:
+**Skip on Bug→Fix when a Debug diagnosis is supplied:** if `IS_BUG_FIX` is true AND `[INPUTS]` contains a `Debug diagnosis:` block, the Debug agent has already identified the exact files to change — build AFFECTED_FILES directly from DEBUG_OUTPUT's `Recommended fix:` paths (each `[unit] path:line` entry) and skip the grep searches below. Running grep again would duplicate work and produce no additional signal.
+
+For Spec→Code runs (and Bug→Fix without a Debug diagnosis): extract 3–5 key entity, route, or component names from the spec requirements and PM acceptance criteria. For each key term, run targeted searches:
 
 ```bash
 # Server-side / API files — routes, services, controllers, models
@@ -44,6 +46,57 @@ grep -rl "<term>" --include="*.tsx" --include="*.jsx" --include="*.vue" --includ
 ```
 
 Store results as AFFECTED_FILES = { by_unit: { [unit_name]: [...] }, schema: [...] }.
+
+### Step 1.6.5: Designer dispatch (conditional)
+
+Set DESIGNER_OUTPUT = `none`.
+
+**Skip on Bug→Fix runs** (IS_BUG_FIX = true) — UX design is not relevant to bug fixes. Proceed to Step 1.6.
+
+For Spec→Code runs:
+
+**Check if any affected frontend unit:** scan the unit names in AFFECTED_FILES (from Step 1.5) and the `units` list from `.nob.yml` (read in Step 1). If any matched unit has `type` in `[next, react, vue, svelte, flutter, android, ios, react-native]` → HAS_FRONTEND_UNIT = true. Otherwise HAS_FRONTEND_UNIT = false.
+
+**Check enabled:** read `agents.enabled` from `.nob.yml` contents (passed in `[INPUTS]`). If `designer` is not in the list → skip. Default to enabled if `.nob.yml` has no `agents.enabled` field.
+
+If HAS_FRONTEND_UNIT = false or designer disabled: leave DESIGNER_OUTPUT = `none`. Proceed to Step 1.6.
+
+If HAS_FRONTEND_UNIT = true and designer enabled:
+
+Read SKILL_BASE_DIR from the system context line `Base directory for this skill:`. Read `{SKILL_BASE_DIR}/../designer/SKILL.md`.
+
+Dispatch ONE Designer Agent using the model from `[INPUTS]` `Agent models: designer` (default: `haiku`):
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../designer/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {working directory from [INPUTS]}
+Spec file path: {spec file path from [INPUTS]}
+Spec file contents:
+{spec file contents from [INPUTS]}
+
+PM output:
+{PM output from [INPUTS]}
+
+Units:
+{units list from [INPUTS] — one line per unit: "  - name: {name}, type: {type}, path: {path}"}
+
+CLAUDE.md contents:
+{CLAUDE.md contents from [INPUTS]}
+
+Project memory:
+{project memory from [INPUTS]}
+[/INPUTS]
+```
+
+Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]`. Store as DESIGNER_OUTPUT.
+
+If extraction fails: re-dispatch once with the same prompt. If still missing: set DESIGNER_OUTPUT = `none` — a failed Designer must not block the pipeline.
+
+Proceed to Step 1.6.
 
 ### Step 1.6: Third-party API lookup
 
@@ -125,6 +178,13 @@ For each API or cross-unit interface implied by the spec requirements and accept
 - Define request shape: `{ fieldName: type }` — use exact field names from PM output; write `type: unknown — decide in implementation` for unspecified types
 - Define response shape: same approach
 - Note auth requirements, pagination, idempotency if implied by PM output
+
+**If DESIGNER_OUTPUT is not `none` (Designer ran in Step 1.6.5):** use it as the primary input for shaping API contracts. The Designer has defined which components exist, what data each one displays, and what states it handles — your API contracts must serve those UI needs. Specifically:
+- Read `Component architecture:` to understand which components fetch data and which trigger mutations.
+- Read `States per component:` to understand what error/empty/success shapes the frontend expects in responses.
+- Design response shapes that give each component exactly what it needs — no more, no less. Avoid over-fetching (returning unused fields) and under-fetching (forcing N+1 calls from the frontend).
+- If the Designer's component tree implies list rendering, add pagination params to the relevant endpoint.
+- If the Designer notes a real-time state (e.g. live feed, notifications), flag `[REALTIME]` in Risks and propose WebSocket or SSE as the mechanism.
 
 If no cross-unit interfaces needed: write `none`.
 
@@ -235,6 +295,11 @@ Risks:
 Acceptance criteria:
 {PM output acceptance criteria}
 
+{if DESIGNER_OUTPUT is not "none", include:
+Designer output:
+{DESIGNER_OUTPUT}
+}
+
 Project memory:
 {project memory from [INPUTS]}
 
@@ -283,13 +348,15 @@ Your output must include two labeled blocks in this order:
 
 On a `Bug→Fix` run, also forward the `[DEBUG OUTPUT]` block from Step 1.7 verbatim **before** the two required blocks above, so the reproduction, root cause, and recommended fix reach the human and Reviewer. Omit it on feature builds (there is no debug investigation).
 
+If DESIGNER_OUTPUT is not `none` (Designer ran in Step 1.6.5), forward the `[DESIGNER OUTPUT]` block verbatim **before** `[TECH LEAD OUTPUT]`, so the hub, Reviewer, and human can see the UX design. Omit it when Designer did not run.
+
 Missing blocks will cause your output to be re-requested by the Hub.
 
 ## Output Format
 
 ```
 [TECH LEAD OUTPUT]
-Affected units: [comma-separated unit names]
+Units touched: [comma-separated unit names]
 
 Design doc: [DESIGN_DOC_PATH, e.g. docs/design/2026-06-19-user-export.md, or: none (write failed)]
 

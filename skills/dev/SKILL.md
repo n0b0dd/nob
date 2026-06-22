@@ -43,8 +43,14 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
    - **Risks:** — store as PLAN_RISKS. If `none` or absent, set PLAN_RISKS to empty.
    - **Per-unit stack-guidance path map** — a map of `unit name → stacks/{type}.md` path for each unit declared in the task list (see stack type map below). If absent, derive from `.nob.yml` units.
 2. Read `[PM OUTPUT]` — extract acceptance criteria. Store as PM_CRITERIA.
-3. Read `Project memory:` from `[INPUTS]`. Extract `corrections` entries — these are highest priority and describe past mistakes or pattern overrides from previous runs. Apply every applicable correction during implementation. If a correction directly conflicts with the spec or PM requirements (i.e. you cannot satisfy both), note it in `Memory conflicts:` in the output block. If no corrections apply or all applied cleanly, write `none`.
-4. Read `Already-completed tasks (skip these task ids):` from `[INPUTS]`. Store as COMPLETED_TASKS (a set of task ids). If absent or `none`, COMPLETED_TASKS is empty.
+3. Read `Designer output:` from `[INPUTS]` if present. Store as DESIGNER_OUTPUT (or `none` if absent).
+   **How to use Designer output alongside Tech Lead contracts — these are complementary, not competing:**
+   - **Designer output** owns the *UI layer*: exact component names and hierarchy to build, all states per component (loading/empty/error/success/disabled) with their precise visual treatments, design tokens, interaction flows, and accessibility requirements. Use it as the implementation spec for every frontend component.
+   - **Tech Lead contracts** own the *data layer*: which API endpoint each component calls, the exact request/response shape, auth requirements, and pagination. Use them to wire the component to its data source.
+   - For a frontend task: build the component exactly as the Designer specified (structure, states, tokens, a11y), then connect it to the API exactly as the contract specifies. If a component name or state in DESIGNER_OUTPUT differs from a task description, prefer the Designer name — it is the canonical UI spec.
+   - For a backend task: DESIGNER_OUTPUT is informational context only — implement the contract the Tech Lead specified; the Designer's component needs are already encoded in the contract shape.
+4. Read `Project memory:` from `[INPUTS]`. Extract `corrections` entries — these are highest priority and describe past mistakes or pattern overrides from previous runs. Apply every applicable correction during implementation. If a correction directly conflicts with the spec or PM requirements (i.e. you cannot satisfy both), note it in `Memory conflicts:` in the output block. If no corrections apply or all applied cleanly, write `none`.
+5. Read `Already-completed tasks (skip these task ids):` from `[INPUTS]`. Store as COMPLETED_TASKS (a set of task ids). If absent or `none`, COMPLETED_TASKS is empty.
 
 **Stack type → guidance file map:**
 - `node` → `skills/dev/stacks/node.md`
@@ -80,11 +86,14 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
 
 ### Step 3: Sub-dev agent dispatch
 
+**Parallelism rule:** dispatch all tasks in the same dependency level as simultaneous parallel Agent tool calls in a single turn — do NOT dispatch them one at a time and wait between them. Wait for ALL results from the current level before dispatching the next level. Pass each completed level's `[TASK OUTPUT]` blocks into the prompts of tasks that `depends_on` them.
+
 For each task dispatched as a sub-agent, use the `dev` model from `[INPUTS]` (default: `sonnet`) and construct a prompt containing:
 
 - The task's `id`, `title`, `description`, `files` (target paths)
 - The stack guidance file path for this unit (from the map in Step 1) — instruct the sub-agent to read it using the Read tool before implementing. Skip if type is `generic`/`ruby`/unrecognized or the file path is absent.
 - The relevant `Interfaces / contracts:` entries from PLAN_CONTRACTS (producer must implement exactly; consumer must call exactly)
+- **Designer output for this task's unit** (if DESIGNER_OUTPUT is not `none` and the task's unit is a frontend type): include the full DESIGNER_OUTPUT block and instruct the sub-agent: "Implement frontend components exactly as specified in Designer output — use the component names, hierarchy, all states (loading/empty/error/success/disabled), design tokens, interaction flows, and accessibility requirements defined there. Wire each component to the API contract from [TECH LEAD SPEC]. Designer output = what to build; contracts = how to connect it."
 - PLAN_RISKS handling:
   - `[AUTH]` → match auth wiring exactly as comparable routes/screens do
   - `[MIGRATION]` → create a migration file following the existing migration pattern

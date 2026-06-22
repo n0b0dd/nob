@@ -163,6 +163,7 @@ agents:
     dev: sonnet
     debug: sonnet
     tech-lead: sonnet
+    designer: haiku
     pm: haiku
     reviewer: haiku
     init: sonnet
@@ -188,6 +189,7 @@ Extract the model for each agent under `agents.models`. If an agent has no entry
 | dev | sonnet |
 | debug | sonnet |
 | tech-lead | sonnet |
+| designer | haiku |
 | init | sonnet |
 | venture | sonnet |
 | refactor | sonnet |
@@ -209,6 +211,7 @@ Also extract:
 - `MARKER_PATH` = `{agents.checkpoint.path}.boundary.json` — the unit-boundary marker read by the `hooks/unit-boundary.sh` PreToolUse hook. **Remove any stale marker now** (run `rm -f {MARKER_PATH}` via Bash, ignore errors): a marker left behind by a previously interrupted run must not police edits in this one. A fresh marker is written at Phase 2.
 - `DEV_MODEL_RESOLVED` = `agents.models["dev"] ?? "sonnet"`
 - `DEBUG_MODEL_RESOLVED` = `agents.models["debug"] ?? agents.models["dev"] ?? "sonnet"` — model for the read-only debug investigation agent (dispatched by the Tech Lead before dev on `Bug→Fix` runs)
+- `DESIGNER_MODEL_RESOLVED` = `agents.models["designer"] ?? "haiku"` — model for the UX/UI designer agent (dispatched by Tech Lead when it discovers frontend units are affected; passed to Tech Lead via Agent models so it can dispatch Designer at the right model)
 
 **Unit guidance map**: compute `UNIT_GUIDANCE_MAP` from SKILL_BASE_DIR and each unit's type. For every unit in `units`:
 - `UNIT_GUIDANCE_MAP[unit.name]` = `{SKILL_BASE_DIR}/../dev/stacks/{unit.type}.md`
@@ -410,10 +413,10 @@ After extracting any `[X OUTPUT]...[/X OUTPUT]` block from an agent result, appl
 
 | Agent | Required fields |
 |---|---|
-| Tech Lead | `Affected units:`, `Interfaces written:`, `Task count:`, `Risks:` |
+| Tech Lead | `Units touched:`, `Interfaces written:`, `Task count:`, `Risks:` |
 | PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
-| Dev Agent | `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
-| Reviewer | `Overall status:`, `Test results:`, `Criteria check:`, `Items for human review:`, `Code quality:` |
+| Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
+| Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
 
 **Validation steps:**
 1. Check that every required field for this agent appears as `FieldName:` on its own line within the extracted block.
@@ -621,6 +624,7 @@ Project memory:
 Agent models:
   dev: {DEV_MODEL_RESOLVED}
   debug: {DEBUG_MODEL_RESOLVED}
+  designer: {DESIGNER_MODEL_RESOLVED}
 
 Max parallel slices: {agents.max_parallel_slices}
 
@@ -632,6 +636,7 @@ When a `Debug diagnosis:` is supplied (complicated bug fix), the Tech Lead uses 
 
 Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. Apply Output Block Validation for Tech Lead.
 Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
+Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]` if present. Store as DESIGNER_OUTPUT (or `none` if absent — Tech Lead only emits this when it dispatched Designer).
 If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing after re-dispatch: mark as `failed`; stop pipeline.
 
 Append to RUN_LOG_PATH (after computing TL_DURATION_MS as below): a `tech-lead` line and a `dev` line (model `{DEV_MODEL_RESOLVED}`). Then proceed to **Common: checkpoint + timing** below.
@@ -763,6 +768,10 @@ All agent outputs for review:
 {PM_OUTPUT}
 
 {DEV_OUTPUT}
+
+{if DESIGNER_OUTPUT is not "none", include:
+{DESIGNER_OUTPUT}
+}
 [/INPUTS]
 ```
 
@@ -810,8 +819,8 @@ If RETRY_COUNT >= MAX_RETRIES:
 **Determine which tasks to re-dispatch:**
 
 Extract from REVIEWER_OUTPUT:
-- For each `✗` or `⚠` criterion line: extract the failing task id (e.g. `[api]`, `[web]`, `[cli]`) noted on that line or in the `Test results:` per-unit list. Collect the set of failing task ids as FAILING_TASK_IDS.
-- Any CONTRACT VIOLATION in contract check → add all affected unit ids to FAILING_TASK_IDS; also set CONTRACT_RETRY = true.
+- For each `✗` or `⚠` criterion line: extract the unit name tagged at the end of the line (e.g. `[api]`, `[web]`, `[cli]`). Map each unit name → its task ids by scanning DEV_OUTPUT's `Tasks:` list for entries whose `(unit: name)` matches. Collect the union of all matching task ids as FAILING_TASK_IDS. If a criterion has no unit tag, add all task ids from DEV_OUTPUT to FAILING_TASK_IDS and note "no unit tag — re-dispatching all tasks".
+- Any CONTRACT VIOLATION in contract check → add all task ids for the affected units to FAILING_TASK_IDS; also set CONTRACT_RETRY = true.
 
 If FAILING_TASK_IDS is empty: no failing task ids identified — no agent can auto-fix the remaining items. Exit loop. Proceed to Step 4.
 
@@ -932,6 +941,7 @@ Project memory:
 Agent models:
   dev: {DEV_MODEL_RESOLVED}
   debug: {DEBUG_MODEL_RESOLVED}
+  designer: {DESIGNER_MODEL_RESOLVED}
 
 Max parallel slices: {agents.max_parallel_slices}
 [/INPUTS]
@@ -1030,7 +1040,8 @@ Nob complete.
 Workflow:  [Spec→Code | Bug→Fix | API→Sync]
 Source:    [spec/bug file path]
 Design:    [Design doc field from TECH_LEAD_OUTPUT — e.g. docs/design/2026-06-19-user-export.md; omit this line if the field is absent or "none"]
-Agents:    [each agent that ACTUALLY ran as "name(model)" separated by " · " — list only what ran, skip disabled/skipped agents. Feature build: pm(haiku) · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). Bug→Fix always includes debug({DEBUG_MODEL_RESOLVED}) after pm; the Tech Lead appears ONLY if the bug escalated (IMPL_PATH = tech-lead) — on the direct-dev fast path omit tech-lead, e.g.: pm(haiku) · debug({DEBUG_MODEL_RESOLVED}) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku).]
+UX design: [Design doc field from DESIGNER_OUTPUT — e.g. docs/design/ux-2026-06-19-user-export.md; omit this line if DESIGNER_OUTPUT is "none" or the field is absent]
+Agents:    [each agent that ACTUALLY ran as "name(model)" separated by " · " — list only what ran, skip disabled/skipped agents. Feature build: pm(haiku) [· designer({DESIGNER_MODEL_RESOLVED}) if DESIGNER_OUTPUT is not "none"] · tech-lead(sonnet) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku). Bug→Fix always includes debug({DEBUG_MODEL_RESOLVED}) after pm; the Tech Lead appears ONLY if the bug escalated (IMPL_PATH = tech-lead) — on the direct-dev fast path omit tech-lead, e.g.: pm(haiku) · debug({DEBUG_MODEL_RESOLVED}) · dev({DEV_MODEL_RESOLVED}) · reviewer(haiku).]
 Timing:    [each agent that ran as "name Ns" separated by " · ", mirroring the Agents line. Round duration_ms to nearest second. Show "n/a" if duration not recorded.]
 [Bug→Fix runs only — print the root-cause line from DEBUG_OUTPUT if present:]
 Root cause: [Root cause field from DEBUG_OUTPUT, or omit this line if absent]

@@ -8,7 +8,7 @@
     {
       "name": "nob",
       "description": "Automates the full dev cycle with minimal human-in-the-loop. PM → Tech Lead → dev → Reviewer — one command, spec to reviewed code, for any project shape.",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "source": "./",
       "author": {
         "name": "n0b0dd"

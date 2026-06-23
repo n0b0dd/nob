@@ -30,18 +30,24 @@ Check whether an `[INPUTS]` block is present in the current context.
 From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
 
 1. Read the `[TECH LEAD SPEC]` block. Extract:
-   - **Task list** — each entry in the canonical format:
+   - **Task list** — each entry in the canonical format (support both old and new fields):
      ```
      - id: [t1]
-       title: [short title]
-       description: [what to build]
-       unit: [unit name from .nob.yml units list]
-       files: [known target paths, or: unknown]
+       title: [short imperative label]
+       file: [exact primary file path — one file per task; fall back to `files` if absent]
+       action: create | edit | delete   # fall back to `edit` if absent
+       what: [one concrete implementation sentence; fall back to `description` if absent]
+       exports: [produced symbol/endpoint, or: none]
+       consumes: [taskId → symbol consumed, or: none]
+       unit: [unit name from .nob.yml; infer from file path prefix if absent]
        depends_on: [list of task ids, or: empty]
      ```
+     For each task, also resolve `stackType` — look up the unit's stack type from the `units` config (e.g. `api → node`, `web → react`). Store on the task object.
    - **Interfaces / contracts:** — the full contracts section. Store as PLAN_CONTRACTS.
    - **Risks:** — store as PLAN_RISKS. If `none` or absent, set PLAN_RISKS to empty.
-   - **Per-unit stack-guidance path map** — a map of `unit name → stacks/{type}.md` path for each unit declared in the task list (see stack type map below). If absent, derive from `.nob.yml` units.
+   - **Per-unit stack-guidance path map** — a map of `unit name → stacks/{type}.md` path. If absent, derive from `.nob.yml` units.
+
+   **Pre-read stack guidance files** (do this now — not from within the Workflow script): for each unique unit in the task list, read its guidance file using the Read tool and store content as `UNIT_GUIDANCE_CONTENT[unit-name]`. Set to `'none'` if type is `generic`, `ruby`, unrecognized, or the file is not found.
 2. Read `[PM OUTPUT]` — extract acceptance criteria. Store as PM_CRITERIA.
 3. Read `Designer output:` from `[INPUTS]` if present. Store as DESIGNER_OUTPUT (or `none` if absent).
    **How to use Designer output alongside Tech Lead contracts — these are complementary, not competing:**
@@ -51,6 +57,25 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
    - For a backend task: DESIGNER_OUTPUT is informational context only — implement the contract the Tech Lead specified; the Designer's component needs are already encoded in the contract shape.
 4. Read `Project memory:` from `[INPUTS]`. Extract `corrections` entries — these are highest priority and describe past mistakes or pattern overrides from previous runs. Apply every applicable correction during implementation. If a correction directly conflicts with the spec or PM requirements (i.e. you cannot satisfy both), note it in `Memory conflicts:` in the output block. If no corrections apply or all applied cleanly, write `none`.
 5. Read `Already-completed tasks (skip these task ids):` from `[INPUTS]`. Store as COMPLETED_TASKS (a set of task ids). If absent or `none`, COMPLETED_TASKS is empty.
+6. Read `TDD mode:` from `[INPUTS]` (true | false; default: false). Store as TDD_MODE.
+   Read `TDD test files:` from `[INPUTS]` — comma-separated paths to test files written by the test-writer. Store as TDD_TEST_FILES (list of paths; empty if absent or `none`).
+
+**TDD pre-run check (applies when TDD_MODE = true and TDD_TEST_FILES is non-empty):**
+
+Before implementing any task, run the test suite targeting only the TDD test files:
+- For jest/vitest: `npx jest {TDD_TEST_FILES joined by space}` (or `npx vitest run {files}`)
+- For pytest: `pytest {TDD_TEST_FILES joined by space}`
+- For go test: `go test ./...` (scope to the affected package)
+- For rspec: `bundle exec rspec {TDD_TEST_FILES joined by space}`
+
+Capture output. Expected: tests FAIL (that is the Red phase). Log in the test output section as:
+```
+TDD pre-run (Red phase): {N} test(s) ran, {M} failed (expected — tests written before implementation)
+```
+If the test runner is not found: log `test-runner-not-found` and continue implementation; note in `Items not implemented (needs human):` that the TDD pre-run could not be verified.
+If all tests PASS before implementation (unexpected): log a warning `TDD pre-run: all tests pass before implementation — tests may not be targeting unimplemented code` and continue.
+
+After this pre-run log, proceed with normal implementation (Green phase). The regular test run (at the end of each task or Step 3.5) will verify the tests now pass.
 
 **Stack type → guidance file map:**
 - `node` → `skills/dev/stacks/node.md`
@@ -78,65 +103,188 @@ From `[INPUTS]` (hub-dispatched) or from discovered files (standalone):
 
 1. Parse the task list into a dependency graph using each task's `depends_on` field. Exclude COMPLETED_TASKS ids from all scheduling and dependency resolution.
 2. **Trivial path**: if total work (after excluding COMPLETED_TASKS) is ≤4 files across a single unit and PLAN_RISKS is empty, implement **in-session** directly (skip sub-agent dispatch, go to Step 3.5 Inline Implementation).
-3. **Coordinator path**: group tasks into dependency levels:
-   - **Level 0**: tasks with no `depends_on` (or all dependencies already satisfied)
-   - **Level N**: tasks whose `depends_on` all belong to levels < N
-   - Tasks within the same level have no mutual dependency and may run in a **parallel batch**. Cap concurrent dispatch at `max_parallel_slices` from `[INPUTS]` (default: 3).
-   - A task whose `depends_on` are not all complete waits for the next batch; pass each prerequisite's produced contracts and `[TASK OUTPUT]` into the dependent task's prompt.
+3. **Coordinator path**: dispatch via the Workflow tool (Step 3). The Workflow script handles dependency ordering and parallel fan-out — no manual level grouping needed here.
 
-### Step 3: Sub-dev agent dispatch
+### Step 3: Workflow dispatch (coordinator path)
 
-**Parallelism rule:** dispatch all tasks in the same dependency level as simultaneous parallel Agent tool calls in a single turn — do NOT dispatch them one at a time and wait between them. Wait for ALL results from the current level before dispatching the next level. Pass each completed level's `[TASK OUTPUT]` blocks into the prompts of tasks that `depends_on` them.
+#### 3a: Build WORKFLOW_ARGS
 
-For each task dispatched as a sub-agent, use the `dev` model from `[INPUTS]` (default: `sonnet`) and construct a prompt containing:
-
-- The task's `id`, `title`, `description`, `files` (target paths)
-- The stack guidance file path for this unit (from the map in Step 1) — instruct the sub-agent to read it using the Read tool before implementing. Skip if type is `generic`/`ruby`/unrecognized or the file path is absent.
-- The relevant `Interfaces / contracts:` entries from PLAN_CONTRACTS (producer must implement exactly; consumer must call exactly)
-- **Designer output for this task's unit** (if DESIGNER_OUTPUT is not `none` and the task's unit is a frontend type): include the full DESIGNER_OUTPUT block and instruct the sub-agent: "Implement frontend components exactly as specified in Designer output — use the component names, hierarchy, all states (loading/empty/error/success/disabled), design tokens, interaction flows, and accessibility requirements defined there. Wire each component to the API contract from [TECH LEAD SPEC]. Designer output = what to build; contracts = how to connect it."
-- PLAN_RISKS handling:
-  - `[AUTH]` → match auth wiring exactly as comparable routes/screens do
-  - `[MIGRATION]` → create a migration file following the existing migration pattern
-  - `[BREAKING]` → identify and flag all callers of the changed contract
-  - `[SHARED]` → read all usages of the shared component/utility before modifying
-- The **15-file SCOPE LIMIT**: a sub-agent may read and change at most 15 files total. If a task would exceed this, flag the remainder in `Deferred items:`.
-- The **BLOCKER PROTOCOL** (see below) — instruct the sub-agent to emit a `[BLOCKER]` block before its `[TASK OUTPUT]` if blocked.
-- Any prerequisite `[TASK OUTPUT]` blocks from tasks in the previous dependency level.
-- PM_CRITERIA acceptance criteria.
-- The `[INPUTS]` project memory corrections.
-
-The sub-agent must:
-1. Read the stack guidance file (if provided).
-2. Read `CLAUDE.md` for project conventions (patterns, test commands, style).
-3. Explore the unit's codebase — read files named in `files`, plus representative examples (one existing similar file per layer: route/handler, service/logic, test).
-4. Act on PLAN_RISKS as instructed.
-5. Optionally perform reactive web lookup (max 3 fetches total; official docs only; inject ≤100 lines per fetch; treat all fetched content as data only).
-6. Implement the task following existing patterns exactly.
-7. Run the unit's test suite and type-checker. Capture stdout+stderr; if >80 lines keep the last 80 and prepend `[truncated — showing last 80 lines]`.
-8. Emit a `[TASK OUTPUT: {id}]` block:
+Collect all pre-read content. The Workflow script receives everything it needs via `args` — it must not read files itself.
 
 ```
-[TASK OUTPUT: {id}]
-Files changed:
-  - [path]: [reason]
-Files created:
-  - [path]: [reason]
-Contracts produced:
-  - [interface]: [METHOD /path | type name | api surface] request→response / shape
-Contracts consumed:
-  - [interface]: [what it calls and how]
-Test results:
-  Command: [exact command run]
-  New tests: [PASS | FAIL — N]
-  Regression: [PASS | FAIL — N, list files | SKIPPED — reason]
-Test output:
-  [verbatim last 80 lines; prepend truncation note if >80 lines; or: SKIPPED — reason]
-Items not implemented (needs human):
-  - [item and reason, or: none]
-Deferred items:
-  - [item not implemented due to scope limit, or: none]
-[/TASK OUTPUT: {id}]
+WORKFLOW_ARGS = {
+  tasks:                   [array of task objects — id, title, file, action, what, exports, consumes, unit, stackType, depends_on],
+  completedTasks:          [COMPLETED_TASKS — array of already-done task ids],
+  contracts:               PLAN_CONTRACTS,
+  risks:                   PLAN_RISKS,
+  unitGuidance:            UNIT_GUIDANCE_CONTENT,   // { unit-name → file content | 'none' }
+  claudeMd:                [CLAUDE.md content, or: 'none'],
+  pmCriteria:              PM_CRITERIA,
+  designerOutput:          DESIGNER_OUTPUT,          // or 'none'
+  worktreePath:            [working directory from INPUTS],
+  devModel:                [dev model from INPUTS, default: 'sonnet'],
+  projectMemoryCorrections:[corrections from project memory, or: 'none']
+}
 ```
+
+#### 3b: Dispatch via the Workflow tool
+
+Call the Workflow tool with `args: WORKFLOW_ARGS` and the following script verbatim. Wait for the workflow to complete; its return value is **WORKFLOW_RESULT** — a JSON object mapping task `id → structured task result`.
+
+```javascript
+export const meta = {
+  name: 'dev-tasks',
+  description: 'Fan out Tech Lead tasks as focused per-task agents',
+  phases: [{ title: 'Implement' }]
+}
+
+function buildLevels(tasks, completed) {
+  const remaining = tasks.filter(t => !completed.includes(t.id))
+  const satisfied = new Set(completed)
+  const levels = []
+  let guard = 0
+  while (remaining.length > 0 && guard++ < 100) {
+    const batch = remaining.filter(t => (t.depends_on || []).every(d => satisfied.has(d)))
+    if (batch.length === 0) break
+    batch.forEach(t => satisfied.add(t.id))
+    levels.push(batch)
+    const batchIds = new Set(batch.map(b => b.id))
+    remaining.splice(0, remaining.length, ...remaining.filter(t => !batchIds.has(t.id)))
+  }
+  return levels
+}
+
+const TASK_SCHEMA = {
+  type: 'object',
+  required: ['taskId', 'status', 'filesChanged', 'filesCreated', 'contractsProduced', 'contractsConsumed', 'testResults', 'testOutput', 'itemsNotImplemented', 'deferredItems', 'memoryConflicts'],
+  properties: {
+    taskId:              { type: 'string' },
+    status:              { type: 'string', enum: ['done', 'partial', 'failed'] },
+    filesChanged:        { type: 'array', items: { type: 'string' } },
+    filesCreated:        { type: 'array', items: { type: 'string' } },
+    contractsProduced:   { type: 'array', items: { type: 'string' } },
+    contractsConsumed:   { type: 'array', items: { type: 'string' } },
+    testResults:         { type: 'string' },
+    testOutput:          { type: 'string' },
+    itemsNotImplemented: { type: 'array', items: { type: 'string' } },
+    deferredItems:       { type: 'array', items: { type: 'string' } },
+    memoryConflicts:     { type: 'array', items: { type: 'string' } },
+    blockers:            { type: 'array', items: { type: 'string' } }
+  }
+}
+
+const {
+  tasks, completedTasks, contracts, risks, unitGuidance,
+  claudeMd, pmCriteria, designerOutput, worktreePath,
+  devModel, projectMemoryCorrections
+} = args
+
+const FRONTEND_STACKS = ['react', 'vue', 'next', 'flutter', 'android', 'ios', 'react-native']
+const RISKY_WORDS = ['auth', 'permission', 'role', 'session', 'token', 'migrat', 'breaking', 'shared', 'middleware', 'transaction', 'refactor', 'schema']
+const GLOBAL_RISK = !!(risks || '').match(/\[(AUTH|MIGRATION|BREAKING|SHARED)\]/)
+
+function selectModel(task, allTasks, devModel) {
+  const text = ((task.what || task.description || '') + ' ' + (task.title || '')).toLowerCase()
+  const dependentCount = allTasks.filter(t => (t.depends_on || []).includes(task.id)).length
+  const consumesCount = (task.consumes || '').split('\n').filter(Boolean).length
+
+  let score = 0
+  if (dependentCount >= 2) score += 3       // critical path — many tasks blocked on this
+  else if (dependentCount === 1) score += 1  // one downstream task depends on this
+  if (RISKY_WORDS.some(w => text.includes(w))) score += 2
+  if (GLOBAL_RISK) score += 1
+  if ((task.depends_on || []).length >= 2) score += 1   // many inputs to synthesize
+  if (task.action === 'delete') score += 1               // irreversible
+  if (consumesCount >= 2) score += 1                     // multiple contracts to satisfy
+
+  return score >= 3 ? (devModel || 'sonnet') : 'haiku'
+}
+
+const levels = buildLevels(tasks, completedTasks || [])
+const taskOutputs = {}
+
+phase('Implement')
+
+for (const level of levels) {
+  const results = await parallel(level.map(task => async () => {
+    const priorContext = (task.depends_on || []).map(dep => {
+      if ((completedTasks || []).includes(dep)) {
+        return 'Task ' + dep + ': completed in a prior session — read the codebase to discover what it produced.'
+      }
+      const out = taskOutputs[dep]
+      if (!out) return null
+      const files = [...(out.filesChanged || []), ...(out.filesCreated || [])].join(', ')
+      return 'Task ' + dep + ' produced:\n  contracts: ' + (out.contractsProduced || []).join(', ') + '\n  files: ' + (files || 'none')
+    }).filter(Boolean).join('\n')
+
+    const guidance = (unitGuidance || {})[task.unit] || 'none'
+    const model = selectModel(task, tasks, devModel)
+    const isFrontend = FRONTEND_STACKS.includes(task.stackType)
+    // Designer detail is already encoded in task.what by the Tech Lead.
+    // Only inject full Designer output as a fallback when what field is sparse (< 80 chars).
+    const whatIsSparse = (task.what || '').length < 80
+    const designerSection = (designerOutput && designerOutput !== 'none' && isFrontend && whatIsSparse)
+      ? 'DESIGNER OUTPUT (fallback — what field is sparse; use this for component states/tokens/a11y):\n' + designerOutput + '\n'
+      : ''
+
+    const prompt = [
+      'You are a focused implementation agent. Implement exactly one task — read the target file, make the change described in "what", run tests, return structured output.',
+      '',
+      'Working directory: ' + worktreePath,
+      '',
+      'TASK',
+      'id: ' + task.id,
+      'title: ' + task.title,
+      'file: ' + (task.file || task.files || 'unknown'),
+      'action: ' + (task.action || 'edit'),
+      'what: ' + (task.what || task.description || task.title),
+      'exports: ' + (task.exports || 'none'),
+      'consumes: ' + (task.consumes || 'none'),
+      '',
+      'PRIOR TASK CONTEXT',
+      priorContext || 'none',
+      '',
+      'CONTRACTS',
+      contracts || 'none',
+      '',
+      'STACK GUIDANCE',
+      guidance,
+      '',
+      'CLAUDE.md',
+      claudeMd || 'none',
+      '',
+      'PM ACCEPTANCE CRITERIA',
+      pmCriteria || 'none',
+      '',
+      designerSection,
+      'PROJECT MEMORY CORRECTIONS (highest priority — apply before anything else)',
+      projectMemoryCorrections || 'none',
+      '',
+      'INSTRUCTIONS',
+      '1. Read the target file (or its parent directory if action=create).',
+      '2. Read one representative existing file from the same layer to understand patterns.',
+      '3. Implement exactly what "what" describes — no more, no less.',
+      '   action=create: write the new file. action=edit: minimal diff only. action=delete: remove the file.',
+      '4. Run the unit test suite and type-checker. Capture last 80 lines of output.',
+      '5. SCOPE LIMIT: read and change at most 15 files total. Flag excess in deferredItems.',
+      '6. BLOCKER: if you cannot proceed, note in itemsNotImplemented — do NOT halt. Implement as much as possible.',
+      '7. Return structured output via the StructuredOutput tool — do not emit plain text.'
+    ].join('\n')
+
+    const result = await agent(prompt, { label: task.id, model, schema: TASK_SCHEMA })
+    if (result) taskOutputs[task.id] = result
+    return result
+  }))
+}
+
+return taskOutputs
+```
+
+#### Workflow error handling
+
+- **Workflow fails to start**: fall back to manual per-level Agent dispatch — send all tasks in the same dependency level as parallel Agent calls, pass prior-level `[TASK OUTPUT]` text blocks into dependent prompts.
+- **Task result is null**: mark task as `failed` in DEV OUTPUT; emit a `[BLOCKER]` for that task id.
+- **WORKFLOW_RESULT is missing task ids**: re-dispatch only the missing tasks as individual Agents.
 
 ### Step 3.5: Inline Implementation (trivial path only)
 
@@ -151,7 +299,9 @@ Enter this section only when Step 2 determined the trivial path (≤4 files, sin
 
 ### Step 4: Aggregate
 
-Once all sub-agent dispatches (and any in-session work) are complete, merge all `[TASK OUTPUT]` blocks into one `[DEV OUTPUT]`. Carried/skipped completed tasks (those in COMPLETED_TASKS) appear in the aggregated `Tasks:` list alongside freshly-run tasks — each with status `done — (resumed: already implemented in a prior run)`.
+Once the Workflow completes (or trivial in-session work is done), merge all task results from **WORKFLOW_RESULT** into one `[DEV OUTPUT]`. Read each result by task id — e.g. `WORKFLOW_RESULT["t1"].filesChanged`. Carried/skipped completed tasks (those in COMPLETED_TASKS) appear in the aggregated `Tasks:` list alongside freshly-run tasks — each with status `done — (resumed: already implemented in a prior run)`.
+
+Before emitting `[DEV OUTPUT]`: collect all non-empty `blockers` arrays across WORKFLOW_RESULT entries. For each blocker string, emit a `[BLOCKER]` block (see Blocker Protocol) before the output block.
 
 - **Units touched**: collect the distinct unit names across all tasks.
 - **Tasks**: one line per task — id, unit, status (done / partial / failed), one-line summary.
@@ -176,7 +326,7 @@ When to emit a blocker:
 - Dependency on a contract from another unit that is not yet defined
 - Risk flag discovered during implementation (`[AUTH]`, `[MIGRATION]`, `[BREAKING]`, `[SHARED]`)
 - UI state ambiguity that would change component architecture
-- A sub-agent returned no `[TASK OUTPUT]` block
+- A task agent returned a null result from the Workflow
 
 Blocker block format:
 ```
@@ -251,6 +401,6 @@ Memory conflicts:
 - **No `[PM OUTPUT]` in context**: proceed using task descriptions from `[TECH LEAD SPEC]` as acceptance criteria; note "No [PM OUTPUT] found — using Tech Lead task descriptions as acceptance criteria."
 - **Unit disabled in `.nob.yml`**: skip that unit's tasks and note "Unit [name] skipped — disabled in .nob.yml."
 - **Stack type not recognized**: treat as `generic` (no guidance file); flag "Unrecognized stack type [X] for unit [name] — treated as generic."
-- **Sub-agent returned no `[TASK OUTPUT]`**: emit a `[BLOCKER]` for that task; continue with remaining tasks; mark the task as `failed` in the `[DEV OUTPUT]` Tasks field.
+- **Task agent returned null result**: emit a `[BLOCKER]` for that task; mark the task as `failed` in the `[DEV OUTPUT]` Tasks field.
 - **Existing codebase uses a different pattern than `CLAUDE.md` describes**: follow the actual codebase, not `CLAUDE.md`; note the discrepancy in the relevant task's output.
 - **Requirement is too vague to implement**: implement a reasonable interpretation; flag it in `Items not implemented (needs human)`.

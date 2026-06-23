@@ -24,6 +24,8 @@ Read `.nob.yml` at the repo root using the Read tool. Extract:
 - `agents.max_retries` (default: 3)
 - `docs.design` — directory for persisted technical design docs. Strip any leading `/`. Store as DESIGN_DIR. Default to `docs/design` if absent.
 
+Read `TDD flag:` from `[INPUTS]` (true | false; default: false). Store as TDD_FLAG. Read `Agent models: test-writer:` from [INPUTS] (default: haiku). Store as TEST_WRITER_MODEL. Set TEST_WRITER_OUTPUT = "none". Set TDD_ACTIVE = false. Set TDD_STATUS = "skipped".
+
 Read `Workflow:` from `[INPUTS]` — the workflow type the hub identified (e.g. `Spec→Code`, `Bug→Fix`). Store as WORKFLOW. If absent, default to `Spec→Code`. Set `IS_BUG_FIX = true` when WORKFLOW names a bug-fix run — match case-insensitively and ignore spacing/arrow style, so `Bug→Fix`, `Bug → Fix`, and `bug-fix` all count. When IS_BUG_FIX is true you build your task list from a **debug diagnosis** (Step 1.7): normally the hub already ran the debug agent and forwards it as a `Debug diagnosis:` block (the hub only escalates a bug to you when it's complicated), but if none is supplied you run debug yourself. dev still implements the fix (Step 3).
 
 Read the **spec** from `[INPUTS]` — the hub passes `Spec file path:` and `Spec file contents:`. The spec is the source of all technical detail. On a `Bug→Fix` run the spec *is* the bug report (steps to reproduce, expected vs. actual behaviour) — preserve it; you forward it to the debug agent in Step 1.7. PM is pure product: its `[PM OUTPUT]` gives you the agreed **acceptance criteria** (the *what*), **edge cases**, **out of scope**, and **product ambiguities** — but it deliberately contains no file paths, API shapes, or technical decisions. You own all of that: read the spec's `Requirements` and any technical detail directly, and treat PM's acceptance criteria as the contract the implementation must satisfy.
@@ -47,9 +49,9 @@ grep -rl "<term>" --include="*.tsx" --include="*.jsx" --include="*.vue" --includ
 
 Store results as AFFECTED_FILES = { by_unit: { [unit_name]: [...] }, schema: [...] }.
 
-### Step 1.6.5: Designer dispatch (conditional)
+### Step 1.6.5: Designer dispatch + review loop (conditional)
 
-Set DESIGNER_OUTPUT = `none`.
+Set DESIGNER_OUTPUT = `none`. Set DESIGN_CONCERNS = [].
 
 **Skip on Bug→Fix runs** (IS_BUG_FIX = true) — UX design is not relevant to bug fixes. Proceed to Step 1.6.
 
@@ -65,7 +67,9 @@ If HAS_FRONTEND_UNIT = true and designer enabled:
 
 Read SKILL_BASE_DIR from the system context line `Base directory for this skill:`. Read `{SKILL_BASE_DIR}/../designer/SKILL.md`.
 
-Dispatch ONE Designer Agent using the model from `[INPUTS]` `Agent models: designer` (default: `haiku`):
+Set DESIGNER_REVIEW_ROUND = 0. Set DESIGNER_REVIEW_FEEDBACK = "none".
+
+**Designer dispatch template** (reused each round):
 
 ```
 [INSTRUCTIONS]
@@ -89,12 +93,49 @@ CLAUDE.md contents:
 
 Project memory:
 {project memory from [INPUTS]}
+
+{if DESIGNER_REVIEW_ROUND > 0:
+Tech Lead review (round {DESIGNER_REVIEW_ROUND}):
+{DESIGNER_REVIEW_FEEDBACK}
+
+Revise your design to address the technical concerns above. Keep all approved aspects unchanged. Do not change design decisions that were not flagged.
+}
 [/INPUTS]
 ```
 
-Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]`. Store as DESIGNER_OUTPUT.
+**Loop (max 2 rounds):**
 
-If extraction fails: re-dispatch once with the same prompt. If still missing: set DESIGNER_OUTPUT = `none` — a failed Designer must not block the pipeline.
+**Round dispatch:** dispatch Designer Agent with model from `[INPUTS]` `Agent models: designer` (default: `haiku`) using the template above. Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]`. Store as DESIGNER_OUTPUT.
+
+If extraction fails: re-dispatch once with the same prompt. If still missing: set DESIGNER_OUTPUT = `none` — a failed Designer must not block the pipeline. Exit loop.
+
+**Tech Lead technical review:** after each Designer round, review DESIGNER_OUTPUT for technical feasibility — NOT aesthetics, NOT UX patterns, NOT naming. Only flag concerns that would make implementation significantly more expensive or architecturally risky:
+
+- Component data needs that require ≥3 separate API calls to fulfil → suggest batching or a simplified data model
+- Real-time / live-update states that imply WebSocket or SSE → flag complexity, suggest polling alternative if acceptable
+- Client-side state that conflicts with SSR or causes hydration issues → flag the constraint
+- Interactions that require client-side data that isn't available at render time without an extra round-trip → flag and propose lazy-load or preload pattern
+- Impossible state combinations (e.g. loading + error shown simultaneously) → flag as spec conflict
+
+Do NOT flag: visual style, color choices, component naming, animation preferences, layout decisions, or any UX pattern that is technically implementable even if complex.
+
+Build ROUND_FEEDBACK as a short list (0–3 items). Format:
+
+```
+[TL DESIGN REVIEW — round {N}]
+Concerns:
+- {concern: one sentence — what the issue is, why it's costly, what simpler alternative exists}
+Approved:
+- {design decisions that are technically sound and must not change}
+[/TL DESIGN REVIEW]
+```
+
+**Continue or exit:**
+- If ROUND_FEEDBACK has 0 concerns: set DESIGNER_REVIEW_FEEDBACK = "none". Exit loop — design is technically approved.
+- If ROUND_FEEDBACK has concerns AND DESIGNER_REVIEW_ROUND < 2: set DESIGNER_REVIEW_FEEDBACK = ROUND_FEEDBACK. Increment DESIGNER_REVIEW_ROUND. Re-run loop.
+- If DESIGNER_REVIEW_ROUND = 2 (max reached): log unresolved concerns as DESIGN_CONCERNS. Exit loop — proceed with current DESIGNER_OUTPUT.
+
+**After loop:** if DESIGN_CONCERNS is non-empty, add a `[DESIGN]` risk entry per concern in the Risks section (Step 3). These signal to the Dev agent that a design trade-off was made.
 
 Proceed to Step 1.6.
 
@@ -232,14 +273,55 @@ Task ids must be assigned **deterministically and stably** (`t1`, `t2`, … in a
 For each task, emit an entry in this exact format:
 ```
 - id: [t1]
-  title: [short title]
-  description: [what to build]
+  title: [short imperative label — e.g. "Add exportPdf service method"]
+  file: [exact primary file path — one file per task]
+  action: create | edit | delete
+  what: [see encoding rules below]
+  exports: [produced symbol/endpoint for other tasks to consume, or: none]
+  consumes: [taskId → symbol this task needs from a dependency, or: none]
   unit: [unit name from .nob.yml units list]
-  files: [known target paths, or: unknown]
   depends_on: [list of task ids, or: empty]
 ```
 
-Set `depends_on` where one task needs another's output or contract (e.g. a consumer unit task depends on the producer unit's contract task completing first). Tasks with no dependencies have `depends_on: empty`. The dev coordinator uses this dependency graph to schedule parallel vs. sequential execution.
+Set `depends_on` where one task needs another's output or contract. Tasks with no dependencies have `depends_on: empty`. The dev coordinator uses this dependency graph to schedule parallel vs. sequential execution.
+
+#### `what` field encoding rules
+
+The `what` field must be **self-contained** — a focused agent implementing this task must not need to read any other document to understand what to build. Write it once, write it completely.
+
+**For backend tasks** (api, node, python, go, ruby, java units): one concrete sentence naming the exact function/endpoint/method and its behaviour.
+```
+# good
+what: Add exportPdf(invoiceId: string, userId: string): Promise<Buffer> to InvoiceService — fetch invoice by id, assert userId matches invoice.userId (throw 403 if not), generate PDF via pdfkit, return the buffer
+
+# bad — agent must guess
+what: Implement the PDF export endpoint
+```
+
+**For frontend tasks** (react, vue, next, flutter, android, ios, react-native units): if DESIGNER_OUTPUT is not `none`, extract the relevant component section and encode it **fully** in `what`. Cover:
+- Component name and file path
+- All states with exact visual treatment (copy from `States per component:` in DESIGNER_OUTPUT)
+- Interaction steps relevant to this component (copy from `Interaction flow:` in DESIGNER_OUTPUT)
+- Design token values to use (specific colors, spacing, radius from DESIGNER_OUTPUT)
+- Accessibility requirements for this component (ARIA role/label, keyboard behaviour, focus destination)
+
+```
+# good — agent needs nothing else
+what: Create ExportButton (apps/web/src/components/ExportButton.tsx) —
+  default: "Export PDF" label + download icon (text-primary, body-md);
+  loading: replace label with 20px centered spinner, disable pointer-events, aria-busy=true;
+  error: red border (color-error #ef4444) + inline "Export failed, try again" below button;
+  success: checkmark icon + "Exported" text for 2s then reset to default.
+  Keyboard: focusable via Tab, Enter/Space triggers, aria-label="Export invoice as PDF".
+  On click: call POST /invoices/:id/export, show loading → on resolve show success → on reject show error.
+
+# bad — agent must read Designer output to understand states
+what: Add ExportButton component per Designer output
+```
+
+If DESIGNER_OUTPUT is `none` for a frontend task: write `what` from the spec requirements alone, describing the component's expected behaviour as specifically as possible.
+
+**One task = one file.** If a feature requires changes to N files, write N tasks. Do not bundle multiple files into one task.
 
 ## Step 2.5: Persist the technical design
 
@@ -252,6 +334,64 @@ Write the design you just produced to a durable doc so it is reviewable alongsid
 5. Store DESIGN_DOC_PATH = `{DESIGN_DIR}/<slug>.md` for the output block.
 
 If the write fails, skip silently and set DESIGN_DOC_PATH = `none (write failed)` — the `[TECH LEAD OUTPUT]` block below remains the authoritative hand-off to dev, so a failed file write must not block the pipeline.
+
+## Step 2.7: TDD test-writer dispatch (conditional)
+
+Skip this step if TDD_FLAG = false. Also skip if IS_BUG_FIX = true (TDD is not relevant to bug fixes — skip silently, do not print a warning).
+
+If TDD_FLAG = true and IS_BUG_FIX = false:
+
+Check `Agents enabled:` from `[INPUTS]`. If `test-writer` is explicitly not in the list: print `"--tdd passed but test-writer is disabled in agents.enabled — skipping TDD phase."` Set TDD_STATUS = "skipped". Skip to **Step 3**.
+
+Otherwise:
+
+1. Read SKILL_BASE_DIR from the system context line `Base directory for this skill:`.
+2. Read `{SKILL_BASE_DIR}/../test-writer/SKILL.md`.
+3. Dispatch ONE test-writer Agent with `model: {TEST_WRITER_MODEL}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../test-writer/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {working directory from [INPUTS]}
+
+[TECH LEAD SPEC]
+Interfaces / contracts:
+{interfaces / contracts from Step 2a}
+
+Data schemas:
+{data schemas from Step 2b}
+
+Task list:
+{flat task list from Step 2d — all entries in canonical format}
+
+Risks:
+{RISK_FLAGS — one flag per line with its description, or: none}
+[/TECH LEAD SPEC]
+
+Spec file contents:
+{spec file contents from [INPUTS]}
+
+Per-unit stack-guidance path map:
+{per-unit stack-guidance path map from [INPUTS]}
+
+Units:
+{units list from [INPUTS] — one per line as "- name: {name}, type: {type}, path: {path}"}
+
+CLAUDE.md contents:
+{CLAUDE.md contents from [INPUTS]}
+[/INPUTS]
+```
+
+4. Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]`. Store as TEST_WRITER_OUTPUT. Apply Output Block Validation (required fields: `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:`). If malformed after one re-dispatch: set TEST_WRITER_OUTPUT = "none"; print "Test writer returned no output — skipping TDD phase." Set TDD_STATUS = "skipped". Skip to **Step 3**.
+5. Print TEST_WRITER_OUTPUT verbatim.
+6. Prompt: `"Tests written. Review them, then continue? (yes / edit / skip-tdd)"`
+   - **yes**: set TDD_ACTIVE = true. Extract test file paths from `Test files written:` in TEST_WRITER_OUTPUT; store as TDD_TEST_FILES (comma-separated). Continue to **Step 3**.
+   - **edit**: print `"Edit tests in the worktree, then type 'continue'."` Wait for `continue`. Set TDD_ACTIVE = true. Extract TDD_TEST_FILES same as above. Continue to **Step 3**.
+   - **skip-tdd**: set TDD_FLAG = false; TDD_ACTIVE = false; TEST_WRITER_OUTPUT = "skipped"; TDD_STATUS = "skipped". Continue to **Step 3** without TDD context.
+   - Any other response: treat as **skip-tdd**.
 
 ## Step 3: Dispatch dev coordinator
 
@@ -300,6 +440,9 @@ Designer output:
 {DESIGNER_OUTPUT}
 }
 
+TDD mode: {TDD_ACTIVE — true | false}
+TDD test files: {TDD_TEST_FILES — comma-separated test file paths, or: none}
+
 Project memory:
 {project memory from [INPUTS]}
 
@@ -330,6 +473,15 @@ Loop until dev coordinator emits `[DEV OUTPUT]` with no further `[BLOCKER]` bloc
 
 **Note:** A `[BLOCKER]` block alongside a `[DEV OUTPUT]` block means the dev coordinator completed partial work before blocking. Preserve the partial output and re-dispatch only for the remaining work described in the blocker.
 
+## Step 4.5: Set TDD status
+
+If TDD_ACTIVE = true:
+- If DEV_OUTPUT contains test results that all PASS: set TDD_STATUS = "Red ✓ → Green ✓".
+- If DEV_OUTPUT contains test results where any fail: set TDD_STATUS = "Red ✓ → Green ✗".
+- If DEV_OUTPUT has no test results: set TDD_STATUS = "Red ✓ → Green ?" (unknown; Reviewer will verify).
+
+If TDD_ACTIVE = false: TDD_STATUS remains "skipped".
+
 ## Step 5: Cross-unit contract check
 
 Before emitting output:
@@ -349,6 +501,8 @@ Your output must include two labeled blocks in this order:
 On a `Bug→Fix` run, also forward the `[DEBUG OUTPUT]` block from Step 1.7 verbatim **before** the two required blocks above, so the reproduction, root cause, and recommended fix reach the human and Reviewer. Omit it on feature builds (there is no debug investigation).
 
 If DESIGNER_OUTPUT is not `none` (Designer ran in Step 1.6.5), forward the `[DESIGNER OUTPUT]` block verbatim **before** `[TECH LEAD OUTPUT]`, so the hub, Reviewer, and human can see the UX design. Omit it when Designer did not run.
+
+If TEST_WRITER_OUTPUT is not `none` and not `"skipped"` (test-writer ran in Step 2.7), forward the `[TEST WRITER OUTPUT]` block verbatim **after** `[TECH LEAD OUTPUT]` and **before** `[DEV OUTPUT]`, so path-full and the hub can extract TDD status. Omit it when test-writer did not run.
 
 Missing blocks will cause your output to be re-requested by the Hub.
 
@@ -387,6 +541,10 @@ Contract violations:
 [DEBUG OUTPUT]
 {Bug→Fix runs only — forward the complete [DEBUG OUTPUT] block from Step 1.7 exactly as returned. Omit this block entirely on feature builds.}
 [/DEBUG OUTPUT]
+
+[TEST WRITER OUTPUT]
+{TDD runs only — forward the complete [TEST WRITER OUTPUT] block from Step 2.7 exactly as returned. Omit this block entirely when TDD_FLAG = false or TDD_STATUS = "skipped".}
+[/TEST WRITER OUTPUT]
 
 [DEV OUTPUT]
 {forward the complete [DEV OUTPUT] block from the dev coordinator exactly as returned}

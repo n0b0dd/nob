@@ -2,6 +2,17 @@
 
 All notable changes to the nob plugin are documented here. Versions are bumped in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
+## [2.3.0] — 2026-06-23
+
+### Added
+- **`/nob:status` skill** (`skills/status/`). New haiku-dispatched skill that shows the current nob session state — active branch, checkpoint status, running agents, and last completed phase. Routed from the hub via `"nob status"` / `"show status"` / `"what's running"` intent patterns. Excluded from checkpoint-gate (no checkpoint written or read).
+- **`/nob:test-writer` skill** (`skills/test-writer/`). New haiku-dispatched skill that generates tests for changed or specified files. Wired into hub model defaults (`test-writer: haiku`) and `.nob.yml` config surface.
+- **`--tdd` flag** (`TDD_FLAG`). Hub flag extraction now detects `--tdd` in the user's message and passes it downstream. Path skills use this to enable test-first mode — test-writer runs before dev, and dev implements to make those tests pass.
+
+### Changed
+- Hub intent routing table updated: `"nob status"` and related phrases now resolve to the Status workflow before falling through to `Idea → Spec → Code`.
+- Hub agent model table and `.nob.yml` defaults updated to include `test-writer` and `status` (both `haiku`).
+
 ## [2.2.0] — 2026-06-23
 
 ### Added

@@ -16,6 +16,8 @@ Set WORKTREE_PATH from `Working directory:` in [INPUTS].
 Set RUN_ID from `Run ID:` in [INPUTS].
 Set RETRY_COUNT = 0.
 Set PLAN_FLAG from `Plan flag:` in [INPUTS] (true | false; default: false).
+Set TDD_FLAG from `TDD flag:` in [INPUTS] (true | false; default: false).
+Set TDD_TEST_FILES from `TDD test files:` in [INPUTS] (comma-separated paths, or: none).
 
 Read `.nob/checkpoint.json` if it exists. If `plan_approval.status = "approved"` in the checkpoint: set PLAN_APPROVAL_DONE = true. Otherwise: PLAN_APPROVAL_DONE = false.
 
@@ -31,6 +33,7 @@ Required fields per agent:
 |---|---|
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
+| Test Writer | `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:` |
 
 **Validation steps:**
 1. Check every required field appears as `FieldName:` on its own line.
@@ -187,6 +190,9 @@ none
 Acceptance criteria:
 {Acceptance criteria section from PM_OUTPUT}
 
+TDD mode: {TDD_FLAG — true | false}
+TDD test files: {TDD_TEST_FILES — comma-separated paths, or: none}
+
 Project memory:
 {Project memory from [INPUTS]}
 
@@ -218,6 +224,9 @@ Working directory: {WORKTREE_PATH}
 Spec file path: {Spec file path from [INPUTS]}
 Spec file contents:
 {Spec file contents from [INPUTS]}
+
+TDD flag: {TDD flag from [INPUTS] — true | false}
+TDD test files: {TDD test files from [INPUTS], or: none}
 
 All agent outputs for review:
 {TECH_LEAD_OUTPUT}
@@ -264,9 +273,10 @@ Emit the following blocks. The hub reads these to print Step 4 terminal summary.
 Status: {Overall status from REVIEWER_OUTPUT — PASS | NEEDS REVIEW | FAIL}
 Retry count: {RETRY_COUNT}
 Retry ran: {true | false}
-Agents run: pm({pm model}) · dev({dev model}) · reviewer({reviewer model})
+Agents run: {if TDD_FLAG = true: "test-writer({test-writer model from Agent models in [INPUTS], or: haiku}) · "}pm({pm model}) · dev({dev model}) · reviewer({reviewer model})
 Timing: dev {round(DEV_DURATION_MS/1000)}s · reviewer {round(REVIEWER_DURATION_MS/1000)}s
 Plan approval: {approved (no edits) | approved (N edits) | n/a — from PLAN_APPROVAL_DONE and PLAN_EDIT_COUNT; n/a if PLAN_FLAG = false}
+TDD status: {if TDD_FLAG = true and Overall status = PASS: "Red ✓ → Green ✓"; if TDD_FLAG = true and Overall status != PASS: "Red ✓ → Green ✗"; else: "skipped"}
 [/LITE PATH OUTPUT]
 ```
 

@@ -179,6 +179,10 @@ Agent models:
   dev: {dev model from [INPUTS]}
   debug: {debug model from [INPUTS]}
   designer: {designer model from [INPUTS]}
+  test-writer: {test-writer model from [INPUTS], or: haiku}
+
+TDD flag: false
+Agents enabled: {Agents enabled from [INPUTS], comma-separated}
 
 Max parallel slices: {Max parallel slices from [INPUTS]}
 

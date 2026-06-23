@@ -34,6 +34,9 @@ Check the context provided by the hub:
 
 Context contains individual `[PM OUTPUT]` and `[DEV OUTPUT]` blocks → proceed to Step 1 as normal.
 
+Read `TDD flag:` from `[INPUTS]` (true | false; default: false). Store as TDD_FLAG.
+Read `TDD test files:` from `[INPUTS]` — comma-separated paths to the test files written by the test-writer. Store as TDD_TEST_FILES (list of paths; empty if absent or `none`).
+
 ### Step 1: Read the original source file
 The hub passes the spec/bug report as `Spec file path:` and `Spec file contents:` in the `[INPUTS]` block — use the provided contents directly (no need to re-read). If only the path is present, read it with the Read tool.
 
@@ -74,6 +77,23 @@ Also extract `[DOCS OUTPUT]` from context if present. Store as DOCS_OUTPUT (or `
 - Never infer PASS from `Test results:` alone — it must be corroborated by `Test output:`.
 
 **Aggregation**: if any unit's test result is FAIL (after corroboration), overall tests are FAIL — the overall review status cannot be PASS.
+
+### Step 3.4: TDD pass check
+
+Skip this step if TDD_FLAG = false or TDD_TEST_FILES is empty.
+
+For each file in TDD_TEST_FILES:
+1. Read the file.
+2. Find the corresponding unit's test results in UNIT_TEST_RESULTS (from Step 3).
+3. Check that the unit's `Test results:` is PASS and that the `Test output:` does not contain any of: `FAILED`, `ERROR`, `AssertionError`, `FAIL` for a test case from that file.
+
+If any TDD-generated test file's tests are still failing (or not present in test output):
+- Add to "Items for human review": `TDD: test file {path} has failing tests after implementation — Red→Green phase incomplete`.
+- Set TDD_FAIL = true.
+
+**Additional rule**: if TDD_FAIL = true, the overall status must be FAIL — not NEEDS REVIEW. TDD-generated tests failing after Dev means the Green phase was not completed. This overrides any softer status.
+
+If all TDD-generated tests pass: set TDD_PASS = true. No additional action needed.
 
 ### Step 3.5: Contract-list-driven check
 

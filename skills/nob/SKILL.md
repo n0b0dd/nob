@@ -24,7 +24,7 @@ Set `SKILL_BASE_DIR` = the path on the `Base directory for this skill:` line in 
 
 Skip if `--fresh` is in the user's message: run `rm -f .nob/checkpoint.json` (ignore errors) and proceed to Step 0 directly.
 
-Skip for Init, Venture, Refactor, and Ideate intent patterns (these workflows never write a checkpoint).
+Skip for Init, Venture, Refactor, Ideate, and Status intent patterns (these workflows never write a checkpoint).
 
 Read `{SKILL_BASE_DIR}/checkpoint-gate/SKILL.md`. Dispatch with `model: haiku`:
 
@@ -154,6 +154,8 @@ agents:
     venture: sonnet
     refactor: sonnet
     ideation: haiku
+    test-writer: haiku
+    status: haiku
   max_parallel_slices: 3
   venture:
     enabled: true
@@ -181,6 +183,8 @@ Resolve each agent model — if absent in config, use this canonical default:
 | reviewer | haiku |
 | ideation | haiku |
 | docs | haiku |
+| test-writer | haiku |
+| status | haiku |
 | (any other) | haiku |
 
 Extract:
@@ -198,6 +202,7 @@ Extract:
 - `DEBUG_MODEL_RESOLVED` = `agents.models["debug"] ?? agents.models["dev"] ?? "sonnet"`
 - `DESIGNER_MODEL_RESOLVED` = `agents.models["designer"] ?? "haiku"`
 - `DOCS_MODEL_RESOLVED` = `agents.models["docs"] ?? "haiku"`
+- `TEST_WRITER_MODEL_RESOLVED` = `agents.models["test-writer"] ?? "haiku"`
 
 **Unit guidance map**: for each unit in `units`: `UNIT_GUIDANCE_MAP[unit.name]` = `{SKILL_BASE_DIR}/../dev/stacks/{unit.type}.md`. Set to `none` if type is `generic` or unrecognised.
 
@@ -206,7 +211,7 @@ Extract:
 - If not found: check `.nob/project-memory.md`. If found: migrate to YAML (same structure, write as `.nob/project-memory.yml`, delete `.nob/project-memory.md`). Store summary as PROJECT_MEMORY.
 - If neither: set PROJECT_MEMORY = "none".
 
-**Flag detection**: `--plan-only` in user's message → PLAN_ONLY = true. `--diff-only` → DIFF_PREVIEW = true. `--plan` in user's message → PLAN = true (note: `--plan-only` exits before TL runs, so `--plan` has no additional effect on `--plan-only` runs; both flags may coexist but `--plan-only` takes precedence and exits before any approval gate is reached).
+**Flag detection**: `--plan-only` in user's message → PLAN_ONLY = true. `--diff-only` → DIFF_PREVIEW = true. `--plan` in user's message → PLAN = true (note: `--plan-only` exits before TL runs, so `--plan` has no additional effect on `--plan-only` runs; both flags may coexist but `--plan-only` takes precedence and exits before any approval gate is reached). `--tdd` in user's message → TDD_FLAG = true (default: false).
 
 ---
 
@@ -221,6 +226,7 @@ Extract:
 | `"startup idea"`, `"business idea"`, `"I have an idea"`, `"nob venture"`, `"build a startup/product/company"`, `"validate my idea"`, `"launch a startup/product/company"`, `"bring to market"` | Venture |
 | `"nob refactor"`, `"restructure project"`, `"migrate to nob structure"`, `"migrate project"`, `"refactor project structure"` | Refactor |
 | `"nob ideate"`, `"ideate [direction]"`, `"what should I build next"`, `"suggest features for"`, `"what feature should I add"` | Ideate |
+| `"nob status"`, `"/nob:status"`, `"show status"`, `"what's running"` | Status |
 | Plain text with no `/` and not ending in `.md`, not matching any pattern above | Idea → Spec → Code |
 
 For ambiguous inputs: ask `"Is this a new feature, bug fix, API sync, business idea, refactor, or ideation?"` Plain text always routes to `Idea → Spec → Code` without asking.
@@ -304,6 +310,23 @@ Current date: {today's date in YYYY-MM-DD}
 ```
 
 - Extract `[IDEATION OUTPUT]...[/IDEATION OUTPUT]`. Store as IDEATION_OUTPUT. If missing: re-dispatch once; if still missing: print raw output and stop. Jump to **Step 4**.
+
+## Status workflow early exit
+
+- Read `{SKILL_BASE_DIR}/../status/SKILL.md`. Dispatch with `model: agents.models["status"] ?? "haiku"`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../status/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {current working directory path}
+Flags: {--unit and --json flags from user's message, or: none}
+[/INPUTS]
+```
+
+- Extract `[STATUS OUTPUT]...[/STATUS OUTPUT]`. Print the human-readable output from the agent verbatim. Exit.
 
 ---
 
@@ -400,6 +423,8 @@ Skip for ROUTE = quick. Skip if CONFIG_AUTODETECTED = false.
 
 ## Dispatch: ROUTE = quick (hub inline — no sub-agents)
 
+If TDD_FLAG = true: print `"--tdd not supported on quick path — proceeding without TDD phase."` and set TDD_FLAG = false.
+
 Read the affected files from the scope scan. If none listed, grep for the key identifier from the user intent and read the first match; if still nothing, set QUICK_STATUS = FAIL, QUICK_SUMMARY = "No files found — re-run with --lite." and jump to **Step 4**.
 
 Make all edits directly with Edit or Write tools per the user intent. Then run a stack-appropriate type-check (`npx tsc --noEmit` / `python -m py_compile <files>` / `go build ./...`) — skip for unrecognised stacks. On failure: one self-correction attempt, then QUICK_CHECK = FAIL or PASS. If skipped: QUICK_CHECK = SKIPPED.
@@ -413,6 +438,51 @@ Set QUICK_STATUS = PASS (or FAIL), QUICK_FILES_CHANGED, QUICK_SUMMARY, QUICK_CHE
 ## Dispatch: ROUTE = lite (hub implements; Reviewer sub-agent)
 
 No PM or Tech Lead phases. Understand what needs to change from the user intent, spec contents, and affected files — no structured output blocks needed.
+
+**TDD phase (lite path)**: If TDD_FLAG = true and `test-writer` is not explicitly absent from `agents.enabled`:
+
+1. Derive a minimal task list inline from the user intent, spec contents, and affected files (one entry per affected file or logical chunk — id: t1, t2, …; include unit, title, description, files). Store as LITE_TASK_LIST.
+2. Run `date +%s` → TW_START_EPOCH.
+3. Read `{SKILL_BASE_DIR}/../test-writer/SKILL.md`. Dispatch with `model: {TEST_WRITER_MODEL_RESOLVED}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../test-writer/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {WORKTREE_PATH}
+
+[TECH LEAD SPEC]
+Task list:
+{LITE_TASK_LIST — one task entry per line in canonical format}
+[/TECH LEAD SPEC]
+
+Spec file contents:
+{spec file content, or: none}
+
+Per-unit stack-guidance path map:
+{UNIT_GUIDANCE_MAP entries}
+
+Units:
+{for each unit: "- name: {name}, type: {type}, path: {path}"}
+
+CLAUDE.md contents:
+{CLAUDE.md content, or: not found}
+[/INPUTS]
+```
+
+4. Run `date +%s` → TW_END_EPOCH. Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]`. Store as TEST_WRITER_OUTPUT. Apply Output Block Validation (required fields: `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:`).
+5. Print the test writer output verbatim.
+6. Prompt: `"Tests written. Review them, then continue? (yes / edit / skip-tdd)"`
+   - **yes**: set LITE_TDD_ACTIVE = true. Continue to Dev dispatch (Dev will run tests before implementing).
+   - **edit**: print `"Worktree preserved at {WORKTREE_PATH} — edit tests manually, then type 'continue'."` Wait for `continue`. Set LITE_TDD_ACTIVE = true. Continue to Dev dispatch.
+   - **skip-tdd**: set TDD_FLAG = false, LITE_TDD_ACTIVE = false, TEST_WRITER_OUTPUT = "skipped". Continue to Dev dispatch without TDD context.
+   - Any other response: treat as **skip-tdd**.
+
+If `test-writer` is explicitly absent from `agents.enabled`: set LITE_TDD_ACTIVE = false; print `"--tdd passed but test-writer is disabled in agents.enabled — skipping TDD phase."` Continue to Dev dispatch.
+
+Set LITE_TDD_STATUS = "Red ✓ → Green ?" (updated to "Red ✓ → Green ✓" after Reviewer PASS, or "skipped" if LITE_TDD_ACTIVE = false).
 
 Dispatch Dev with a plain task description (no `[TECH LEAD SPEC]` wrapper). Run `date +%s` → DEV_START_EPOCH.
 
@@ -438,6 +508,9 @@ CLAUDE.md contents:
 Task: {2–4 sentences describing what to implement, derived directly from user intent and spec}
 Files to change: {affected files from scope scan, one per line}
 Acceptance criteria: {key criteria from spec / user intent, or: implement as described}
+
+TDD mode: {LITE_TDD_ACTIVE — true | false}
+TDD test files: {comma-separated test file paths from TEST_WRITER_OUTPUT "Test files written:" section, or: none}
 
 Project memory:
 {PROJECT_MEMORY}
@@ -467,6 +540,9 @@ Spec file contents:
 {spec file content, or: none}
 User intent: {user's original message}
 
+TDD flag: {LITE_TDD_ACTIVE — true | false}
+TDD test files: {test file paths from TEST_WRITER_OUTPUT "Test files written:", or: none}
+
 All agent outputs for review:
 {DEV_OUTPUT}
 [/INPUTS]
@@ -483,8 +559,9 @@ Run `date +%s` → REVIEWER_END_EPOCH.
 Set:
 - LITE_STATUS = `Overall status:` from REVIEWER_OUTPUT
 - LITE_RETRY_COUNT, LITE_RETRY_RAN = (LITE_RETRY_COUNT > 0)
-- LITE_TIMING = `dev {round(DEV_END_EPOCH - DEV_START_EPOCH)}s · reviewer {round(REVIEWER_END_EPOCH - REVIEWER_START_EPOCH)}s`
-- LITE_AGENTS_RUN = `dev({DEV_MODEL_RESOLVED}) · reviewer({agents.models["reviewer"] ?? "haiku"})`
+- LITE_TIMING = `{if LITE_TDD_ACTIVE: "test-writer {round(TW_END_EPOCH - TW_START_EPOCH)}s · "}dev {round(DEV_END_EPOCH - DEV_START_EPOCH)}s · reviewer {round(REVIEWER_END_EPOCH - REVIEWER_START_EPOCH)}s`
+- LITE_AGENTS_RUN = `{if LITE_TDD_ACTIVE: "test-writer({TEST_WRITER_MODEL_RESOLVED}) · "}dev({DEV_MODEL_RESOLVED}) · reviewer({agents.models["reviewer"] ?? "haiku"})`
+- LITE_TDD_STATUS = if LITE_TDD_ACTIVE and LITE_STATUS = PASS: "Red ✓ → Green ✓"; else if LITE_TDD_ACTIVE: "Red ✓ → Green ✗"; else: "skipped"
 
 Proceed to **Step 4**.
 
@@ -531,6 +608,7 @@ Agent models:
   reviewer: {agents.models["reviewer"] ?? "haiku"}
   pm: {agents.models["pm"] ?? "haiku"}
   docs: {DOCS_MODEL_RESOLVED}
+  test-writer: {TEST_WRITER_MODEL_RESOLVED}
 
 Agents enabled: {agents.enabled list, comma-separated}
 Max parallel slices: {agents.max_parallel_slices}
@@ -541,6 +619,7 @@ Marker path: {MARKER_PATH}
 Run log path: {RUN_LOG_PATH}
 Unit boundary enabled: {agents.unit_boundary.enabled}
 Plan flag: {PLAN — true | false}
+TDD flag: {TDD_FLAG — true | false}
 
 Affected files (from scope scan):
 {SCAN_RESULT.affected_files — one per line, or: none}
@@ -580,6 +659,7 @@ The hub (lite: Dev + Reviewer), path-full, and retry all validate agent output b
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
 | Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
+| Test Writer | `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:` |
 
 When any required field is missing from an agent's output: re-dispatch once with a field list prepended. If still missing after re-dispatch: mark as `malformed` and treat as `failed` for all pipeline flow decisions.
 
@@ -681,8 +761,10 @@ Exit after printing. Do not proceed to the sections below.
 - REVIEWER_OUTPUT, DEV_OUTPUT, TECH_LEAD_OUTPUT, PM_OUTPUT from extracted `[X OUTPUT]` blocks.
 - DEBUG_OUTPUT (from [DEBUG OUTPUT] block, or "none").
 - DESIGNER_OUTPUT (from [DESIGNER OUTPUT] block, or "none").
+- TEST_WRITER_OUTPUT (from [TEST WRITER OUTPUT] block, or "none").
 - DOCS_OUTPUT (from [DOCS OUTPUT] block, or "none").
 - RETRY_COUNT, RETRY_RAN, RETRY_EXIT_REASON: extract from PATH_OUTPUT_META.
+- TDD_STATUS (from `TDD status:` in PATH_OUTPUT_META, or "skipped" if absent).
 
 ```
 Nob complete.
@@ -698,6 +780,7 @@ Root cause: {Root cause field from DEBUG_OUTPUT}
 {if PLAN = true: read plan_approval from PATH_OUTPUT_META:}
 Plan:      {approved (no edits) | approved (N edits) | cancelled — from plan_approval in PATH_OUTPUT_META; omit this line if PLAN = false}
 
+TDD:       {LITE_TDD_STATUS for lite | TDD_STATUS for full — "Red ✓ → Green ✓" | "Red ✓ → Green ✗" | "skipped" — omit this line if TDD_FLAG = false and TDD_STATUS = "skipped"}
 Tests:     {per-unit test results from REVIEWER_OUTPUT "Test results:" — e.g. api ✓ · web ✗ · cli ✓. ✓=PASS, ✗=FAIL, —=SKIPPED. If no per-unit data: overall PASS/FAIL/SKIPPED.}
 Security:  {from REVIEWER_OUTPUT Security section: PASS | FINDINGS: N medium M low | SKIPPED}
 CI:        {CI_STATUS — PASS | FAIL | SKIPPED (gh unavailable) | SKIPPED (disabled) | SKIPPED (timeout)}

@@ -144,7 +144,8 @@ done
 AGENT_MAP="Tech Lead|[TECH LEAD OUTPUT]|skills/tech-lead/SKILL.md
 PM Agent|[PM OUTPUT]|skills/pm/SKILL.md
 Dev Agent|[DEV OUTPUT]|skills/dev/SKILL.md
-Reviewer|[REVIEWER OUTPUT]|skills/reviewer/SKILL.md"
+Reviewer|[REVIEWER OUTPUT]|skills/reviewer/SKILL.md
+Test Writer|[TEST WRITER OUTPUT]|skills/test-writer/SKILL.md"
 
 # Extract the validation table from the hub.
 # We look for the table between "| Agent |" and the next blank line or heading.
@@ -310,6 +311,7 @@ IDEATION OUTPUT
 RETRY-DIAGNOSTIC OUTPUT
 DESIGNER OUTPUT
 DOCS OUTPUT
+TEST WRITER OUTPUT
 QUICK PATH OUTPUT
 LITE PATH OUTPUT
 FULL PATH OUTPUT

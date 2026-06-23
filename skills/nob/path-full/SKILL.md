@@ -17,6 +17,9 @@ Set WORKTREE_BRANCH from `Worktree branch:` in [INPUTS].
 Set RUN_ID from `Run ID:` in [INPUTS].
 Set IS_BUG_FIX from `Is bug fix:` in [INPUTS] (true | false).
 Set PLAN_FLAG from `Plan flag:` in [INPUTS] (true | false; default: false).
+Set TDD_FLAG from `TDD flag:` in [INPUTS] (true | false; default: false).
+Set TEST_WRITER_MODEL from `Agent models: test-writer:` in [INPUTS] (default: haiku).
+Set TDD_ACTIVE = false. Set TEST_WRITER_OUTPUT = "none". Set TDD_STATUS = "skipped".
 
 Extract all agent models, checkpoint settings, marker path, run log path, and max retries from [INPUTS].
 
@@ -34,6 +37,7 @@ Required fields per agent:
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
 | Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
+| Test Writer | `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:` |
 
 **Validation steps:**
 1. Check every required field appears as `FieldName:` on its own line within the extracted block.
@@ -211,6 +215,10 @@ Agent models:
   dev: {dev model from [INPUTS]}
   debug: {debug model from [INPUTS]}
   designer: {designer model from [INPUTS]}
+  test-writer: {test-writer model from [INPUTS], or: haiku}
+
+TDD flag: {TDD_FLAG — true | false}
+Agents enabled: {Agents enabled from [INPUTS], comma-separated}
 
 Max parallel slices: {Max parallel slices from [INPUTS]}
 
@@ -221,6 +229,7 @@ Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS, or: none
 Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. Apply Output Block Validation.
 Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
 Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]` if present. Store as DESIGNER_OUTPUT (or "none" if absent).
+Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]` if present. Store as TEST_WRITER_OUTPUT (or "none" if absent). If present: set TDD_ACTIVE = true. Extract TDD_TEST_FILES = comma-separated paths from the `Test files written:` section of TEST_WRITER_OUTPUT (or "none" if the section is empty/absent). Extract `TDD status:` line from TEST_WRITER_OUTPUT; store as TDD_STATUS (default: "skipped" if absent).
 If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing: mark `failed`. Stop pipeline.
 
 #### Plan approval gate (Path A only)
@@ -423,6 +432,9 @@ Spec file path: {Spec file path from [INPUTS]}
 Spec file contents:
 {Spec file contents from [INPUTS]}
 
+TDD flag: {TDD_FLAG — true | false}
+TDD test files: {TDD_TEST_FILES — comma-separated paths from TEST_WRITER_OUTPUT "Test files written:", or: none}
+
 All agent outputs for review:
 
 {TECH_LEAD_OUTPUT}
@@ -531,9 +543,9 @@ Compute RETRY_COUNT and RETRY_RAN from RETRY_OUTPUT_META (or 0 / false if retry 
 Compute RETRY_EXIT_REASON from RETRY_OUTPUT_META `Exit reason:` field (or "none" if retry was not dispatched).
 
 Build AGENTS_RUN and TIMING strings:
-- Feature build (IS_BUG_FIX = false): `pm({pm model}) [· designer({designer model}) if DESIGNER_OUTPUT is not "none"] · tech-lead({tech-lead model}) · dev({dev model}) [· docs({docs model}) if DOCS_OUTPUT is not "none"] · reviewer({reviewer model})`
+- Feature build (IS_BUG_FIX = false): `pm({pm model}) [· designer({designer model}) if DESIGNER_OUTPUT is not "none"] · tech-lead({tech-lead model}) [· test-writer({test-writer model}) if TEST_WRITER_OUTPUT is not "none"] · dev({dev model}) [· docs({docs model}) if DOCS_OUTPUT is not "none"] · reviewer({reviewer model})`
 - Bug→Fix direct-dev: `pm({pm model}) · debug({debug model}) · dev({dev model}) [· docs({docs model})] · reviewer({reviewer model})`
-- Bug→Fix escalated (IMPL_PATH = tech-lead): `pm({pm model}) · debug({debug model}) · tech-lead({tech-lead model}) · dev({dev model}) [· docs({docs model})] · reviewer({reviewer model})`
+- Bug→Fix escalated (IMPL_PATH = tech-lead): `pm({pm model}) · debug({debug model}) · tech-lead({tech-lead model}) [· test-writer({test-writer model}) if TEST_WRITER_OUTPUT is not "none"] · dev({dev model}) [· docs({docs model})] · reviewer({reviewer model})`
 
 Emit:
 
@@ -547,6 +559,7 @@ Retry exit reason: {RETRY_EXIT_REASON — none | pass | stuck | max-retries | us
 Agents run: {AGENTS_RUN string}
 Timing: pm {round(PM_DURATION_MS/1000)}s{· debug {round(DEBUG_DURATION/1000)}s if ran} · {tech-lead {round(TL_DURATION_MS/1000)}s if ran} · dev {round(TL_DURATION_MS/1000)}s{· docs {round(DOCS_DURATION_MS/1000)}s if ran} · reviewer {round(REVIEWER_DURATION_MS/1000)}s
 Plan approval: {approved (no edits) | approved (N edits) | cancelled | n/a — from plan_approval in checkpoint, or n/a if PLAN_FLAG = false}
+TDD status: {TDD_STATUS — "Red ✓ → Green ✓" | "Red ✓ → Green ✗" | "skipped"}
 [/FULL PATH OUTPUT]
 ```
 
@@ -572,6 +585,10 @@ Then emit all agent output blocks verbatim so the hub can extract them:
 [DESIGNER OUTPUT]
 {DESIGNER_OUTPUT — omit this block entirely if DESIGNER_OUTPUT = "none"}
 [/DESIGNER OUTPUT]
+
+[TEST WRITER OUTPUT]
+{TEST_WRITER_OUTPUT — omit this block entirely if TEST_WRITER_OUTPUT = "none"}
+[/TEST WRITER OUTPUT]
 
 [DOCS OUTPUT]
 {DOCS_OUTPUT — omit this block entirely if DOCS_OUTPUT = "none"}

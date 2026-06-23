@@ -46,7 +46,7 @@ Ask **one at a time** — wait for an answer before continuing:
 2. "What is the core action they are trying to do? Describe the happy path step by step."
 3. "What existing features, screens, or data does this build on or extend?" — accept "none" as valid
 4. "Any constraints? (e.g. must work on mobile, requires auth, performance-critical)" — accept "none" as valid
-5. "What should happen when it fails? Describe the key error states or edge cases." — accept "none known" as valid
+5. "What should happen when it fails? Consider: invalid input, network or server errors, auth failures, empty results, rate limits. Which of these can occur here, and what should the user see?" — only accept "none" if the user explicitly confirms none of the listed scenarios apply after seeing the scaffold
 6. "What is explicitly out of scope for this feature?" — accept "none" as valid
 
 Store answers as CLARIFICATIONS.
@@ -81,8 +81,9 @@ Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structur
 - [add as many as the idea and answers imply]
 
 ## Acceptance criteria
-- [ ] [observable user-facing outcome — written as "user can…" or "system shows/does…". NO API endpoints, NO schema details, NO implementation mechanics.]
-- [ ] [derived from the happy path in User flow]
+- [ ] [observable user-facing outcome with a concrete signal: "when [trigger], [actor] sees/gets [toast | redirect | download | message | state change | count]". NO API endpoints, NO schema details, NO implementation mechanics.]
+- [ ] [derived from the happy path in User flow — include what the user sees when it succeeds]
+- [ ] [at least one error-state criterion: "when [failure condition], user sees [specific message or fallback]"]
 
 ## Builds on
 [answer to question 3, or: none]
@@ -104,6 +105,16 @@ Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structur
 If a section has no content, write the section header with 'none' rather than omitting it.
 
 Print: "Spec written to `{SPECS_DIR}/<filename>.md`."
+
+### Step 3.2: AC self-audit
+
+Before offering the spec for revision, re-read every acceptance criterion you just wrote. For each one verify:
+
+- **Trigger**: is it clear what action or event causes this? If not, add it ("when user clicks X…").
+- **Observable outcome**: does it name a concrete signal the user sees or receives — a toast, redirect, file, message, count, or visible state change? "User can export" fails this; "user sees a download dialog" passes.
+- **Error variant**: if the happy path AC implies a failure path, is there a corresponding error-state AC? If not, add one derived from what the user already told you.
+
+For any AC that fails: rewrite it in place before moving to Step 3.5. Do not invent new requirements — only sharpen what is already implied by the idea, user flow, and clarification answers. Do not touch sections other than `## Acceptance criteria` and `## Error states` during this audit.
 
 ### Step 3.5: Revision loop
 

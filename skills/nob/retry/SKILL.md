@@ -1,6 +1,6 @@
 ---
 name: retry
-description: 'Retry loop for nob pipelines. Receives current reviewer findings and all prior agent outputs, coordinates tech-lead + dev re-run + reviewer re-check, loops until PASS / stuck / max-retries / user-declined / no-failing-tasks. Always routes through Tech Lead — even if the original run used direct-dev. Emits [RETRY OUTPUT] followed by updated [TECH LEAD OUTPUT], [DEV OUTPUT], and [REVIEWER OUTPUT] blocks.'
+description: 'Retry loop for nob pipelines. Reads Reviewer routing classification and dispatches Dev-only (implementation bugs, quality, partial criteria) or TL+Dev (missing tasks, contract violations). Human-gates CRITICAL security/migration findings before any autonomous retry. Loops until PASS / stuck / max-retries / user-declined. Emits [RETRY OUTPUT] followed by updated [TECH LEAD OUTPUT], [DEV OUTPUT], and [REVIEWER OUTPUT] blocks.'
 ---
 
 # Nob — Retry Loop
@@ -135,9 +135,35 @@ Extract `[RETRY-DIAGNOSTIC OUTPUT]...[/RETRY-DIAGNOSTIC OUTPUT]`. Store as DIAG_
 
 Parse `Fix scope per unit:` as UNIT_FIX_SCOPE (unit name → list of paths). If DIAG_OUTPUT is null: UNIT_FIX_SCOPE = {}.
 
-### 9. Tech Lead retry
+### 8.5. Read retry routing
 
-Always routes through Tech Lead — a localized fix that failed review is more complex than originally judged.
+Extract `Retry routing:` from REVIEWER_OUTPUT. Parse:
+- RETRY_ROUTE = value of `route:` field (`tl-required` | `dev-only` | `human-gate` | `none`)
+- TL_REASONS = list under `tl-reasons:` (empty if `none`)
+- DEV_ONLY_ITEMS = list under `dev-only:` (empty if `none`)
+- HUMAN_GATE_ITEMS = list under `human-gate:` (empty if `none`)
+
+**Backward compatibility**: if `Retry routing:` is absent (Reviewer ran before this routing was introduced): set RETRY_ROUTE = `tl-required`, TL_REASONS = RETRY_ITEMS, DEV_ONLY_ITEMS = [], HUMAN_GATE_ITEMS = []. This preserves the prior always-TL behavior.
+
+**Human-gate check**: if HUMAN_GATE_ITEMS is non-empty, print:
+```
+These findings require human review before retrying:
+{HUMAN_GATE_ITEMS listed one per line}
+
+Proceed with retry on the remaining items? (yes / no)
+```
+Wait for response. If `no` or any non-yes: **exit → exit_reason = user-declined.**
+If `yes`: continue — scope the retry to non-human-gate items only.
+
+If RETRY_ROUTE = `none` (overall status is PASS): **exit → exit_reason = pass.**
+
+### 9. Dispatch (routed)
+
+Branch on RETRY_ROUTE.
+
+#### 9a — TL-required route
+
+Dispatch Tech Lead when the plan itself needs updating: missing tasks, contract violations, or any mix of TL-required and dev-only items.
 
 Read `{SKILL_BASE_DIR}/../tech-lead/SKILL.md`. Dispatch with `model: {tech-lead model from Agent models in [INPUTS]}`:
 
@@ -188,7 +214,10 @@ Max parallel slices: {Max parallel slices from [INPUTS]}
 
 Already-completed tasks (skip these task ids): none
 
-Reviewer found these failures — re-implement only the failing tasks:
+Plan gaps requiring re-work (focus here):
+{TL_REASONS listed one per line}
+
+All failing items for context:
 {RETRY_ITEMS listed one per line}
 
 Failing task ids to re-implement:
@@ -206,7 +235,76 @@ Root cause (from diagnostic):
 
 Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]` → update TECH_LEAD_OUTPUT.
 Extract `[DEV OUTPUT]...[/DEV OUTPUT]` → update DEV_OUTPUT.
-If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing: **exit → exit_reason = tech-lead-failed.**
+If DEV_OUTPUT is missing: re-dispatch once. If still missing: **exit → exit_reason = tech-lead-failed.**
+
+#### 9b — Dev-only route
+
+Skip Tech Lead. The existing task list and contracts are correct — only the implementation needs fixing.
+
+Extract DEV_ONLY_TASK_IDS from DEV_ONLY_ITEMS: collect every `[t{N}]` prefix in the list.
+Set PASS_THROUGH_IDS = all task ids from TECH_LEAD_OUTPUT `Task list:` that are NOT in DEV_ONLY_TASK_IDS. These are carried as already-completed so Dev skips them.
+
+Read `{SKILL_BASE_DIR}/../dev/SKILL.md`. Dispatch with `model: {dev model from Agent models in [INPUTS]}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../dev/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {WORKTREE_PATH}
+
+Per-unit stack-guidance path map:
+{Per-unit stack-guidance path map from [INPUTS]}
+
+.nob.yml contents:
+{.nob.yml contents from [INPUTS]}
+
+CLAUDE.md contents:
+{CLAUDE.md contents from [INPUTS]}
+
+[TECH LEAD SPEC]
+Interfaces / contracts:
+{Interfaces written: section from TECH_LEAD_OUTPUT}
+
+Data schemas:
+{Data schemas written: section from TECH_LEAD_OUTPUT}
+
+Task list:
+{full Task list: section from TECH_LEAD_OUTPUT — all entries}
+
+Risks:
+{Risks: section from TECH_LEAD_OUTPUT}
+[/TECH LEAD SPEC]
+
+Acceptance criteria:
+{Acceptance criteria section from PM_OUTPUT}
+
+{if DESIGNER_OUTPUT is not "none":
+Designer output:
+{DESIGNER_OUTPUT}
+}
+
+Already-completed tasks (skip these task ids): {PASS_THROUGH_IDS comma-separated, or: none}
+
+Retry context — fix only these specific issues, do not re-architect:
+{DEV_ONLY_ITEMS listed one per line}
+
+Fix scope per unit (touch only these files where possible):
+{for each unit in UNIT_FIX_SCOPE: "  [{unit}]: {paths}"}
+
+Root cause (from diagnostic):
+{DIAG_OUTPUT "Root cause summary:" line, or: "Diagnostic not available — use your judgment"}
+
+Project memory:
+{Project memory from [INPUTS]}
+
+Max parallel slices: {Max parallel slices from [INPUTS]}
+[/INPUTS]
+```
+
+Extract `[DEV OUTPUT]...[/DEV OUTPUT]` → update DEV_OUTPUT. TECH_LEAD_OUTPUT is not updated (existing plan is reused as-is).
+If DEV_OUTPUT is missing: re-dispatch once with the same prompt. If still missing: fall back to **9a** — emit `"Dev-only retry failed — escalating to Tech Lead."` and run the TL route.
 
 ### 10. Re-dispatch Reviewer
 

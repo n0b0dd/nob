@@ -260,6 +260,33 @@ Additional rule: if DESIGN_IMPORTANT_COUNT > 0, the overall status is at minimum
 
 Additional rule: if DOC_COVERAGE_STATUS contains 'NEEDS REVIEW', the overall status is at minimum NEEDS REVIEW — even if all spec criteria are ✓ and tests pass.
 
+### Step 5.5: Retry routing classification
+
+Classify every failing item so the retry skill can route without re-analyzing the output.
+
+**Human-gate items** — require human sign-off before any autonomous retry:
+- Each Security `[CRITICAL]` finding from Step 3.6
+- Each Migration `[CRITICAL]` finding from Step 3.65
+
+**TL-required items** — retry must go through Tech Lead (the plan itself is wrong):
+- Any CONTRACT VIOLATION from Step 3.5
+- Any `✗ NOT implemented` criterion where `Coverage check:` in `[TECH LEAD OUTPUT]` shows no task was assigned to it — meaning TL missed the AC entirely; a new task is needed, not just a re-implementation
+
+**Dev-only items** — retry can go directly to Dev, skipping TL (plan is correct, implementation is wrong):
+- Any `⚠ partial` criterion — a task existed but the implementation is incomplete
+- Any `✗ NOT implemented` criterion where Coverage check shows a task DID exist for it (the plan was right; dev implemented it incorrectly)
+- All Code quality `[IMPORTANT]` findings from Step 3.7
+- Security `[MEDIUM]` findings from Step 3.6
+- Design compliance `[IMPORTANT]` findings from Step 3.8
+- Unit test failures where tests ran but failed (task ran, contract unchanged)
+
+Set RETRY_ROUTE:
+- `human-gate` if any human-gate items exist (surface before routing — the retry can still proceed on the remaining items after user confirmation)
+- `tl-required` if any TL-required items exist (regardless of whether dev-only items also exist alongside them)
+- `dev-only` if only dev-only items exist
+
+Store as TL_REASONS (list), DEV_ONLY_ITEMS (list — each entry prefixed with the task id and unit tag from the failing criterion line, e.g. `[t3] [web] AC-PARTIAL: loading state not implemented`), HUMAN_GATE_ITEMS (list).
+
 ### Step 6: List human review items
 For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete: name the missing feature and why it wasn't implemented (from the "items not implemented" field if available).
 
@@ -313,6 +340,21 @@ Criteria check:
 - [criterion 3]: ⚠ partial — [what is missing] [unit-name]
 
 Overall status: PASS | NEEDS REVIEW | FAIL
+
+Retry routing:
+  route: [tl-required | dev-only | human-gate | none — overall status is PASS]
+  tl-reasons:
+    - [CONTRACT] {interface}: {violation description}
+    - [AC-MISSING] "{criterion text}" — no task in Coverage check
+    (or: none)
+  dev-only:
+    - [{task-id}] [{unit}] {type}: {description}
+      type = AC-PARTIAL | AC-WRONG | QUALITY | SECURITY | DESIGN | TEST-FAIL
+    (or: none)
+  human-gate:
+    - [SECURITY-CRITICAL] {file}:{line} | {description}
+    - [MIGRATION-CRITICAL] {file}:{line} | {description}
+    (or: none)
 
 Items for human review:
 - [specific, actionable item — or: none, all criteria met]

@@ -65,6 +65,8 @@ This is unit-path-based, not extension-based — a Next.js monorepo where only `
 
 If HAS_FRONTEND_UNIT = false or designer disabled: leave DESIGNER_OUTPUT = `none`. Proceed to Step 1.6.
 
+If HAS_FRONTEND_UNIT = false because `.nob.yml` was not found (i.e., units list is empty): print one line — `"Note: .nob.yml not found — Designer dispatch skipped. If this is a frontend feature, add a .nob.yml with unit types (next, react, vue, etc.) to enable the Designer agent."` — then proceed.
+
 If HAS_FRONTEND_UNIT = true and designer enabled:
 
 Read SKILL_BASE_DIR from the system context line `Base directory for this skill:`. Read `{SKILL_BASE_DIR}/../designer/SKILL.md`.
@@ -247,6 +249,11 @@ Scan the spec requirements, PM acceptance criteria, and AFFECTED_FILES for:
 - `[MIGRATION]` — changes to database schema, model fields, or existing data structure
 - `[BREAKING]` — changes to an existing API endpoint's contract (method, path, request/response shape)
 - `[SHARED]` — changes to shared utilities, core modules, or types used across multiple units
+- `[PAGINATION]` — new endpoints or queries returning unbounded lists with no limit/offset or cursor param — flag so dev adds pagination before shipping
+- `[VALIDATION]` — new endpoints or mutations accepting user-supplied input with no validation mentioned in the spec — flag so dev adds input validation
+- `[CORS]` — new API endpoints that browser clients from a different origin will call — flag so dev verifies CORS config
+
+`[AUTH]` and `[BREAKING]` trigger the escalation protocol below. The remaining flags are informational — they appear in `Risks:` as warnings for dev but do not require human approval.
 
 Store the detected flags (with their one-line descriptions) as RISK_FLAGS. If none apply: set RISK_FLAGS to `none`.
 
@@ -324,6 +331,41 @@ what: Add ExportButton component per Designer output
 If DESIGNER_OUTPUT is `none` for a frontend task: write `what` from the spec requirements alone, describing the component's expected behaviour as specifically as possible.
 
 **One task = one file.** If a feature requires changes to N files, write N tasks. Do not bundle multiple files into one task.
+
+### Step 2e: AC→task coverage check
+
+After writing the task list, verify every PM acceptance criterion is covered.
+
+1. List every AC from PM_OUTPUT `Acceptance criteria:`.
+2. For each AC, identify which task id(s) in the task list directly implement or enable it. Record the mapping: `"AC text" → t1, t3`.
+3. If any AC has no covering task: add a task for it now in the same canonical format, with the next available id.
+4. Store the full mapping as COVERAGE_CHECK — it is emitted in `[TECH LEAD OUTPUT]`.
+
+An AC with no covering task is a silent gap. Never let one through.
+
+### Step 2f: Integration/wiring task checklist
+
+For each task whose `action` is `create`, check whether any of the following is required and not already in the task list. Add a task for each gap found — `action: edit`, pointing to the specific file that needs the wiring change.
+
+- **Route registration**: does this file define a new HTTP handler? Is there a task to register it in the router or app entry file?
+- **Service / DI registration**: does this file export a new service, class, or provider that must be registered in a DI container, module, or factory? Is there a task for that registration file?
+- **Index re-export**: does the consuming unit import symbols via a barrel index (e.g. `index.ts`, `__init__.py`)? Is there a task to add the export?
+- **Environment variable**: does this file reference a new env var (`process.env.X`, `ENV['X']`, etc.)? Is there a task to document it in `.env.example` or equivalent?
+- **Database migration**: does a schema change accompany this file? Is there a task to write and apply the migration file?
+- **Middleware / plugin registration**: does this file add a middleware, hook, or plugin that must be registered in a setup or config file? Is there a task for that config file?
+
+These are often 3–5 line edits but they are required for the feature to function at runtime. Missing wiring tasks are one of the most common causes of "the code is there but nothing works."
+
+### Step 2g: `what` field self-audit
+
+Re-read every task's `what` field. For each one verify:
+
+- **Named exactly**: does it name the specific function, method, class, or component — not just "implement X"? Backend tasks must include the function signature. Frontend tasks must list all visual states.
+- **Error handling stated**: for backend tasks, does it say what happens on failure (error code, exception type, fallback value)? For frontend tasks, does it name the error-state visual treatment (copy, color, icon)?
+- **Edge cases encoded**: cross-check PM's `Edge cases to handle:` — if an edge case is relevant to this file, is it in `what`?
+- **No forward references**: `what` must not say "per Designer output", "per spec", or "see TL output" — all detail must be inlined so a focused agent reading only the task has everything it needs.
+
+Rewrite any `what` field that fails these checks in place before moving to Step 2.5.
 
 ## Step 2.5: Persist the technical design
 
@@ -429,8 +471,12 @@ Task list:
 {full flat task list from Step 2d — all entries in canonical format, one per line}
 
 Risks:
-- [AUTH | MIGRATION | BREAKING | SHARED] [description]
+- [AUTH | MIGRATION | BREAKING | SHARED | PAGINATION | VALIDATION | CORS] [description]
 - none
+
+Coverage check:
+- "[AC text]" → [task ids, comma-separated]
+- (one line per PM acceptance criterion)
 
 Escalations made:
 - [description of what was escalated and human's response; prefix non-interactive auto-defaults with [AUTO-DEFAULTED], or: none]

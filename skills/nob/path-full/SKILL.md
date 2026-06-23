@@ -34,8 +34,9 @@ Required fields per agent:
 | Agent | Required fields |
 |---|---|
 | PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
+| Tech Lead | `Units touched:`, `Interfaces written:`, `Data schemas written:`, `Task list:`, `Risks:`, `Coverage check:`, `Escalations made:`, `Unresolved blockers:`, `Contract violations:` |
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
-| Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
+| Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Retry routing:`, `Items for human review:` |
 | Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
 | Test Writer | `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:` |
 

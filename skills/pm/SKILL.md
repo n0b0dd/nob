@@ -36,6 +36,8 @@ Read these files if they exist (skip silently if not found):
 
 This gives enough project context to write a product spec. The spec is product-focused — API contracts and data schemas are deferred to the Tech Lead — so detailed stack detection is not needed here. If `.nob.yml` is absent, proceed using CLAUDE.md (or the user's description) for context; do not auto-detect a frontend/backend split.
 
+**PM scope boundary (hard rule):** PM never writes, implies, or asks about: API endpoints, HTTP methods, request/response shapes, data models, database schemas, field names, or implementation details of any kind. If any of these surface during spec-writing, omit them — they belong to the Tech Lead.
+
 ### Step 2: Ask clarifying questions
 
 Ask **one at a time** — wait for an answer before continuing:
@@ -48,6 +50,8 @@ Ask **one at a time** — wait for an answer before continuing:
 6. "What is explicitly out of scope for this feature?" — accept "none" as valid
 
 Store answers as CLARIFICATIONS.
+
+**Do NOT ask about** — and do NOT let user answers lead you to write — API design, endpoint names, HTTP methods, request/response structures, data models, field names, or database schemas. If the user volunteers this information, acknowledge it and say the Tech Lead will handle those details. Keep questions and answers at the user behavior and product outcome level.
 
 ### Step 3: Write spec file
 
@@ -73,11 +77,11 @@ Write `{SPECS_DIR}/YYYY-MM-DD-<slug>.md` using the Write tool with this structur
 [add alt paths if answer to question 2 implied them]
 
 ## Requirements
-- [requirement derived from the idea and clarifying answers — specific and testable]
+- [behavioral requirement: what the user can do or what the system does — specific and testable from the user's perspective. NO API shapes, NO field names, NO data models.]
 - [add as many as the idea and answers imply]
 
 ## Acceptance criteria
-- [ ] [specific, testable criterion — each requirement maps to at least one checkbox]
+- [ ] [observable user-facing outcome — written as "user can…" or "system shows/does…". NO API endpoints, NO schema details, NO implementation mechanics.]
 - [ ] [derived from the happy path in User flow]
 
 ## Builds on
@@ -114,6 +118,7 @@ Loop:
 3. Otherwise, parse the user's request:
    - Identify the target section: match the user's words against the spec's section headers (`## Summary`, `## Users`, `## User flow`, `## Requirements`, `## Acceptance criteria`, `## Builds on`, `## Constraints`, `## Error states`, `## Out of scope`, `## Open questions`). If the user asks for API contracts or data models, explain those are defined by the Tech Lead during implementation, not in the PRD.
    - If the section reference is ambiguous or absent, use the full request as the change description and apply it to the most relevant section.
+   - If the requested change (from the user or your own draft) would introduce API contracts, endpoint names, HTTP methods, data models, field names, or schema details — omit those elements, apply the rest, and note: "API/data details removed — the Tech Lead defines those during implementation."
 4. Apply the targeted edit:
    - Read the current spec file using the Read tool.
    - Replace only the content of the matched section — do not touch other sections.

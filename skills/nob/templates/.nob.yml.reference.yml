@@ -30,12 +30,15 @@ agents:
   # are invoked explicitly (e.g. /nob refactor) — venture has its own toggle below.
   enabled:
     - pm
+    - designer
     - tech-lead
     - dev
     - debug
     - reviewer
     - docs
+    - test-writer
     - ideation
+    - status
 
   models:
     # Models set here are always respected. Security review is performed inline
@@ -43,13 +46,16 @@ agents:
     dev: sonnet           # the generic implementation agent — code-writing needs sonnet
     debug: sonnet         # Bug→Fix investigation agent (read-only root-cause diagnosis, runs before dev); defaults to the dev model if unset
     tech-lead: sonnet     # writes contracts + task list, coordinates the dev/debug agent
+    designer: haiku       # UX/UI design agent — runs between PM and Tech Lead on frontend tasks
     pm: haiku
     reviewer: haiku
-    docs: haiku              # inline documentation agent — runs between dev and reviewer
+    docs: haiku           # inline documentation agent — runs between dev and reviewer
+    test-writer: haiku    # TDD red-phase agent — writes failing tests before dev (requires --tdd flag)
     init: sonnet          # project scaffolding agent
     venture: sonnet       # end-to-end venture validation pipeline
     refactor: sonnet      # project migration agent
     ideation: haiku       # feature ideation agent
+    status: haiku         # run inspector — reads checkpoint + git history
 
   max_parallel_slices: 3    # cap concurrent fan-out pipelines (default: 3)
   max_retries: 3              # max retry passes: 1 automatic + user-gated after that (default: 3)

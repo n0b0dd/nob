@@ -22,106 +22,22 @@
 - [Single-responsibility requirement. e.g. "PDF includes invoice number, date, line items, and total."]
 - [One line per requirement. Split "X and Y" into two separate lines.]
 
-## API contracts
-<!-- Include when any HTTP endpoint is created or changed. Otherwise write: not applicable -->
-- [METHOD] /exact/path
-  - Request: `{ fieldName: type, fieldName: type }`
-  - Response: `{ fieldName: type, fieldName: type }`
-  - Auth: [required / not required / role: admin]
-  - Notes: [idempotent? paginated? rate-limited?]
-<!-- One block per endpoint. Unknown types: write `type: unknown` -->
+## Data
+<!-- Name the entities this feature creates, reads, or changes. One line per entity.
+     Don't specify fields or schema — that's the Tech Lead's job. -->
+- [EntityName]: [what it represents and why it's needed — e.g. "Invoice: a record of a completed purchase"]
+<!-- Or: not applicable -->
 
-## Data models
-<!-- Include when any persisted data is created or changed. Otherwise write: not applicable -->
-[EntityName]:
-  - fieldName: type   # brief note
-  - fieldName: type
-<!-- One block per entity. Map to a table name if known. Don't invent fields — write "not specified". -->
-
-## UI spec
-
-### Web
-<!-- Remove this section if Web is not checked in Platform targets -->
-
-Route: /exact/path
-
-Designer resources:
+## Design resources
+<!-- Link any existing Figma frames or assets. The Designer agent produces the full UI spec from these + the requirements above. -->
 - Figma: [URL — or: not provided]
-- Assets: [path/to/asset or Figma asset link — or: not provided]
-
-Layout:
-<!-- If Figma is provided: reference frame/page name. If not: describe layout in plain text. -->
-- Desktop (>1024px): [description]
-- Tablet (768–1024px): [description or "same as desktop"]
-- Mobile (<768px): [description]
-
-Components:
-- [ComponentName] (`path/to/existing/component` or `new`):
-  - Purpose: [what this component does in this feature]
-  - Props: `{ propName: type }`
-  - States: [loading | error | empty | populated | disabled]
-  - Interactions: [e.g. "click Export button → POST /invoices/:id/export → show spinner → on success download file"]
-  - Design notes: [spacing, color tokens, typography — or: follow design system defaults]
-
-Navigation:
-- [e.g. "Entry point: Billing page → Export button. No new route added."]
-- [e.g. "Success: stay on page, show toast. Error: show inline error below button."]
-
----
-
-### Mobile iOS
-<!-- Remove this section if Mobile iOS is not checked in Platform targets -->
-
-Screen: [ScreenName]
-Navigation: [push | modal | tab | replace stack]
-
-Designer resources:
-- Figma: [URL — or: not provided]
-- Assets: [path/to/asset or Figma asset link — or: not provided]
-
-Layout:
-<!-- If Figma is provided: reference frame/page name. If not: describe layout in plain text. -->
-- [Layout description — safe area, scroll behavior, keyboard handling]
-
-Components:
-- [WidgetName / ComponentName] (`path/to/existing` or `new`):
-  - Purpose: [what this component does in this feature]
-  - Props/State: `{ fieldName: type }`
-  - States: [loading | error | empty | populated]
-  - Interactions: [e.g. "tap Export → show activity indicator → on success show confirmation sheet"]
-  - iOS-specific notes: [swipe-to-dismiss, haptic feedback, SF Symbols icon name — or: none]
-
----
-
-### Mobile Android
-<!-- Remove this section if Mobile Android is not checked in Platform targets -->
-
-Screen: [ScreenName]
-Navigation: [push | modal | bottom sheet | replace]
-
-Designer resources:
-- Figma: [URL — or: not provided]
-- Assets: [path/to/asset or Figma asset link — or: not provided]
-
-Layout:
-<!-- If Figma is provided: reference frame/page name. If not: describe layout in plain text. -->
-- [Layout description — insets, scroll behavior, keyboard handling]
-
-Components:
-- [WidgetName / ComponentName] (`path/to/existing` or `new`):
-  - Purpose: [what this component does in this feature]
-  - Props/State: `{ fieldName: type }`
-  - States: [loading | error | empty | populated]
-  - Interactions: [e.g. "tap Export → show progress indicator → on success open share sheet"]
-  - Android-specific notes: [back button behavior, Material component name — or: none]
-
----
+- Assets: [path/to/asset or Figma link — or: not provided]
 
 ## Acceptance criteria
-- [ ] [Specific, testable. e.g. "GET /invoices/:id/pdf returns 200 with Content-Type: application/pdf"]
-- [ ] [Frontend web: e.g. "Export button on InvoicePage is disabled while request is in flight"]
-- [ ] [Frontend mobile: e.g. "iOS ExportScreen shows activity indicator during export"]
-- [ ] [Error: e.g. "GET /invoices/:id/pdf returns 404 when invoice does not belong to requesting user"]
+- [ ] [Specific, testable behavior. e.g. "Authenticated user can download their invoice as a PDF"]
+- [ ] [Web: e.g. "Export button is disabled while the request is in flight"]
+- [ ] [Mobile: e.g. "iOS ExportScreen shows an activity indicator during export"]
+- [ ] [Error: e.g. "Accessing another user's invoice shows an 'Access denied' message"]
 <!-- RULES:
      1. This section is REQUIRED — the pipeline halts without it.
      2. One thing per criterion. "X and Y" → two criteria.
@@ -139,8 +55,8 @@ Components:
 <!-- Or: none -->
 
 ## Error states
-- [Error condition]: [Expected behavior. e.g. "Invoice not found: return 404 with { error: 'not_found' }"]
-- [Error condition]: [Expected behavior. e.g. "Export fails: show toast 'Export failed, try again'"]
+- [Error condition]: [Expected user-visible behavior. e.g. "Invoice not found: show 'Invoice not found' and a back button"]
+- [Error condition]: [Expected user-visible behavior. e.g. "Export fails: show toast 'Export failed, try again'"]
 <!-- Or: none specified -->
 
 ## Out of scope

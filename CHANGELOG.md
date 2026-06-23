@@ -2,6 +2,23 @@
 
 All notable changes to the nob plugin are documented here. Versions are bumped in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
+## [2.2.0] — 2026-06-23
+
+### Added
+- **Designer creative mandate.** Designer now has an explicit creative requirement: explore 2–3 distinct UX approaches before committing (Step 1.8), reframe each requirement as a user goal + emotional state and surface missing moments the spec never mentioned — first-use, success, error recovery, permission states (Step 1.7). A Designer that only outputs what the spec already said adds no value; this forces the creative judgment that justifies the agent's existence.
+- **Designer ↔ Tech Lead feedback loop** (1–2 rounds). After each Designer round, Tech Lead reviews for technical feasibility — data cost, real-time implications, SSR constraints, impossible state combinations — and sends targeted feedback. Designer revises. If round 2 still has unresolved concerns they become `[DESIGN]` risk flags rather than blocking the pipeline. Short-circuits on approval: zero concerns after round 1 means no round 2.
+- **Workflow-based dev task dispatch.** The dev coordinator now fans out per-task agents via the Claude Workflow tool instead of manual Agent calls. Dependency ordering is handled by a topological sort (`buildLevels`) and `parallel()` within each level — tasks with no mutual dependency run concurrently, dependent tasks wait for their prerequisites' structured results.
+- **Intelligent per-task model selection.** Each task agent is assigned `haiku` or `devModel` (sonnet by default) based on a complexity score: critical-path position (other tasks depend on this one), risky keywords in `what`/`title`, global risk flags, multiple `depends_on` inputs, `action: delete`, and multiple `consumes` entries. Simple focused leaf tasks use haiku; high-stakes or complex tasks escalate automatically.
+- **Composable task format.** Tech Lead task list now uses `file` (one file per task), `action` (create/edit/delete), `what` (self-contained implementation sentence), `exports` (produced symbol/endpoint), and `consumes` (taskId → symbol). Each task agent needs only its own fields to implement — no cross-task context required.
+- **Designer detail encoded into task `what` fields.** Tech Lead encodes the relevant component section from Designer output directly into each frontend task's `what` — all states with exact visual treatments, design token values, interaction steps, ARIA and keyboard requirements. A focused Haiku agent implementing `ExportButton` gets everything it needs in `what`; full Designer output is injected only as a fallback when `what` is sparse.
+
+### Changed
+- **Spec template cleaned up.** Removed `## API contracts` (Tech Lead's domain) and `## UI spec` (Designer's domain). Replaced with a lightweight `## Data` section (entity names + intent only, no field types) and `## Design resources` (Figma link only). Acceptance criteria and error state examples are now behaviour-focused — no HTTP verbs or response shapes.
+- **Design template restructured per-unit.** One `## {unit-name}` section per unit (api, web, ios, android, flutter, cli — any stack). Data schemas only appear under units that own persisted data. Task list is grouped by unit with the new composable format.
+- **`.nob.yml.reference.yml` updated.** Added `designer`, `test-writer`, and `status` to both `agents.enabled` and `agents.models` with inline comments.
+- **`CLAUDE.md.template` updated.** Corrected pipeline description (Designer runs inside Tech Lead, not as a separate step). Added flags table documenting `--tdd`, `--plan`, `--plan-only`, `--diff-only`, `--fresh`, `--quick`, `--full`.
+- **Dev Workflow drops full Designer output from task prompts.** Since Tech Lead encodes Designer detail into `what`, task agents receive focused prompts. Full Designer output is only injected as fallback when `what` is sparse (< 80 chars).
+
 ## [2.1.0] — 2026-06-22
 
 ### Changed

@@ -17,12 +17,32 @@ Define your project's actual structure and adapt these examples to match your un
 
 ## AI Agent Pipeline
 
-The Nob pipeline runs: **PM → Tech Lead → dev → Reviewer**
+The Nob pipeline runs: **PM → Tech Lead → dev → Docs → Reviewer**
 
 - **PM** extracts requirements and writes specs to `/docs/specs`
-- **Tech Lead** reads specs, writes task contracts, and coordinates the dev agent
+- **Tech Lead** reads specs + PM output. If a frontend unit is involved, it first dispatches **Designer** (which explores UX approaches and produces a component spec), then uses that output to write contracts + task list, and persists a design doc to `/docs/design`
+- **Debug** investigates root cause on Bug→Fix runs (read-only; runs after PM, before Tech Lead or dev)
 - **dev** implements changes across all units in parallel (guided by `dev/stacks/<type>.md`)
+- **Docs** writes or updates inline documentation after dev completes
 - **Reviewer** performs final pass/fail and inline security review
+
+Simpler tasks use a shorter path:
+- **Quick path** (≤3 files): hub implements inline, no sub-agents
+- **Lite path** (4–10 files): inline PM+TL reasoning + dev + Reviewer, one auto-retry
+
+## Flags
+
+Pass these after the spec/bug path in your `/nob` command:
+
+| Flag | Effect |
+|---|---|
+| `--tdd` | Red→Green TDD mode: Test Writer writes failing tests before dev implements |
+| `--plan` | Show Tech Lead plan for approval before dev runs |
+| `--plan-only` | Run PM only, print requirements, then exit (no implementation) |
+| `--diff-only` | Show diff after PASS and prompt to apply or discard |
+| `--fresh` | Ignore any existing checkpoint and start a new run |
+| `--quick` | Force quick path (hub inline) |
+| `--full` | Force full pipeline (PM → TL → dev → Reviewer) |
 
 ## Agent Conventions
 

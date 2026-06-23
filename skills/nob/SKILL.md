@@ -20,11 +20,15 @@ Set `SKILL_BASE_DIR` = the path on the `Base directory for this skill:` line in 
 
 ## Checkpoint pre-flight
 
-**Dispatched as the very first agent call — before git, config, scan, or any other work.**
+**Runs before git, config, scan, or any other work.**
 
 Skip if `--fresh` is in the user's message: run `rm -f .nob/checkpoint.json` (ignore errors) and proceed to Step 0 directly.
 
 Skip for Init, Venture, Refactor, Ideate, and Status intent patterns (these workflows never write a checkpoint).
+
+**Fast-path skip**: run `ls .nob/checkpoint.json 2>/dev/null`. If the file does not exist, treat this as `Action: none` and proceed to Step 0 directly — do not dispatch the checkpoint-gate agent.
+
+Only dispatch the checkpoint-gate agent when `.nob/checkpoint.json` exists.
 
 Read `{SKILL_BASE_DIR}/checkpoint-gate/SKILL.md`. Dispatch with `model: haiku`:
 
@@ -55,7 +59,7 @@ These override normal step behaviour throughout the rest of the hub:
 - **Step 0** (git branch): skip creating a new branch. If not already on `RESUME_WORKTREE_BRANCH`, run `git checkout {RESUME_WORKTREE_BRANCH}`.
 - **Step 0.1** (worktree): worktree already exists — skip `git worktree add`. Set `WORKTREE_PATH = RESUME_WORKTREE_PATH`, `WORKTREE_BRANCH = RESUME_WORKTREE_BRANCH`.
 - **Step 1.5** (spec preflight): skip — spec was validated in the original run.
-- **After Step 1** (once config is read): set `ROUTE = full`. Skip Step 2.5 and Step 3. Print `"Resuming from checkpoint — skipping scope scan."` Jump directly to **Dispatch path skill**, passing `RESUME_COMPLETED_TASKS` in [INPUTS].
+- **After Step 1** (once config is read): skip Step 3. Print `"Resuming from checkpoint."` Jump directly to **Dispatch path-full**, passing `RESUME_COMPLETED_TASKS` in [INPUTS].
 
 ---
 
@@ -374,39 +378,17 @@ If all checks pass: proceed.
 
 ---
 
-## Step 2.5: Scope scan + complexity routing
+## Step 1.7: Route decision
 
-Skip for Init, Venture, Refactor, Ideate, API → Sync.
+Set ROUTE = full (default).
 
-If `--full` in user's message: ROUTE = full. Skip scan. Proceed to Step 3.
-If `--quick` in user's message: ROUTE = quick. Skip scan. Proceed to Step 3.
+Skip for Init, Venture, Refactor, Ideate, Status workflows and resume runs (CHECKPOINT_RESUME = true) — these always use their own paths.
 
-Note: if PLAN = true and `--quick` is also in the user's message (or ROUTE resolves to quick after scope scan): print `"--plan not supported on quick path (no TL step) — proceeding as normal quick run."` and set PLAN = false before dispatching.
+Set ROUTE = quick when ANY:
+- `--quick` is in the user's message.
+- No spec/bug file path in the user's message (no `.md` token, no path-like string with `/`) AND the message is ≤ 15 words — a plain casual edit request.
 
-**Determine scan source**: for `Idea → Spec → Code` (SOURCE_FILE set by PM): use the spec file at SOURCE_FILE. For Spec → Code / Bug → Fix: use the user's original message, supplemented by the spec/bug file content.
-
-**Extract targets** from the primary scan source:
-- Explicit file paths (strings with `/` or known extensions: `.ts`, `.tsx`, `.js`, `.py`, `.go`, `.rb`, `.java`, `.dart`)
-- Symbol names (tokens in backticks, quotes, or recognisable camelCase/snake_case identifiers)
-
-For each symbol: `grep -rn "<symbol>" . --include="*.ts" --include="*.tsx" --include="*.js" --include="*.py" --include="*.go" --include="*.rb" --include="*.java" -l 2>/dev/null | grep -v node_modules | grep -v ".git" | head -20`
-
-For each explicit path: `ls <path> 2>/dev/null`. If no targets found: run 1–2 broad finds against likely directories.
-
-If a spec/bug file is available and was not the primary scan source: also scan it for `## Files` or path references.
-
-Collect SCAN_RESULT:
-- `affected_files`: deduplicated list of found file paths
-- `affected_units`: unit names whose `path` is a prefix of any affected file
-- `new_files_required`: true if intent clearly requires creating non-existent files
-- `cross_unit_contract`: true if a new shared interface, new API endpoint consumed by another unit, or schema change coordinated across units is needed
-
-**Judge** (thresholds are guides — apply judgment; prefer higher route when ambiguous):
-- **ROUTE = quick**: ALL — `affected_files` ≤ 3, `affected_units` ≤ 1, `new_files_required` = false, `cross_unit_contract` = false, no spec file with acceptance criteria.
-- **ROUTE = lite**: `affected_files` 4–10, OR 1–2 new files within one unit, OR spec without cross-unit contracts.
-- **ROUTE = full**: `affected_files` > 10, OR multi-unit, OR `cross_unit_contract` = true, OR task too risky/complex to plan inline.
-
-Print: `Scope: {N} file(s) across {M} unit(s) → {ROUTE} path`
+`Idea → Spec → Code` runs always use ROUTE = full (PM already ran and produced a spec file as SOURCE_FILE).
 
 ---
 
@@ -421,13 +403,9 @@ Skip for ROUTE = quick. Skip if CONFIG_AUTODETECTED = false.
 
 ---
 
-## Dispatch: ROUTE = quick (hub inline — no sub-agents)
+## Dispatch: quick (hub inline)
 
-If TDD_FLAG = true: print `"--tdd not supported on quick path — proceeding without TDD phase."` and set TDD_FLAG = false.
-
-Read the affected files from the scope scan. If none listed, grep for the key identifier from the user intent and read the first match; if still nothing, set QUICK_STATUS = FAIL, QUICK_SUMMARY = "No files found — re-run with --lite." and jump to **Step 4**.
-
-Make all edits directly with Edit or Write tools per the user intent. Then run a stack-appropriate type-check (`npx tsc --noEmit` / `python -m py_compile <files>` / `go build ./...`) — skip for unrecognised stacks. On failure: one self-correction attempt, then QUICK_CHECK = FAIL or PASS. If skipped: QUICK_CHECK = SKIPPED.
+Grep for key identifiers from the user intent and read up to 5 affected files. Make all edits directly using Edit or Write tools. Run a stack-appropriate type-check (`npx tsc --noEmit` / `python -m py_compile <files>` / `go build ./...`) — skip for unrecognised stacks. On failure: one self-correction attempt.
 
 Commit: `git -C {WORKTREE_PATH} add -A && git -C {WORKTREE_PATH} commit -m "nob: {run-id}"` (skip if clean).
 
@@ -435,139 +413,7 @@ Set QUICK_STATUS = PASS (or FAIL), QUICK_FILES_CHANGED, QUICK_SUMMARY, QUICK_CHE
 
 ---
 
-## Dispatch: ROUTE = lite (hub implements; Reviewer sub-agent)
-
-No PM or Tech Lead phases. Understand what needs to change from the user intent, spec contents, and affected files — no structured output blocks needed.
-
-**TDD phase (lite path)**: If TDD_FLAG = true and `test-writer` is not explicitly absent from `agents.enabled`:
-
-1. Derive a minimal task list inline from the user intent, spec contents, and affected files (one entry per affected file or logical chunk — id: t1, t2, …; include unit, title, description, files). Store as LITE_TASK_LIST.
-2. Run `date +%s` → TW_START_EPOCH.
-3. Read `{SKILL_BASE_DIR}/../test-writer/SKILL.md`. Dispatch with `model: {TEST_WRITER_MODEL_RESOLVED}`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../test-writer/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {WORKTREE_PATH}
-
-[TECH LEAD SPEC]
-Task list:
-{LITE_TASK_LIST — one task entry per line in canonical format}
-[/TECH LEAD SPEC]
-
-Spec file contents:
-{spec file content, or: none}
-
-Per-unit stack-guidance path map:
-{UNIT_GUIDANCE_MAP entries}
-
-Units:
-{for each unit: "- name: {name}, type: {type}, path: {path}"}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: not found}
-[/INPUTS]
-```
-
-4. Run `date +%s` → TW_END_EPOCH. Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]`. Store as TEST_WRITER_OUTPUT. Apply Output Block Validation (required fields: `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:`).
-5. Print the test writer output verbatim.
-6. Prompt: `"Tests written. Review them, then continue? (yes / edit / skip-tdd)"`
-   - **yes**: set LITE_TDD_ACTIVE = true. Continue to Dev dispatch (Dev will run tests before implementing).
-   - **edit**: print `"Worktree preserved at {WORKTREE_PATH} — edit tests manually, then type 'continue'."` Wait for `continue`. Set LITE_TDD_ACTIVE = true. Continue to Dev dispatch.
-   - **skip-tdd**: set TDD_FLAG = false, LITE_TDD_ACTIVE = false, TEST_WRITER_OUTPUT = "skipped". Continue to Dev dispatch without TDD context.
-   - Any other response: treat as **skip-tdd**.
-
-If `test-writer` is explicitly absent from `agents.enabled`: set LITE_TDD_ACTIVE = false; print `"--tdd passed but test-writer is disabled in agents.enabled — skipping TDD phase."` Continue to Dev dispatch.
-
-Set LITE_TDD_STATUS = "Red ✓ → Green ?" (updated to "Red ✓ → Green ✓" after Reviewer PASS, or "skipped" if LITE_TDD_ACTIVE = false).
-
-Dispatch Dev with a plain task description (no `[TECH LEAD SPEC]` wrapper). Run `date +%s` → DEV_START_EPOCH.
-
-Read `{SKILL_BASE_DIR}/../dev/SKILL.md`. Dispatch with `model: {DEV_MODEL_RESOLVED}`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../dev/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {WORKTREE_PATH}
-
-Per-unit stack-guidance path map:
-{UNIT_GUIDANCE_MAP entries}
-
-.nob.yml contents:
-{.nob.yml content, or: not found}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: not found}
-
-Task: {2–4 sentences describing what to implement, derived directly from user intent and spec}
-Files to change: {affected files from scope scan, one per line}
-Acceptance criteria: {key criteria from spec / user intent, or: implement as described}
-
-TDD mode: {LITE_TDD_ACTIVE — true | false}
-TDD test files: {comma-separated test file paths from TEST_WRITER_OUTPUT "Test files written:" section, or: none}
-
-Project memory:
-{PROJECT_MEMORY}
-
-Max parallel slices: 1
-Already-completed tasks: none
-[/INPUTS]
-```
-
-Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT. Apply Output Block Validation. If missing after one re-dispatch: set LITE_STATUS = FAIL; jump to **Step 4**.
-
-Run `date +%s` → DEV_END_EPOCH.
-
-Dispatch Reviewer. Run `date +%s` → REVIEWER_START_EPOCH.
-
-Read `{SKILL_BASE_DIR}/../reviewer/SKILL.md`. Dispatch with `model: {agents.models["reviewer"] ?? "haiku"}`:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../reviewer/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {WORKTREE_PATH}
-Spec file path: {spec file path, or: none}
-Spec file contents:
-{spec file content, or: none}
-User intent: {user's original message}
-
-TDD flag: {LITE_TDD_ACTIVE — true | false}
-TDD test files: {test file paths from TEST_WRITER_OUTPUT "Test files written:", or: none}
-
-All agent outputs for review:
-{DEV_OUTPUT}
-[/INPUTS]
-```
-
-Extract `[REVIEWER OUTPUT]...[/REVIEWER OUTPUT]`. Store as REVIEWER_OUTPUT. Apply Output Block Validation.
-
-Run `date +%s` → REVIEWER_END_EPOCH.
-
-**Auto-retry (1 pass):** Set LITE_RETRY_COUNT = 0. If `Overall status:` is not PASS: collect all `✗`/`⚠` lines from REVIEWER_OUTPUT as RETRY_ITEMS; print `"Reviewer found {N} item(s) — auto-fixing:\n{RETRY_ITEMS}"`; re-dispatch Dev prepending `"Fix only these:\n{RETRY_ITEMS}"`, extract new DEV_OUTPUT; re-dispatch Reviewer, extract new REVIEWER_OUTPUT; set LITE_RETRY_COUNT = 1.
-
-**Commit if PASS:** `git -C {WORKTREE_PATH} add -A && git -C {WORKTREE_PATH} commit -m "nob: {run-id}"`
-
-Set:
-- LITE_STATUS = `Overall status:` from REVIEWER_OUTPUT
-- LITE_RETRY_COUNT, LITE_RETRY_RAN = (LITE_RETRY_COUNT > 0)
-- LITE_TIMING = `{if LITE_TDD_ACTIVE: "test-writer {round(TW_END_EPOCH - TW_START_EPOCH)}s · "}dev {round(DEV_END_EPOCH - DEV_START_EPOCH)}s · reviewer {round(REVIEWER_END_EPOCH - REVIEWER_START_EPOCH)}s`
-- LITE_AGENTS_RUN = `{if LITE_TDD_ACTIVE: "test-writer({TEST_WRITER_MODEL_RESOLVED}) · "}dev({DEV_MODEL_RESOLVED}) · reviewer({agents.models["reviewer"] ?? "haiku"})`
-- LITE_TDD_STATUS = if LITE_TDD_ACTIVE and LITE_STATUS = PASS: "Red ✓ → Green ✓"; else if LITE_TDD_ACTIVE: "Red ✓ → Green ✗"; else: "skipped"
-
-Proceed to **Step 4**.
-
----
-
-## Dispatch: ROUTE = full (path-full sub-agent)
+## Dispatch path-full
 
 Read `{SKILL_BASE_DIR}/path-full/SKILL.md`. Dispatch with `model: {DEV_MODEL_RESOLVED}`:
 
@@ -621,15 +467,6 @@ Unit boundary enabled: {agents.unit_boundary.enabled}
 Plan flag: {PLAN — true | false}
 TDD flag: {TDD_FLAG — true | false}
 
-Affected files (from scope scan):
-{SCAN_RESULT.affected_files — one per line, or: none}
-
-Affected units (from scope scan):
-{SCAN_RESULT.affected_units — one per line, or: none}
-
-Cross-unit contract: {SCAN_RESULT.cross_unit_contract}
-New files required: {SCAN_RESULT.new_files_required}
-
 Units (from config):
 {for each unit: "- name: {name}, type: {type}, path: {path}"}
 
@@ -650,11 +487,11 @@ If PATH_OUTPUT_META is missing: re-dispatch once. If still missing: print raw ou
 
 ## Output Block Validation Procedure
 
-The hub (lite: Dev + Reviewer), path-full, and retry all validate agent output blocks before passing them downstream. This table documents the required fields per agent — the linter checks this table against the producing skills.
+Path-full and retry validate agent output blocks before passing them downstream. This table documents the required fields per agent — the linter checks this table against the producing skills.
 
 | Agent | Required fields |
 |---|---|
-| Tech Lead | `Units touched:`, `Interfaces written:`, `Task count:`, `Risks:` |
+| Tech Lead | `Units touched:`, `Interfaces written:`, `Task list:`, `Risks:` |
 | PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
@@ -738,9 +575,9 @@ Next steps:
 **If ROUTE = quick:**
 
 ```
-Nob quick complete.
+Nob complete.
 
-Path:          quick (hub inline — no sub-agents)
+Path:          quick (hub inline)
 Files changed: {QUICK_FILES_CHANGED}
 Changes:       {QUICK_SUMMARY}
 Check:         {QUICK_CHECK}
@@ -751,13 +588,11 @@ Next:
   Push:   git push -u origin {WORKTREE_BRANCH}
 ```
 
-Exit after printing. Do not proceed to the sections below.
+Exit.
 
-**For all other workflows** (Spec → Code, Bug → Fix, API → Sync — ROUTE = lite or full):
+**For Spec → Code, Bug → Fix, API → Sync workflows (ROUTE = full):**
 
-**ROUTE = lite**: DEV_OUTPUT and REVIEWER_OUTPUT are in hub context from the inline dispatch above. PM_OUTPUT, TECH_LEAD_OUTPUT, DEBUG_OUTPUT, DESIGNER_OUTPUT, DOCS_OUTPUT are all "none" (not produced on lite path). Set RETRY_COUNT = LITE_RETRY_COUNT, RETRY_RAN = LITE_RETRY_RAN, RETRY_EXIT_REASON = "n/a (lite)". Use LITE_AGENTS_RUN for the Agents line and LITE_TIMING for the Timing line.
-
-**ROUTE = full**: read from PATH_OUTPUT_META and the embedded output blocks extracted from the path-full sub-agent result:
+Read from PATH_OUTPUT_META and the embedded output blocks extracted from the path-full sub-agent result:
 - REVIEWER_OUTPUT, DEV_OUTPUT, TECH_LEAD_OUTPUT, PM_OUTPUT from extracted `[X OUTPUT]` blocks.
 - DEBUG_OUTPUT (from [DEBUG OUTPUT] block, or "none").
 - DESIGNER_OUTPUT (from [DESIGNER OUTPUT] block, or "none").
@@ -773,14 +608,14 @@ Workflow:  {Spec→Code | Bug→Fix | API→Sync}
 Source:    {spec/bug file path}
 Design:    {Design doc field from TECH_LEAD_OUTPUT — omit if absent or "none"}
 UX design: {Design doc field from DESIGNER_OUTPUT — omit if DESIGNER_OUTPUT is "none" or field absent}
-Agents:    {LITE_AGENTS_RUN for lite | Agents run from PATH_OUTPUT_META for full}
-Timing:    {LITE_TIMING for lite | Timing from PATH_OUTPUT_META for full}
+Agents:    {Agents run from PATH_OUTPUT_META}
+Timing:    {Timing from PATH_OUTPUT_META}
 {Bug→Fix only, if DEBUG_OUTPUT is not "none":}
 Root cause: {Root cause field from DEBUG_OUTPUT}
 {if PLAN = true: read plan_approval from PATH_OUTPUT_META:}
 Plan:      {approved (no edits) | approved (N edits) | cancelled — from plan_approval in PATH_OUTPUT_META; omit this line if PLAN = false}
 
-TDD:       {LITE_TDD_STATUS for lite | TDD_STATUS for full — "Red ✓ → Green ✓" | "Red ✓ → Green ✗" | "skipped" — omit this line if TDD_FLAG = false and TDD_STATUS = "skipped"}
+TDD:       {TDD_STATUS — "Red ✓ → Green ✓" | "Red ✓ → Green ✗" | "skipped" — omit this line if TDD_FLAG = false and TDD_STATUS = "skipped"}
 Tests:     {per-unit test results from REVIEWER_OUTPUT "Test results:" — e.g. api ✓ · web ✗ · cli ✓. ✓=PASS, ✗=FAIL, —=SKIPPED. If no per-unit data: overall PASS/FAIL/SKIPPED.}
 Security:  {from REVIEWER_OUTPUT Security section: PASS | FINDINGS: N medium M low | SKIPPED}
 CI:        {CI_STATUS — PASS | FAIL | SKIPPED (gh unavailable) | SKIPPED (disabled) | SKIPPED (timeout)}

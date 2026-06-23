@@ -13,8 +13,6 @@ skills/
   nob/            — Hub orchestrator (entry point for /nob)
     SKILL.md          — Hub skill: pure router (classify, route, git, config, Step 4 summary)
     checkpoint-gate/  — Pre-flight checkpoint check: runs first, alerts user, returns action
-    path-quick/       — Quick path: inline implementation for ≤3-file changes, no sub-agents
-    path-lite/        — Lite path: inline PM+TL reasoning + Dev + Reviewer, one auto-retry
     path-full/        — Full path: PM→Debug→TL→Dev→Docs→Reviewer pipeline + Phase 0 resume scan
     retry/            — Retry loop: Phase 3.5 stuck/max/user-gate loop
     templates/        — CLAUDE.md.template, .nob.yml.template (minimal starter), .nob.yml.reference.yml (full annotated), spec.template.md
@@ -45,17 +43,13 @@ Version is tracked in **both** `.claude-plugin/plugin.json` and `.claude-plugin/
 
 ## Skill Architecture
 
-Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) is a **pure router** — it classifies intent, reads config, scans scope, and dispatches one of three path skills. Each path skill owns its pipeline end-to-end and returns a structured output block. The hub prints Step 4 terminal summary from that block.
+Each skill file (`SKILL.md`) is a self-contained instruction set dispatched via the Agent tool. The Nob hub (`skills/nob/SKILL.md`) classifies intent, reads config, and dispatches path-full for all implementation work. The hub prints the Step 4 terminal summary from path-full's output block.
 
-**Hub → path skill → Reviewer**
+**Hub → path-full → Reviewer**
 
-The hub runs a **scope scan at Step 2.5** before dispatching, greps actual affected files, and routes to one path skill based on evidence — not on the user's word choice:
+All implementation workflows (Spec→Code, Bug→Fix, API→Sync) dispatch `path-full` directly. No routing, no inline path.
 
-- **Quick path** (`skills/nob/path-quick/`) — ≤3 files, single unit, no new contracts: path skill implements inline, no sub-agents dispatched.
-- **Lite path** (`skills/nob/path-lite/`) — 4–10 files, single unit: inline PM + TL reasoning, dispatches Dev + Reviewer, one auto-retry.
-- **Full path** (`skills/nob/path-full/`) — multi-unit, cross-unit contracts, or complex spec: full PM → Debug → TL → Dev → Docs → Reviewer pipeline, delegates Phase 3.5 retry to `skills/nob/retry/`.
-
-Override flags: `--quick` forces the quick path; `--full` forces the full pipeline.
+- **Full path** (`skills/nob/path-full/`) — PM → Debug (Bug→Fix only) → Tech Lead → Dev → Docs → Reviewer pipeline, delegates Phase 3.5 retry to `skills/nob/retry/`.
 
 (PM is pure product — it owns the *what/why* and never touches code. Tech Lead owns all technical work — it discovers affected files, resolves any third-party API shapes, writes contracts + a flat task list, and **persists a technical design doc** to `docs/design/`. The dev agent self-manages parallel/sequential sub-agents per unit. Reviewer includes inline security scanning.)
 

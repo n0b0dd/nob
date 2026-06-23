@@ -227,10 +227,8 @@ Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS, or: none
 ```
 
 Extract `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`. Store as TECH_LEAD_OUTPUT. Apply Output Block Validation.
-Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT.
 Extract `[DESIGNER OUTPUT]...[/DESIGNER OUTPUT]` if present. Store as DESIGNER_OUTPUT (or "none" if absent).
-Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]` if present. Store as TEST_WRITER_OUTPUT (or "none" if absent). If present: set TDD_ACTIVE = true. Extract TDD_TEST_FILES = comma-separated paths from the `Test files written:` section of TEST_WRITER_OUTPUT (or "none" if the section is empty/absent). Extract `TDD status:` line from TEST_WRITER_OUTPUT; store as TDD_STATUS (default: "skipped" if absent).
-If DEV_OUTPUT is missing: re-dispatch Tech Lead once with the same prompt. If still missing: mark `failed`. Stop pipeline.
+Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]` if present. Store as TEST_WRITER_OUTPUT (or "none" if absent). If present and not "skipped": set TDD_ACTIVE = true. Extract TDD_TEST_FILES = comma-separated paths from the `Test files written:` section of TEST_WRITER_OUTPUT (or "none" if absent). Otherwise: set TDD_ACTIVE = false, TDD_TEST_FILES = "none".
 
 #### Plan approval gate (Path A only)
 
@@ -269,7 +267,76 @@ Set PLAN_EDIT_COUNT = 0.
 
 Note: if `--plan` and `--tdd` are both active, this approval gate runs after TL and before the test-writer phase (i.e., before Dev dispatch), preserving the `--tdd` test-writing step that follows Dev.
 
-Append to RUN_LOG_PATH: a `tech-lead` line and a `dev` line. Proceed to **Common**.
+Append to RUN_LOG_PATH: a `tech-lead` line.
+
+#### Dev dispatch (Path A)
+
+Run `date +%s` → DEV_START_EPOCH.
+
+Read `{SKILL_BASE_DIR}/../dev/SKILL.md`. Dispatch with `model: {dev model from Agent models in [INPUTS]}`:
+
+```
+[INSTRUCTIONS]
+{full contents of {SKILL_BASE_DIR}/../dev/SKILL.md}
+[/INSTRUCTIONS]
+
+[INPUTS]
+Working directory: {WORKTREE_PATH}
+
+Per-unit stack-guidance path map:
+{Per-unit stack-guidance path map from [INPUTS]}
+
+.nob.yml contents:
+{.nob.yml contents from [INPUTS]}
+
+CLAUDE.md contents:
+{CLAUDE.md contents from [INPUTS]}
+
+[TECH LEAD SPEC]
+Interfaces / contracts:
+{Interfaces written: section from TECH_LEAD_OUTPUT}
+
+Data schemas:
+{Data schemas written: section from TECH_LEAD_OUTPUT}
+
+Task list:
+{Task list: section from TECH_LEAD_OUTPUT — all entries in canonical format}
+
+Risks:
+{Risks: section from TECH_LEAD_OUTPUT}
+[/TECH LEAD SPEC]
+
+Acceptance criteria:
+{Acceptance criteria section from PM_OUTPUT}
+
+{if DESIGNER_OUTPUT is not "none":
+Designer output:
+{DESIGNER_OUTPUT}
+}
+
+TDD mode: {TDD_ACTIVE — true | false}
+TDD test files: {TDD_TEST_FILES, or: none}
+
+Project memory:
+{Project memory from [INPUTS]}
+
+Max parallel slices: {Max parallel slices from [INPUTS]}
+
+Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS, or: none}
+[/INPUTS]
+```
+
+Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT. Apply Output Block Validation. If missing after one re-dispatch: mark `failed`. Stop pipeline.
+
+Run `date +%s` → DEV_END_EPOCH.
+
+**Set TDD_STATUS** (after Dev returns):
+- If TDD_ACTIVE = true and DEV_OUTPUT test results all PASS: TDD_STATUS = "Red ✓ → Green ✓".
+- If TDD_ACTIVE = true and any test FAIL: TDD_STATUS = "Red ✓ → Green ✗".
+- If TDD_ACTIVE = true and no test results: TDD_STATUS = "Red ✓ → Green ?" (Reviewer will verify).
+- If TDD_ACTIVE = false: TDD_STATUS = "skipped".
+
+Append to RUN_LOG_PATH: a `dev` line. Proceed to **Common**.
 
 #### Path B — Direct dev (localized bug fixes)
 
@@ -373,6 +440,8 @@ Append run-log lines for the path taken: `{date -u +%FT%TZ}  {agent}         {mo
 ## Phase 2.5: Docs
 
 If `docs` is explicitly NOT in `Agents enabled:` from [INPUTS] (and the list is explicitly set): set DOCS_OUTPUT = "none". Skip to Phase 3.
+
+**Skip when no new contracts**: check `Contracts produced:` in DEV_OUTPUT. If the field is absent, `none`, or contains only `- none` entries: set DOCS_OUTPUT = "none" and skip to Phase 3. Docs adds no value when no new API surface was produced.
 
 Otherwise (default is enabled):
 

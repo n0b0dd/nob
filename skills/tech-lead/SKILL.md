@@ -1,12 +1,12 @@
 ---
 name: tech-lead
-description: "Owns all technical work from PM requirements to implementation completion. Writes interfaces / contracts, data schemas, and a flat task list. Dispatches the dev coordinator, resolves blockers autonomously or escalates to human, and forwards [DEV OUTPUT] before Security review. Invocable via /nob:tech-lead or through the Nob hub after the PM Agent."
+description: "Owns all technical work from PM requirements to a complete technical plan. Writes interfaces / contracts, data schemas, a flat task list, and a design doc. Emits [TECH LEAD OUTPUT] for the Dev agent to pick up. Invocable via /nob:tech-lead or through the Nob hub after the PM Agent."
 ---
 
 # Nob — Tech Lead Agent
 
 ## Overview
-Tech Lead translates PM product requirements into a complete technical specification, then actively manages implementation through the dev coordinator. It holds authority over all technical decisions end-to-end: interfaces / contracts, schemas, task sequencing, and blocker resolution. Human escalation is reserved for decisions outside its technical authority (product intent) or high-risk flags ([AUTH], [BREAKING]).
+Tech Lead translates PM product requirements into a complete technical specification. It holds authority over all technical decisions: interfaces / contracts, schemas, task sequencing, and risk flags. Dev picks up the output and handles implementation. Human escalation is reserved for decisions outside technical authority (product intent) or high-risk flags ([AUTH], [BREAKING]).
 
 ## Step 0: Mode Detection
 
@@ -57,7 +57,9 @@ Set DESIGNER_OUTPUT = `none`. Set DESIGN_CONCERNS = [].
 
 For Spec→Code runs:
 
-**Check if any affected frontend unit:** scan the unit names in AFFECTED_FILES (from Step 1.5) and the `units` list from `.nob.yml` (read in Step 1). If any matched unit has `type` in `[next, react, vue, svelte, flutter, android, ios, react-native]` → HAS_FRONTEND_UNIT = true. Otherwise HAS_FRONTEND_UNIT = false.
+**Check if any affected files belong to a frontend unit:** from the `units` list in `.nob.yml`, collect all units whose `type` is in `[next, react, vue, svelte, flutter, android, ios, react-native]` — call these FRONTEND_UNITS. For each path in AFFECTED_FILES, check whether it starts with the `path` of any FRONTEND_UNIT. If at least one affected file falls under a frontend unit's path → HAS_FRONTEND_UNIT = true. Otherwise HAS_FRONTEND_UNIT = false.
+
+This is unit-path-based, not extension-based — a Next.js monorepo where only `apps/api/` files are touched will correctly set HAS_FRONTEND_UNIT = false even though the project has a `next` unit.
 
 **Check enabled:** read `agents.enabled` from `.nob.yml` contents (passed in `[INPUTS]`). If `designer` is not in the list → skip. Default to enabled if `.nob.yml` has no `agents.enabled` field.
 
@@ -388,123 +390,24 @@ CLAUDE.md contents:
 4. Extract `[TEST WRITER OUTPUT]...[/TEST WRITER OUTPUT]`. Store as TEST_WRITER_OUTPUT. Apply Output Block Validation (required fields: `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:`). If malformed after one re-dispatch: set TEST_WRITER_OUTPUT = "none"; print "Test writer returned no output — skipping TDD phase." Set TDD_STATUS = "skipped". Skip to **Step 3**.
 5. Print TEST_WRITER_OUTPUT verbatim.
 6. Prompt: `"Tests written. Review them, then continue? (yes / edit / skip-tdd)"`
-   - **yes**: set TDD_ACTIVE = true. Extract test file paths from `Test files written:` in TEST_WRITER_OUTPUT; store as TDD_TEST_FILES (comma-separated). Continue to **Step 3**.
-   - **edit**: print `"Edit tests in the worktree, then type 'continue'."` Wait for `continue`. Set TDD_ACTIVE = true. Extract TDD_TEST_FILES same as above. Continue to **Step 3**.
-   - **skip-tdd**: set TDD_FLAG = false; TDD_ACTIVE = false; TEST_WRITER_OUTPUT = "skipped"; TDD_STATUS = "skipped". Continue to **Step 3** without TDD context.
+   - **yes**: set TDD_ACTIVE = true. Extract test file paths from `Test files written:` in TEST_WRITER_OUTPUT; store as TDD_TEST_FILES (comma-separated). Proceed to emit output.
+   - **edit**: print `"Edit tests in the worktree, then type 'continue'."` Wait for `continue`. Set TDD_ACTIVE = true. Extract TDD_TEST_FILES same as above. Proceed to emit output.
+   - **skip-tdd**: set TDD_FLAG = false; TDD_ACTIVE = false; TEST_WRITER_OUTPUT = "skipped"; TDD_STATUS = "skipped". Proceed to emit output.
    - Any other response: treat as **skip-tdd**.
-
-## Step 3: Dispatch dev coordinator
-
-Read SKILL_BASE_DIR from the system context line `Base directory for this skill:`. Sub-skill paths use `{SKILL_BASE_DIR}/../X/SKILL.md`.
-
-Read `{SKILL_BASE_DIR}/../dev/SKILL.md`.
-
-Dispatch ONE `dev` Agent using the model from `[INPUTS]` `Agent models: dev` (default: `sonnet`). This is the same dev dispatch for feature builds and bug fixes — on a bug fix the task list you pass already encodes the debug agent's recommended fix (from Step 1.7). Construct the prompt as follows:
-
-```
-[INSTRUCTIONS]
-{full contents of {SKILL_BASE_DIR}/../dev/SKILL.md}
-[/INSTRUCTIONS]
-
-[INPUTS]
-Working directory: {working directory from [INPUTS]}
-
-Per-unit stack-guidance path map:
-{per-unit stack-guidance path map from [INPUTS] — one line per unit: "unit_name: skills/dev/stacks/type.md"}
-
-.nob.yml contents:
-{.nob.yml content}
-
-CLAUDE.md contents:
-{CLAUDE.md content, or: "CLAUDE.md not found"}
-
-[TECH LEAD SPEC]
-Interfaces / contracts:
-{interfaces / contracts from Step 2a}
-
-Data schemas:
-{data schemas from Step 2b}
-
-Task list:
-{flat task list from Step 2d — all entries in canonical format}
-
-Risks:
-{RISK_FLAGS — one flag per line with its description, or: none}
-[/TECH LEAD SPEC]
-
-Acceptance criteria:
-{PM output acceptance criteria}
-
-{if DESIGNER_OUTPUT is not "none", include:
-Designer output:
-{DESIGNER_OUTPUT}
-}
-
-TDD mode: {TDD_ACTIVE — true | false}
-TDD test files: {TDD_TEST_FILES — comma-separated test file paths, or: none}
-
-Project memory:
-{project memory from [INPUTS]}
-
-Max parallel slices: {Max parallel slices from [INPUTS], or: 3}
-
-Already-completed tasks (skip these task ids): {Already-completed tasks from [INPUTS], or: none}
-[/INPUTS]
-```
-
-## Step 4: Active blocker resolution loop
-
-After the dev coordinator returns its result, check for `[BLOCKER]` blocks.
-
-**Blocker resolution policy:**
-
-| Blocker type | Resolution |
-|---|---|
-| `type: technical` | Resolve autonomously: pick the best option from your technical context. Amend the relevant section of the Tech Lead spec. Re-dispatch the dev coordinator scoped to the unresolved task(s) with the resolved spec. |
-| `type: ambiguity` | Check PM output first. If resolvable from PM output: resolve autonomously. If not resolvable: escalate via the **Escalation protocol** (Step 2c). Resume after response (standalone) or after auto-defaulting (non-interactive). |
-| `type: cross-unit` | Coordinate: extract the relevant partial output from the completed task(s) and inject the produced contracts into the blocked task's re-dispatch prompt. |
-| `type: risk` (AUTH or BREAKING) | Always escalate via the **Escalation protocol** (Step 2c) before re-dispatching. |
-
-**Re-dispatch the dev coordinator scoped to the blocked task(s) only.** Completed tasks' outputs are held as-is.
-
-**Max blocker resolution passes:** `agents.max_retries` (from Step 1; default 3). If the same blocker still appears after `max_retries` re-dispatches, mark it as unresolved and include it in `[TECH LEAD OUTPUT]` under `Unresolved blockers:`. Do not block the pipeline — pass through to Reviewer with the blocker noted.
-
-Loop until dev coordinator emits `[DEV OUTPUT]` with no further `[BLOCKER]` blocks, or max passes reached.
-
-**Note:** A `[BLOCKER]` block alongside a `[DEV OUTPUT]` block means the dev coordinator completed partial work before blocking. Preserve the partial output and re-dispatch only for the remaining work described in the blocker.
-
-## Step 4.5: Set TDD status
-
-If TDD_ACTIVE = true:
-- If DEV_OUTPUT contains test results that all PASS: set TDD_STATUS = "Red ✓ → Green ✓".
-- If DEV_OUTPUT contains test results where any fail: set TDD_STATUS = "Red ✓ → Green ✗".
-- If DEV_OUTPUT has no test results: set TDD_STATUS = "Red ✓ → Green ?" (unknown; Reviewer will verify).
-
-If TDD_ACTIVE = false: TDD_STATUS remains "skipped".
-
-## Step 5: Cross-unit contract check
-
-Before emitting output:
-
-1. Check PM output acceptance criteria → interfaces / contracts: does the dev output implement all required interfaces?
-2. Check Tech Lead interfaces → consumer task outputs: do consumer units call the interfaces Tech Lead specified?
-
-If violations found: note them in `[TECH LEAD OUTPUT]` under `Contract violations:`. Do not block — Reviewer will catch them.
 
 ## Output Format Requirement
 
-Your output must include two labeled blocks in this order:
+Your output is planning artifacts only — Dev picks up the output and handles implementation.
 
-1. `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`
-2. `[DEV OUTPUT]...[/DEV OUTPUT]` (forwarded from the dev coordinator exactly as returned)
+Required block: `[TECH LEAD OUTPUT]...[/TECH LEAD OUTPUT]`
 
-On a `Bug→Fix` run, also forward the `[DEBUG OUTPUT]` block from Step 1.7 verbatim **before** the two required blocks above, so the reproduction, root cause, and recommended fix reach the human and Reviewer. Omit it on feature builds (there is no debug investigation).
+On a `Bug→Fix` run, also forward the `[DEBUG OUTPUT]` block from Step 1.7 verbatim **before** `[TECH LEAD OUTPUT]`. Omit it on feature builds.
 
-If DESIGNER_OUTPUT is not `none` (Designer ran in Step 1.6.5), forward the `[DESIGNER OUTPUT]` block verbatim **before** `[TECH LEAD OUTPUT]`, so the hub, Reviewer, and human can see the UX design. Omit it when Designer did not run.
+If DESIGNER_OUTPUT is not `none` (Designer ran in Step 1.6.5), forward the `[DESIGNER OUTPUT]` block verbatim **before** `[TECH LEAD OUTPUT]`. Omit it when Designer did not run.
 
-If TEST_WRITER_OUTPUT is not `none` and not `"skipped"` (test-writer ran in Step 2.7), forward the `[TEST WRITER OUTPUT]` block verbatim **after** `[TECH LEAD OUTPUT]` and **before** `[DEV OUTPUT]`, so path-full and the hub can extract TDD status. Omit it when test-writer did not run.
+If TEST_WRITER_OUTPUT is not `none` and not `"skipped"` (test-writer ran in Step 2.7), forward the `[TEST WRITER OUTPUT]` block verbatim **after** `[TECH LEAD OUTPUT]`. Omit it when test-writer did not run.
 
-Missing blocks will cause your output to be re-requested by the Hub.
+Missing required blocks will cause your output to be re-requested by the hub.
 
 ## Output Format
 
@@ -522,7 +425,8 @@ Data schemas written:
 - [EntityName]: { fieldName: type, ... }
 - none
 
-Task count: [N tasks]
+Task list:
+{full flat task list from Step 2d — all entries in canonical format, one per line}
 
 Risks:
 - [AUTH | MIGRATION | BREAKING | SHARED] [description]
@@ -545,18 +449,12 @@ Contract violations:
 [TEST WRITER OUTPUT]
 {TDD runs only — forward the complete [TEST WRITER OUTPUT] block from Step 2.7 exactly as returned. Omit this block entirely when TDD_FLAG = false or TDD_STATUS = "skipped".}
 [/TEST WRITER OUTPUT]
-
-[DEV OUTPUT]
-{forward the complete [DEV OUTPUT] block from the dev coordinator exactly as returned}
-[/DEV OUTPUT]
 ```
 
 ## Error Handling
 
 - **Spec lacks the detail to define a contract**: derive what you can from the spec requirements and PM acceptance criteria; for anything still unspecified, flag as a `[non-blocking]` ambiguity and make a reasonable technical assumption (you hold technical authority).
-- **Dev coordinator returns no [DEV OUTPUT]**: re-dispatch once. If still missing: mark `dev: failed` in output. Hub will stop pipeline.
 - **Debug agent returns no [DEBUG OUTPUT]** (Bug→Fix, Step 1.7): re-dispatch once; if still missing, set DEBUG_OUTPUT to `none (debug agent returned no diagnosis)` and plan the fix from your own reading of the bug report — do not block the pipeline.
-- **Max blocker passes reached** (`agents.max_retries`): include remaining blockers in `Unresolved blockers:` and continue.
 - **CLAUDE.md not found**: note it and continue.
-- **.nob.yml not found**: use defaults (max_retries: 3).
+- **.nob.yml not found**: use defaults.
 - **Unit in task list not found in .nob.yml**: flag as ambiguity; map to the closest matching unit or ask for clarification.

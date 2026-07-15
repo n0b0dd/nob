@@ -287,6 +287,8 @@ Set RETRY_ROUTE:
 
 Store as TL_REASONS (list), DEV_ONLY_ITEMS (list — each entry prefixed with the task id and unit tag from the failing criterion line, e.g. `[t3] [web] AC-PARTIAL: loading state not implemented`), HUMAN_GATE_ITEMS (list).
 
+**Deriving the task id for dev-only items**: AC-PARTIAL/AC-WRONG/TEST-FAIL findings already carry a task id from the criteria check. QUALITY, SECURITY, and DESIGN findings are captured per-file (`{file}:{line}`), not per-task — for each of these, match `{file}` against `TECH_LEAD_OUTPUT`'s `Task list:` entries (each task has a `file:` field, one file per task) and use that task's `id` as the prefix. If no task in the list claims the file, use `[unmapped]` as the prefix instead of guessing an id.
+
 ### Step 6: List human review items
 For every ✗ or ⚠ criterion, write one specific, actionable item. Be concrete: name the missing feature and why it wasn't implemented (from the "items not implemented" field if available).
 

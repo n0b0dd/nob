@@ -34,7 +34,7 @@ Required fields per agent:
 | Agent | Required fields |
 |---|---|
 | PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
-| Tech Lead | `Units touched:`, `Interfaces written:`, `Data schemas written:`, `Task list:`, `Risks:`, `Coverage check:`, `Escalations made:`, `Unresolved blockers:`, `Contract violations:` |
+| Tech Lead | `Units touched:`, `Interfaces written:`, `Data schemas written:`, `Task list:`, `Risks:`, `Coverage check:`, `Escalations made:`, `Unresolved blockers:` |
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
 | Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Retry routing:`, `Items for human review:` |
 | Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
@@ -262,7 +262,14 @@ Set PLAN_EDIT_COUNT = 0.
   3. Extract new `[TECH LEAD OUTPUT]`. If extraction fails or validation fails after one re-dispatch: print `"Edit re-dispatch failed."` and prompt `"Retry edit or proceed with original plan? (retry / proceed / cancel)"`. If `retry`: repeat the re-dispatch once more; if still fails, prompt again with only `(proceed / cancel)`. If `proceed`: use original TECH_LEAD_OUTPUT and continue to Dev. If `cancel`: go to **cancel** branch.
   4. Increment PLAN_EDIT_COUNT. Re-render plan summary and prompt again.
 
-- **cancel** (or any non-yes/non-edit response): print `"Run cancelled at plan approval — no changes made."`. Write to `{Checkpoint path}checkpoint.json`: set `plan_approval` to `{ "status": "cancelled", "edits": {PLAN_EDIT_COUNT} }`. Run `git worktree remove {WORKTREE_PATH} --force` (ignore errors). Exit — do not proceed to Dev or any further phase.
+- **cancel** (or any non-yes/non-edit response): print `"Run cancelled at plan approval — no changes made."`. Write to `{Checkpoint path}checkpoint.json`: set `plan_approval` to `{ "status": "cancelled", "edits": {PLAN_EDIT_COUNT} }`. Run `git worktree remove {WORKTREE_PATH} --force` (ignore errors). Emit:
+  ```
+  [FULL PATH OUTPUT]
+  Status: cancelled at plan approval
+  Edits: {PLAN_EDIT_COUNT}
+  [/FULL PATH OUTPUT]
+  ```
+  Exit — do not proceed to Dev or any further phase. This `[FULL PATH OUTPUT]` block is required so the hub recognizes the cancellation and does not re-dispatch the whole pipeline (a missing block reads as sub-agent failure).
 
 **Write approval to checkpoint**: after approval (yes or edit→proceed), if `Checkpoint enabled:` is true: read `{Checkpoint path}checkpoint.json`, set `plan_approval` to `{ "status": "approved", "edits": {PLAN_EDIT_COUNT} }`, write back. Set PLAN_APPROVAL_DONE = true.
 
@@ -403,22 +410,24 @@ Already-completed tasks (skip these task ids): {RESUME_COMPLETED_TASKS, or: none
 
 4. Extract `[DEV OUTPUT]...[/DEV OUTPUT]`. Store as DEV_OUTPUT. Apply Output Block Validation. If missing: re-dispatch once; if still missing: mark `failed`. Stop pipeline.
 5. Set DESIGNER_OUTPUT = "none".
-6. Synthesize TECH_LEAD_OUTPUT (stub — satisfies Reviewer contract check):
+6. Synthesize TECH_LEAD_OUTPUT (stub — satisfies Output Block Validation and downstream Reviewer/retry parsing). Build the `Coverage check:` by mapping every acceptance criterion from PM_OUTPUT to the full set of constructed task ids (t1..tN) — the fix as a whole (all constructed tasks together) is what's meant to satisfy each criterion, since debug's diagnosis was derived from the bug report the criteria describe. Do not write a blanket `none` — that would read to Reviewer as "no task covers any criterion" and force an unwanted Tech Lead escalation on retry, defeating the point of this fast path:
    ```
    [TECH LEAD OUTPUT]
-   Affected units: {Affected units from DEBUG_OUTPUT}
+   Units touched: {Affected units from DEBUG_OUTPUT}
    Interfaces written:
    - none
    Data schemas written:
    - none
-   Task count: {N from constructed task list}
+   Task list:
+   {constructed task list, one entry per line in canonical format}
    Risks:
    {IMPL_RISKS}
+   Coverage check:
+   - "[AC text]" → {all constructed task ids, comma-separated}
+   - (one line per PM acceptance criterion; if PM_OUTPUT has none — relaxed bug-report case — write: "(no PM acceptance criteria — see [DEBUG OUTPUT] for reproduction/expected/actual)")
    Escalations made:
    - none
    Unresolved blockers:
-   - none
-   Contract violations:
    - none
    Note: direct-dev path (localized bug fix) — Tech Lead skipped; diagnosis in [DEBUG OUTPUT].
    [/TECH LEAD OUTPUT]

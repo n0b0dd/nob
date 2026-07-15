@@ -384,7 +384,9 @@ Set ROUTE = full (default).
 
 Skip for Init, Venture, Refactor, Ideate, Status workflows and resume runs (CHECKPOINT_RESUME = true) — these always use their own paths.
 
-Set ROUTE = quick when ANY:
+If `--full` is in the user's message: ROUTE = full unconditionally — skip the quick checks below entirely (this is the escape hatch for a short casual-sounding message the user still wants the full pipeline for).
+
+Otherwise, set ROUTE = quick when ANY:
 - `--quick` is in the user's message.
 - No spec/bug file path in the user's message (no `.md` token, no path-like string with `/`) AND the message is ≤ 15 words — a plain casual edit request.
 
@@ -491,10 +493,10 @@ Path-full and retry validate agent output blocks before passing them downstream.
 
 | Agent | Required fields |
 |---|---|
-| Tech Lead | `Units touched:`, `Interfaces written:`, `Task list:`, `Risks:` |
 | PM Agent | `Acceptance criteria:`, `Edge cases to handle:`, `Out of scope:`, `Ambiguities flagged:` |
+| Tech Lead | `Units touched:`, `Interfaces written:`, `Data schemas written:`, `Task list:`, `Risks:`, `Coverage check:`, `Escalations made:`, `Unresolved blockers:` |
 | Dev Agent | `Units touched:`, `Tasks:`, `Files changed:`, `Contracts produced:`, `Contracts consumed:`, `Test results:`, `Items not implemented (needs human):`, `Deferred items:`, `Memory conflicts:` |
-| Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Items for human review:` |
+| Reviewer | `Overall status:`, `Test results:`, `Contract check:`, `Security:`, `Migration safety:`, `Code quality:`, `Design compliance:`, `Criteria check:`, `Retry routing:`, `Items for human review:` |
 | Docs Agent | `Files documented:`, `Files skipped:`, `Total:` |
 | Test Writer | `Units tested:`, `Test files written:`, `Tests written:`, `Framework detected:` |
 
@@ -591,6 +593,8 @@ Next:
 Exit.
 
 **For Spec → Code, Bug → Fix, API → Sync workflows (ROUTE = full):**
+
+If PATH_OUTPUT_META `Status:` is `cancelled at plan approval`: print `"Run cancelled at plan approval — no changes made."` and exit. Do not re-dispatch path-full and do not attempt to read REVIEWER_OUTPUT/DEV_OUTPUT — they do not exist on this path.
 
 Read from PATH_OUTPUT_META and the embedded output blocks extracted from the path-full sub-agent result:
 - REVIEWER_OUTPUT, DEV_OUTPUT, TECH_LEAD_OUTPUT, PM_OUTPUT from extracted `[X OUTPUT]` blocks.

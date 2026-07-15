@@ -2,6 +2,43 @@
 
 All notable changes to the nob plugin are documented here. Versions are bumped in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
 
+## [2.5.1] — 2026-07-15
+
+### Fixed
+- **Direct-dev bug-fix stub used pre-v2.4.0 field names.** `path-full`'s synthesized `[TECH LEAD OUTPUT]` for the localized bug-fix fast path emitted `Affected units:`/`Task count:` instead of the current `Units touched:`/`Task list:`, and omitted `Coverage check:` entirely — breaking retry's task-completion tracking and Reviewer's AC-MISSING classification on any retried direct-dev fix. The stub now emits the canonical fields, with `Coverage check:` mapping each PM acceptance criterion to the constructed task ids (not a blanket `none`, which would force an unwanted Tech Lead escalation on retry).
+- **Plan-cancellation didn't emit `[FULL PATH OUTPUT]`.** Cancelling at the `--plan` approval gate tore down the worktree but never printed the required output wrapper, so the hub treated the cancellation as a crashed sub-agent and silently re-dispatched the entire pipeline from scratch. The cancel branch now emits a minimal `cancelled at plan approval` status block, and the hub short-circuits on it instead of re-running.
+- **Two copies of the Output Block Validation required-fields table had drifted apart** (hub vs `path-full`) — re-synced field-for-field.
+- **Removed the dead `Contract violations:` field** from Tech Lead's output — its contract-check step moved to Reviewer in v2.4.0 and nothing ever populated or read this field.
+- **Three stale Tech Lead cross-references** to a removed dev-dispatch step and a removed blocker-loop "Step 4" corrected to reflect the current planner-only role (path-full dispatches dev; ambiguity/risk blockers are handled inline in Step 2 / Error Handling).
+- **Reviewer's dev-only retry routing couldn't attach a task id to per-file findings.** Quality/Security/Design findings are captured per-file, not per-task, but retry's `PASS_THROUGH_IDS` computation only recognized `[t{N}]`-prefixed items — an unmapped finding could be silently treated as already-completed and skipped. Reviewer now matches the finding's file against Tech Lead's task list to derive the task id, falling back to an explicit `[unmapped]` sentinel that retry always forwards to Dev instead of dropping.
+- **`--full` flag was documented but never implemented.** Hub routing now honors it as an explicit override of the auto-quick heuristic.
+- **Removed a stale "Lite path" tier** from `CLAUDE.md.template`, left over from the quick/lite/full model collapsed to quick/full-only in v2.4.0.
+
+## [2.5.0] — 2026-06-23
+
+### Added
+- **PM: hardened error-states question** with a failure scaffold (invalid input, network, auth, empty, rate limits) so specs surface edge cases up front.
+- **PM: AC self-audit (Step 3.2)** sharpens vague acceptance criteria before the revision loop; the AC format now requires a concrete observable signal (toast, redirect, download, state change).
+- **Tech Lead: AC→task coverage check (Step 2e)** — every PM acceptance criterion must map to at least one task.
+- **Tech Lead: integration/wiring task checklist (Step 2f)** — route registration, DI, index exports, env vars, migrations, middleware.
+- **Tech Lead: `what` field self-audit (Step 2g)** — exact naming, error handling, edge cases, no forward references.
+- **Tech Lead: extended risk flags** — `[PAGINATION]`, `[VALIDATION]`, `[CORS]` (informational, no escalation).
+- **Reviewer: retry routing classification (Step 5.5)** — classifies every failing item into `tl-required`, `dev-only`, or `human-gate`, emitted as a new `Retry routing` block.
+- **Retry: routing-aware dispatch (Step 8.5)** — reads the `Retry routing` block and human-gates `CRITICAL` findings before autonomous retry. TL-required items (contract violations, missing tasks) route through Tech Lead as before; dev-only items (implementation bugs, quality findings, partial criteria) skip Tech Lead and only re-run the failing tasks against the existing plan, falling back to the TL-required path if dev dispatch fails. Backward compatible — an absent `Retry routing` block defaults to `tl-required`.
+
+### Changed
+- Tech Lead's Designer dispatch now warns explicitly when `.nob.yml` is absent.
+- Tech Lead's coverage check is emitted in `[TECH LEAD OUTPUT]` and validated by `path-full`.
+
+## [2.4.0] — 2026-06-23
+
+### Changed
+- **Simplified pipeline: quick or full only.** Removed `path-quick` and `path-lite`; the hub now routes to either the inline quick handler or `path-full`. Quick bypass triggers on a `--quick` flag or a plain casual message (≤15 words, no spec file) and the hub handles it inline.
+- **Tech Lead is planner-only.** Removed dev dispatch, the blocker loop, TDD status computation, and the contract-check step from Tech Lead — it now only discovers files, resolves contracts, and produces the task list.
+- **`path-full` dispatches Dev directly after Tech Lead**; TDD status is computed post-Dev instead of inside Tech Lead.
+- **`[TECH LEAD OUTPUT]` now includes the full task list**, replacing the prior `Task count` field.
+- **Hub no longer runs a scope scan** — Tech Lead owns file discovery.
+
 ## [2.3.0] — 2026-06-23
 
 ### Added

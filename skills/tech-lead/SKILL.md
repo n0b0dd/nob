@@ -209,7 +209,7 @@ Extract `[DEBUG OUTPUT]...[/DEBUG OUTPUT]`. Store as DEBUG_OUTPUT. If it is miss
 - If DEBUG_OUTPUT `Suggested regression test:` names a test (not `none`), add it to the relevant fix task's description so dev writes it as part of the fix.
 - Forward DEBUG_OUTPUT verbatim in your output (see **## Output Format**) so the human and Reviewer see the reproduction and root cause.
 
-You always dispatch the normal **dev** agent to implement the fix in Step 3 — debug does not write code.
+You are planner-only — you never dispatch dev yourself. path-full dispatches the normal **dev** agent to implement the fix after your output is returned; debug does not write code.
 
 ## Step 2: Write technical specification
 
@@ -257,11 +257,11 @@ Scan the spec requirements, PM acceptance criteria, and AFFECTED_FILES for:
 
 Store the detected flags (with their one-line descriptions) as RISK_FLAGS. If none apply: set RISK_FLAGS to `none`.
 
-**Escalate high-risk flags immediately:** If `[AUTH]` or `[BREAKING]` flags are present, follow the **Escalation protocol** below before dispatching dev agents.
+**Escalate high-risk flags immediately:** If `[AUTH]` or `[BREAKING]` flags are present, follow the **Escalation protocol** below before finalizing your output.
 
 ### Escalation protocol
 
-Escalations are used by Step 2c (high-risk flags) and Step 4 (unresolvable `ambiguity` and `risk` blockers). In every case, print:
+Escalations are used by Step 2c (high-risk flags) and inline whenever Step 2 hits an unresolvable `ambiguity` or `risk` blocker (see **Error Handling** below). In every case, print:
 ```
 Risk escalation: [flag/type] detected — [description].
 Proposed resolution: [your recommendation].
@@ -483,9 +483,6 @@ Escalations made:
 
 Unresolved blockers:
 - [BLOCKER description, or: none]
-
-Contract violations:
-- [violation description, or: none]
 [/TECH LEAD OUTPUT]
 
 [DEBUG OUTPUT]

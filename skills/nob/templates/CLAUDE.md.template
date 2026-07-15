@@ -26,9 +26,8 @@ The Nob pipeline runs: **PM → Tech Lead → dev → Docs → Reviewer**
 - **Docs** writes or updates inline documentation after dev completes
 - **Reviewer** performs final pass/fail and inline security review
 
-Simpler tasks use a shorter path:
-- **Quick path** (≤3 files): hub implements inline, no sub-agents
-- **Lite path** (4–10 files): inline PM+TL reasoning + dev + Reviewer, one auto-retry
+Simple, casual edit requests use a shorter path:
+- **Quick path** (short message, no spec/bug file path): hub implements inline, no sub-agents. Use `--full` to force the full pipeline instead, or `--quick` to force the quick path.
 
 ## Flags
 

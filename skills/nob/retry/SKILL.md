@@ -244,6 +244,8 @@ Skip Tech Lead. The existing task list and contracts are correct — only the im
 Extract DEV_ONLY_TASK_IDS from DEV_ONLY_ITEMS: collect every `[t{N}]` prefix in the list.
 Set PASS_THROUGH_IDS = all task ids from TECH_LEAD_OUTPUT `Task list:` that are NOT in DEV_ONLY_TASK_IDS. These are carried as already-completed so Dev skips them.
 
+If any DEV_ONLY_ITEMS entry is prefixed `[unmapped]` (Reviewer could not match the finding's file to a task): never add it to PASS_THROUGH_IDS regardless of task id — forward the full item text to Dev as an extra fix instruction alongside the task list, so the file still gets addressed even without a task id to key off of.
+
 Read `{SKILL_BASE_DIR}/../dev/SKILL.md`. Dispatch with `model: {dev model from Agent models in [INPUTS]}`:
 
 ```
